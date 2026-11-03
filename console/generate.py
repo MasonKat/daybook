@@ -26,11 +26,11 @@ STATIC = ROOT / "static"
 
 SVG_W, SVG_H = 320, 150
 JS_STRINGS = ("done_title", "streak_label", "class_plus", "reward_to_go", "uploading", "upload_error",
-              "upload_rate", "upload_offline", "replaced", "no_worker", "today_set", "set_default", "weekdays", "story_streak")
+              "upload_rate", "upload_offline", "replaced", "no_worker", "today_set", "set_default", "weekdays", "story_streak",
+              "recorded_at", "recorded")
 YT_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 WEEKDAYS_FULL = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
 PARENT_WEEKS = 8      # weeks kept in the parent room
-PARENT_OPEN = 2       # most recent weeks shown open; older ones sit in "이전 기록"
 TILE_DAYS_MAX = 180   # profile grid: at most this many day tiles
 
 
@@ -38,7 +38,7 @@ def json_script(obj) -> str:
     """JSON safe to embed inside <script type="application/json">."""
     return (json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
             .replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026"))
-PAD_L, PAD_R, PAD_T, PAD_B = 34, 12, 12, 26
+PAD_L, PAD_R, PAD_T, PAD_B = 34, 14, 12, 26
 
 
 def env() -> Environment:
@@ -103,7 +103,9 @@ def videos_file(cfg: Config) -> Path | None:
 
 
 def load_videos(cfg: Config) -> list[dict]:
-    """videos.json: [{title, url, group, added, yt_id?, thumb?}] -> flat list, newest first.
+    """videos.json: [{title, url, group, added, kind?, yt_id?, thumb?, duration?}] -> flat list, newest first.
+
+    `kind` is "short" (vertical, shown as reels) or "long" (default; shown as 16:9 cards).
 
     `thumb` is a local image path (relative to videos.json); it is shrunk into dist/t/<id>.jpg at publish.
     """
@@ -122,8 +124,11 @@ def load_videos(cfg: Config) -> list[dict]:
         if v.get("thumb"):
             cand = (p.parent / str(v["thumb"])).resolve()
             thumb_src = cand if cand.is_file() else None
+        kind = "short" if str(v.get("kind", "")).lower() == "short" else "long"
+        dur = str(v.get("duration", "") or "")
         out.append({"id": vid, "title": str(v.get("title", "")), "url": url, "group": str(v.get("group", "")),
-                    "added": str(v.get("added", "")), "yt_id": yt, "thumb_src": thumb_src,
+                    "added": str(v.get("added", "")), "yt_id": yt, "thumb_src": thumb_src, "kind": kind,
+                    "duration": dur if re.fullmatch(r"\d{1,2}(:\d{2}){1,2}", dur) else "",
                     "thumb": f"/t/{vid}.jpg" if thumb_src else ""})
     out.sort(key=lambda v: v["added"], reverse=True)
     return out
@@ -154,7 +159,9 @@ def _trend(rows: list[sqlite3.Row]) -> dict | None:
     for key, vals, thr in (("eff", eff, M.EFFICIENCY_THRESHOLD), ("reach", reach, M.REACH_THRESHOLD)):
         pts = [(round(xs[i], 1), round(y(v), 1)) for i, v in enumerate(vals) if v is not None]
         lines[key] = TrendLine(vals, M.direction(vals, thr), " ".join(f"{a},{b}" for a, b in pts), pts)
-    labels = [(round(xs[i], 1), parse_short(r["date"])) for i, r in enumerate(rows)]
+    labels = [(round(xs[i], 1), parse_short(r["date"]),
+               "middle" if n == 1 else "start" if i == 0 else "end" if i == n - 1 else "middle")
+              for i, r in enumerate(rows)]
     grid = [(PAD_T + (SVG_H - PAD_T - PAD_B) * (1 - g), f"{int(g * 100)}") for g in (0, 0.5, 1)]
     return {"lines": lines, "labels": labels, "grid": grid, "w": SVG_W, "h": SVG_H, "x0": PAD_L,
             "x1": SVG_W - PAD_R, "ylab": SVG_H - 8}
@@ -183,6 +190,28 @@ def _hash(obj) -> str:
 
 def _sum_upto(rows: list[tuple[date, int]], start: date | None, end: date) -> int:
     return sum(p for d, p in rows if d <= end and (start is None or d >= start))
+
+
+def _week_of_month(mon: date) -> tuple[int, int]:
+    """Korean "M월 N주": the month that holds the week's Thursday, N = which Thursday of that month."""
+    thu = mon + timedelta(days=3)
+    return thu.month, (thu.day - 1) // 7 + 1
+
+
+def _md(d: date) -> str:
+    return f"{d.month}/{d.day}"
+
+
+def _publish_times(conn: sqlite3.Connection) -> dict[date, datetime]:
+    """The last successful publish of each day (from the append-only event log), in KST."""
+    out: dict[date, datetime] = {}
+    for r in conn.execute("SELECT payload_json FROM events WHERE type = 'publish' ORDER BY id"):
+        p = json.loads(r["payload_json"])
+        try:
+            out[date.fromisoformat(p["date"])] = M.utc_iso_to_kst(p["at"])
+        except (KeyError, ValueError):
+            continue
+    return out
 
 
 def _week_days(mon: date, subs: dict, cd: set, today: date, wk: list[str]) -> list[dict]:
@@ -215,6 +244,10 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             """SELECT se.date, a.points FROM attitude a JOIN sessions se ON se.id = a.session_id
                JOIN students_public s ON s.id = a.student_id WHERE s.class_id = ? AND s.active = 1""", (cid,))]
     new_videos = [v for v in videos if v["added"] and v["added"] >= (today - timedelta(days=6)).isoformat()]
+    shorts = [v for v in videos if v["kind"] == "short"]
+    longs = [v for v in videos if v["kind"] == "long"]
+    newest_thumb = next((v["thumb"] for v in (new_videos or videos) if v["thumb"]), "")
+    published_at = _publish_times(conn)
 
     students = []
     for s in conn.execute("SELECT * FROM students_public WHERE active = 1 ORDER BY id"):
@@ -241,57 +274,90 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         streak = M.streak(sub_days, days_upto_today, today)
         cumulative = _sum_upto(att, None, today)
 
-        # profile grid: one tile per day of the term so far, newest first (never a photo)
+        # profile grid: one tile per day of the term so far, newest first, a month header where a month starts
         first = t_start or min(sub_days | {date.fromisoformat(s["created_at"][:10])})
         first = max(first, today - timedelta(days=TILE_DAYS_MAX - 1))
-        tiles = []
+        tiles, months = [], []
         d = today
         while d >= first:
-            st = ("sub" if d in sub_days else "open" if d == today else "miss" if d in cd else "off")
+            if not months or months[-1]["key"] != f"{d.year}-{d.month:02d}":
+                months.append({"key": f"{d.year}-{d.month:02d}", "label": S["month"].format(m=d.month),
+                               "n": 0})
+                tiles.append({"month": months[-1]["label"], "key": months[-1]["key"]})
+            st = ("hl" if d in three_days else "sub" if d in sub_days else "open" if d == today
+                  else "miss" if d in cd else "off")
+            if d in sub_days:
+                months[-1]["n"] += 1
             tiles.append({"date": d.isoformat(), "label": f"{d.month}/{d.day}", "wd": wk[d.weekday()],
-                          "st": st, "heart": d in three_days})
+                          "st": st, "sub": d in sub_days, "heart": d in three_days})
             d -= timedelta(days=1)
+        week_k = sum(1 for x in week if x["done"])
 
         # stories (own data only)
         stories = []
         if new_videos:
-            stories.append({"key": "videos", "label": S["story_new_videos"], "items": new_videos})
-        stories.append({"key": "streak", "label": S["story_streak"].format(n=streak), "streak": streak})
+            stories.append({"key": "videos", "label": S["story_new_videos"], "items": new_videos,
+                            "thumb": newest_thumb})
+        stories.append({"key": "streak", "label": S["story_streak"].format(n=streak), "streak": streak,
+                        "pct": round(100 * week_k / 7)})
         if rw and rw.goal > 0:
             nxt = next((m for m in rw.milestones + [rw.goal] if m > rw.total), None)
-            stories.append({"key": "goal", "label": S["story_goal"], "next": (nxt - rw.total) if nxt else 0})
+            stories.append({"key": "goal", "label": S["story_goal"], "next": (nxt - rw.total) if nxt else 0,
+                            "pct": round(rw.pct)})
         if note:
             stories.append({"key": "teacher", "label": S["story_teacher"], "note": note,
                             "week": _date_ko(M.week_monday(notes[-1]["week"]))})
         for st_ in stories:
-            content = {k: v for k, v in st_.items() if k not in ("label", "streak")}
+            content = {k: v for k, v in st_.items() if k not in ("label", "streak", "pct", "thumb")}
             if st_["key"] == "videos":
                 content = [v["id"] for v in st_["items"]]
             st_["hash"] = _hash([st_["key"], content, rw.total if st_["key"] == "goal" and rw else 0])
 
-        # parent room: one group of report cards per week, last PARENT_WEEKS weeks
+        # parent room: one report message per week (last PARENT_WEEKS weeks), newest open, earlier ones one line
         room = []
         wm = M.week_bounds(t_start)[0] if t_start else M.week_bounds(first)[0]
         wm = max(wm, mon - timedelta(weeks=PARENT_WEEKS - 1))
         while wm <= mon:
-            cut = min(wm + timedelta(days=6), today)
+            we = wm + timedelta(days=6)
+            cut = min(we, today)
             current = wm == mon
             wdays = _week_days(wm, subs, cd, today, wk)
             rows = [r for r in tests if r["date"] <= cut.isoformat()]
+            trend = _trend(rows)
+            last = rows[-1] if rows else None
             wk_notes = [n for n in notes if n["week"] == M.iso_week(wm)]
             total_then = _sum_upto(class_att.get(s["class_id"], []), None, cut)
-            stamp = today if current else wm + timedelta(days=5)
+            class_days_so_far = [x for x in wdays if x["class_day"] and not x["future"]]
+            if current:
+                stamp, at = today, now
+            else:
+                pubs = [dd for dd in published_at if wm <= dd <= we]
+                stamp = max(pubs) if pubs else wm + timedelta(days=5)
+                at = published_at[stamp] if pubs else None
+            mth, nth = _week_of_month(wm)
+            k = sum(1 for x in wdays if x["done"])
+            wsum = _sum_upto(att, wm, cut)
+            dir_eff = S["dir_" + trend["lines"]["eff"].dir] if trend else ""
+            rng = f"{_md(wm)}–{_md(we)}"
             room.append({
-                "sep": _date_ko_full(stamp), "current": current, "time": now.strftime("%H:%M") if current else "",
-                "label": f"{_date_ko(wm)} – {_date_ko(wm + timedelta(days=6))}",
-                "days": wdays, "k": sum(1 for x in wdays if x["done"]), "n": (cut - wm).days + 1,
-                "trend": _trend(rows), "week_sum": _sum_upto(att, wm, cut), "cumulative": _sum_upto(att, None, cut),
-                "bar_pct": (min(100.0, 100.0 * total_then / rw.goal) if rw and rw.goal > 0 else None),
+                "sep": _date_ko_full(stamp), "current": current, "time": at.strftime("%H:%M") if at else "",
+                "title": S["report_title"].format(m=mth, n=nth, range=rng),
+                "summary": (S["summary"] if trend else S["summary_no_test"]).format(range=rng, k=k, dir=dir_eff, w=wsum),
+                "days": wdays, "k": k, "c": len(class_days_so_far),
+                "d": sum(1 for x in class_days_so_far if x["done"]),
+                "trend": trend if current else None, "has_tests": trend is not None,
+                "eff": round(100 * last["efficiency"]) if last and last["efficiency"] is not None else None,
+                "reach": round(100 * last["reach"]) if last and last["reach"] is not None else None,
+                "dir_eff": trend["lines"]["eff"].dir if trend else "",
+                "dir_reach": trend["lines"]["reach"].dir if trend else "",
+                "week_sum": wsum, "cumulative": _sum_upto(att, None, cut),
+                "bar_pct": (min(100.0, 100.0 * total_then / rw.goal) if rw and rw.goal > 0 and current else None),
                 "to_go": max(0, rw.goal - total_then) if rw else 0,
                 "note": wk_notes[-1]["text"] if wk_notes else "",
             })
             wm += timedelta(weeks=1)
 
+        today_sub = subs.get(today.isoformat())
         js = {
             "worker": cfg.worker,
             "pub": today.isoformat(),
@@ -308,6 +374,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "weekStart": mon.isoformat(),
             "stories": {st_["key"]: st_["hash"] for st_ in stories},
             "sets": set_labels(conn, cfg, s["class_id"]),
+            "todayTime": _fmt_time(today_sub["ts"]) if today_sub else "",
             "S": {k: S[k] for k in JS_STRINGS},
         }
         students.append({
@@ -329,14 +396,16 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "stories": stories,
             "tiles": tiles,
             "room": room,
-            "room_open": room[-PARENT_OPEN:],
-            "room_earlier": room[:-PARENT_OPEN],
+            "months": months,
+            "bio": S["bio"].format(cls=cls["name"] if cls else "", n=len(sub_days)),
             "js": json_script(js),
         })
     return {
         "S": S,
         "students": students,
         "videos": videos,
+        "shorts": shorts,
+        "longs": longs,
         "today": today,
         "week_label": f"{_date_ko(mon)} – {_date_ko(sun)}",
         "updated": now.strftime("%Y-%m-%d %H:%M"),
@@ -376,7 +445,7 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
         (out / "t").mkdir()
         for v in ctx["videos"]:
             if v["thumb_src"]:
-                make_thumb(v["thumb_src"], out / "t" / f"{v['id']}.jpg")
+                make_thumb(v["thumb_src"], out / "t" / f"{v['id']}.jpg", max_w=360 if v["kind"] == "short" else 480)
     st, pt, gt, it = (e.get_template(n) for n in ("student.html", "parent.html", "go.html", "index.html"))
     for s in ctx["students"]:
         sd = out / "s" / s["student_token"]

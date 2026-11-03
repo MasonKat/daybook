@@ -75,7 +75,8 @@ def test_student_stories_tiles_and_messages(conn, cfg, klass, tmp_path):
     tiles = re.findall(r'<li class="tile (\w+)" data-date="([\d-]+)"', html)
     assert tiles[0] == ("open", "2026-11-06")                  # newest first, today open
     st = dict((d, c) for c, d in tiles)
-    assert st["2026-11-03"] == "sub" and st["2026-10-30"] == "miss" and st["2026-11-01"] == "off"
+    assert st["2026-11-03"] == "hl" and st["2026-11-04"] == "off" and st["2026-10-30"] == "miss"   # hl = 3 points
+    ops.teacher_submit(conn, s["id"], date(2026, 11, 5))
     assert re.search(r'data-date="2026-11-03">.*?♥', html)       # 3 points that day
     assert "<img" not in html.split('id="tiles"')[1].split("</ol>")[0]   # tiles never show photos
     assert "<input" in html and "<textarea" not in html          # only the file input
@@ -87,15 +88,21 @@ def test_parent_room_keeps_8_weeks_with_earlier_collapsed(conn, cfg, klass, tmp_
     cls, studs = klass
     s = studs[0]
     conn.execute("UPDATE classes SET term = '2026-09-01..2026-12-31' WHERE id = ?", (cls["id"],))
+    from console import importers
+    from pathlib import Path
+    importers.import_screeners(conn, Path(__file__).resolve().parent.parent / "demo" / "screeners")
     for w in range(10):
         ops.add_note(conn, s["id"], f"2026-W{36 + w:02d}", f"노트 {36 + w}")
     conn.commit()
     assert generate.publish(conn, cfg, tmp_path / "dist", today=TODAY, now=NOW).ok
     html = (tmp_path / "dist" / "p" / s["parent_token"] / "index.html").read_text(encoding="utf-8")
     assert html.count('class="sep"') == 8
-    earlier = html.split('<details class="earlier">')[1].split("</details>")[0]
-    assert earlier.count('class="sep"') == 6
+    assert html.count('<details class="past">') == 7          # earlier weeks: one line each, closed
+    assert html.count('<details class="past" open') == 0
+    assert html.count("<svg") == 1                             # the trend chart only in the newest week
     assert "노트 45" in html and "노트 38" in html and "노트 37" not in html   # W38..W45
+    sums = re.findall(r'<summary class="bubble sum">(.*?)</summary>', html)
+    assert len(sums) == 7 and all(re.fullmatch(r"\d+/\d+–\d+/\d+ · 제출 \d+일( · 테스트 (상승|유지|조정))? · 태도 \+\d+", x) for x in sums)
     assert "<input" not in html
 
 

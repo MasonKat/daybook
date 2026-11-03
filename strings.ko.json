@@ -79,5 +79,22 @@
   "messages_empty": "아직 메시지가 없어요.",
   "card_sub": "주간 제출",
   "card_sub_now": "이번 주 제출",
-  "set_default": "{md} 과제"
+  "set_default": "{md} 과제",
+  "month": "{m}월",
+  "bio": "{cls} · {n}번째 기록",
+  "recorded_at": "오늘의 한 장 · {date} 기록됨 {t}",
+  "recorded": "오늘의 한 장 · {date} 기록됨",
+  "tab_shorts": "쇼츠",
+  "tab_long": "강의",
+  "report_title": "주간 리포트 · {m}월 {n}주 ({range})",
+  "row_sub": "제출",
+  "sub_count": "제출 {k}일",
+  "sub_detail": "수업일 {c}일 중 {d}일",
+  "row_tests": "주간 테스트",
+  "row_att": "태도",
+  "att_line": "이번 주 +{w} · 누적 {c}점",
+  "summary": "{range} · 제출 {k}일 · 테스트 {dir} · 태도 +{w}",
+  "summary_no_test": "{range} · 제출 {k}일 · 태도 +{w}",
+  "room_sub": "주간 기록",
+  "pct": "{n}%"
 }

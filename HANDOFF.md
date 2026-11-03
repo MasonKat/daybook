@@ -154,7 +154,8 @@ The student 영상 tab is rendered at publish from the file named by `videos_pat
 
 ```json
 [{"title": "1강 다항식의 연산", "url": "https://masonkat.github.io/q/cv/10-2/1/", "group": "고1 · 개념",
-  "added": "2026-10-20", "yt_id": "<11-character YouTube id>", "thumb": "thumbs/cv-10-2-1.jpg"}]
+  "added": "2026-10-20", "kind": "long", "duration": "12:05", "yt_id": "<11-character YouTube id>",
+  "thumb": "thumbs/cv-10-2-1.jpg"}]
 ```
 
 - Solution videos use their fixed forwarding address `https://masonkat.github.io/q/<term>/<n>/`.
@@ -162,6 +163,8 @@ The student 영상 tab is rendered at publish from the file named by `videos_pat
 - Build the list from those existing records with a small local script (outside this repo or under `scripts/`).
 - The feed is newest first by `added`; `group` is the chip on each reel (e.g. "고1 · 개념"). Only `http(s)` URLs are kept.
 - Videos whose `added` is within the last 7 days of a publish also appear in the "새 영상" story.
+- `kind`: `"short"` for the channel's daily Shorts (9:16 reels; use a vertical thumbnail) or `"long"` (default; 16:9
+  cards in the 강의 sub-tab). `duration` ("12:05") shows on long cards.
 - `yt_id`: the YouTube id. With it, tapping ▶ plays the video inside the reel through
   `https://www.youtube-nocookie.com/embed/<id>`. The iframe is created only on tap and sends only the site origin as
   the referrer. Without it, ▶ opens `url`.

@@ -68,7 +68,7 @@
         $('t-' + t).setAttribute('aria-selected', t === name ? 'true' : 'false');
       });
       $('stories').hidden = name === 'me';
-      $('s-main').classList.toggle('feed-mode', name === 'videos' && !!$('feed'));
+      $('s-main').classList.toggle('feed-mode', name === 'videos' && !!($('feed') || $('longs')));
       if (name !== 'videos') stopVideos();
     }
     tabs.forEach(function (t) {
@@ -128,20 +128,33 @@
       $('c-streak').textContent = n;
       $('c-sub').textContent = nSubNow();
       /* profile tiles: add the days since publish, then colour every known day */
-      var tiles = $('tiles'), first = tiles.firstElementChild;
-      var top = first ? first.getAttribute('data-date') : addDays(today, -1);
+      var tiles = $('tiles'), firstTile = tiles.querySelector('.tile');
+      var top = firstTile ? firstTile.getAttribute('data-date') : addDays(today, -1);
       for (var d = addDays(top, 1); d <= today; d = addDays(d, 1)) {
         var li = document.createElement('li');
         li.className = 'tile off';
         li.setAttribute('data-date', d);
         li.innerHTML = '<span class="tl tnum">' + Number(d.slice(5, 7)) + '/' + Number(d.slice(8, 10)) + '</span><span class="tw">' + WD[weekday(d)] + '</span>';
-        tiles.insertBefore(li, tiles.firstElementChild);
+        var head = tiles.firstElementChild;
+        if (head && head.className === 'mhead' && head.id === 'm-' + d.slice(0, 7)) tiles.insertBefore(li, head.nextSibling);
+        else {
+          var mh = document.createElement('li');
+          mh.className = 'mhead';
+          mh.id = 'm-' + d.slice(0, 7);
+          mh.textContent = Number(d.slice(5, 7)) + '월';
+          tiles.insertBefore(li, tiles.firstElementChild);
+          tiles.insertBefore(mh, li);
+        }
       }
-      var lis = tiles.children;
+      var lis = tiles.querySelectorAll('.tile');
       for (var i = 0; i < lis.length; i++) {
-        var day = lis[i].getAttribute('data-date'), wasMiss = lis[i].classList.contains('miss');
-        lis[i].classList.remove('sub', 'open', 'miss', 'off');
-        lis[i].classList.add(known[day] ? 'sub' : day === today ? 'open' : (wasMiss || isClassDay(day)) ? 'miss' : 'off');
+        var day = lis[i].getAttribute('data-date'), cl = lis[i].classList;
+        if (cl.contains('hl')) continue;                       /* a 3-point day stays the highlight */
+        var wasMiss = cl.contains('miss');
+        cl.remove('sub', 'open', 'miss', 'off');
+        cl.add(known[day] ? 'sub' : day === today ? 'open' : (wasMiss || (isClassDay(day) && day < today)) ? 'miss' : 'off');
+        var md = lis[i].querySelector('.mdot');
+        if (md && !cl.contains('miss')) md.parentNode.removeChild(md);
       }
       var dots = $('sv-dots') ? $('sv-dots').children : [];
       for (var j = 0; j < dots.length; j++) {
@@ -201,34 +214,44 @@
       else if (e.key === 'ArrowLeft') slide(cur.i - 1);
     });
 
-    /* ---- reels: the iframe is created only on tap (0 third-party requests on load) */
-    var feed = $('feed');
+    /* ---- 영상: shorts (reels) and long videos; the iframe is created only on tap (0 third-party requests on load) */
+    var vtab = $('tab-videos'), feed = $('feed'), longs = $('longs');
     function stopVideos() {
-      if (!feed) return;
-      var frames = feed.querySelectorAll('iframe');
+      if (!vtab) return;   /* showTab() runs before this section is wired */
+      var frames = vtab.querySelectorAll('iframe');
       for (var i = 0; i < frames.length; i++) {
         var media = frames[i].parentNode;
         media.removeChild(frames[i]);
         for (var c = 0; c < media.children.length; c++) media.children[c].hidden = false;
       }
     }
-    if (feed) {
-      feed.addEventListener('click', function (e) {
-        var b = e.target.closest('button.play');
-        if (!b) return;
-        var id = b.closest('.reel').getAttribute('data-yt');
-        if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return;
+    vtab.addEventListener('click', function (e) {
+      var b = e.target.closest('button.play');
+      if (!b) return;
+      var id = b.closest('[data-yt]').getAttribute('data-yt');
+      if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return;
+      stopVideos();
+      var media = b.parentNode, f = document.createElement('iframe');
+      for (var c = 0; c < media.children.length; c++) media.children[c].hidden = true;
+      f.src = 'https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1&playsinline=1&rel=0';
+      f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+      f.allowFullscreen = true;
+      f.referrerPolicy = 'strict-origin';   /* only the origin, never the token path */
+      f.title = b.getAttribute('aria-label') || 'video';
+      media.appendChild(f);
+    });
+    var segs2 = vtab.querySelectorAll('.seg-b'), tg = $('grid-toggle');
+    for (var sb = 0; sb < segs2.length; sb++) {
+      segs2[sb].addEventListener('click', function () {
+        var v = this.getAttribute('data-v');
         stopVideos();
-        var media = b.parentNode, f = document.createElement('iframe');
-        for (var c = 0; c < media.children.length; c++) media.children[c].hidden = true;
-        f.src = 'https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1&playsinline=1&rel=0';
-        f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
-        f.allowFullscreen = true;
-        f.referrerPolicy = 'strict-origin';   /* only the origin, never the token path */
-        f.title = b.getAttribute('aria-label') || 'video';
-        media.appendChild(f);
+        for (var k = 0; k < segs2.length; k++) segs2[k].setAttribute('aria-selected', segs2[k] === this ? 'true' : 'false');
+        if (feed) feed.hidden = v !== 'shorts';
+        if (longs) longs.hidden = v !== 'long';
+        if (tg) tg.hidden = v !== 'shorts';
       });
-      var tg = $('grid-toggle');
+    }
+    if (tg && feed) {
       tg.addEventListener('click', function () {
         var grid = feed.classList.toggle('grid');
         tg.setAttribute('aria-pressed', grid ? 'true' : 'false');
@@ -237,10 +260,23 @@
       });
     }
 
+    /* ---- 내 기록: month highlights jump to that month in the grid */
+    var hls = document.querySelectorAll('.hl-b');
+    for (var h = 0; h < hls.length; h++) {
+      hls[h].addEventListener('click', function () {
+        var target = $('m-' + this.getAttribute('data-month'));
+        if (target) target.scrollIntoView({ block: 'start', behavior: reduced ? 'auto' : 'smooth' });
+      });
+    }
+
     /* ---- 오늘: pick -> preview -> 올리기 -> done */
     var states = ['idle', 'preview', 'done', 'err'];
     function show(state) { states.forEach(function (s) { $('st-' + s).hidden = s !== state; }); }
+    var TKEY = 'daybook.time.' + tok + '.';
     function showDone(replaced) {
+      var t = LS.get(TKEY + today) || (today === D.pub ? D.todayTime : '');
+      var md = Number(today.slice(5, 7)) + '/' + Number(today.slice(8, 10));
+      $('d-shot').textContent = t ? fmt(S.recorded_at, { date: md, t: t }) : fmt(S.recorded, { date: md });
       $('d-replaced').hidden = !replaced;
       $('d-streak').textContent = fmt(S.streak_label, { n: streakNow() });
       $('d-class').textContent = fmt(S.class_plus, { n: D.classTotal || 0 });
@@ -300,6 +336,10 @@
           if (j.ok) {
             if (j.day) today = j.day;
             known[today] = 1;
+            if (j.ts) {
+              var kt = new Date(Date.parse(j.ts) + 9 * 3600e3).toISOString().slice(11, 16);
+              LS.set(TKEY + today, kt);
+            }
             remember((j.days || []).concat([today]));
             renderLive();
             picked = null;

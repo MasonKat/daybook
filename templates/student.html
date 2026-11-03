@@ -18,9 +18,15 @@
 <div class="stories" id="stories">
   {% for st in me.stories %}
   <button type="button" class="story" data-story="{{ st.key }}" data-hash="{{ st.hash }}">
-    <span class="ring"><span class="story-in s-{{ st.key }}" aria-hidden="true">
-      {%- if st.key == 'videos' %}▶{% elif st.key == 'streak' %}<b class="tnum" data-live="streak">{{ st.streak }}</b>{% elif st.key == 'goal' %}★{% else %}“{% endif -%}
-    </span></span>
+    {% if st.key == 'streak' %}
+    <span class="ring prog" style="--p: {{ st.pct }}"><span class="story-in s-streak"><b class="tnum" data-live="streak">{{ st.streak }}</b></span></span>
+    {% elif st.key == 'videos' %}
+    <span class="ring"><span class="story-in s-videos">{% if st.thumb %}<img src="{{ st.thumb }}" alt="" decoding="async">{% else %}<span aria-hidden="true">▶</span>{% endif %}</span></span>
+    {% elif st.key == 'goal' %}
+    <span class="ring"><span class="story-in s-goal"><svg viewBox="0 0 36 36" class="donut" aria-hidden="true"><circle cx="18" cy="18" r="14" class="d-track"/><circle cx="18" cy="18" r="14" class="d-fill" pathLength="100" stroke-dasharray="{{ st.pct }} 100" transform="rotate(-90 18 18)"/></svg><b class="tnum dpct">{{ st.pct }}</b></span></span>
+    {% else %}
+    <span class="ring"><span class="story-in s-teacher"><span class="mono">AMP</span></span></span>
+    {% endif %}
     <span class="story-label"{% if st.key == 'streak' %} data-live="streak-label"{% endif %}>{{ st.label }}</span>
   </button>
   {% endfor %}
@@ -28,29 +34,58 @@
 
 <main class="s-main" id="s-main">
 <section id="tab-videos" class="panel" role="tabpanel" hidden>
-  {% if videos %}
+  {% if shorts or longs %}
   <div class="feedbar">
-    <button type="button" class="toggle" id="grid-toggle" aria-pressed="false" data-grid="{{ S.grid_toggle }}" data-feed="{{ S.feed_toggle }}">{{ S.grid_toggle }}</button>
+    {% if shorts and longs %}
+    <div class="seg" role="tablist">
+      <button type="button" class="seg-b" id="v-shorts" data-v="shorts" aria-selected="true">{{ S.tab_shorts }}</button>
+      <button type="button" class="seg-b" id="v-long" data-v="long" aria-selected="false">{{ S.tab_long }}</button>
+    </div>
+    {% else %}<span></span>{% endif %}
+    {% if shorts %}<button type="button" class="toggle" id="grid-toggle" aria-pressed="false" data-grid="{{ S.grid_toggle }}" data-feed="{{ S.feed_toggle }}">{{ S.grid_toggle }}</button>{% endif %}
   </div>
+  {% if shorts %}
   <div class="feed" id="feed">
-    {% for v in videos %}
+    {% for v in shorts %}
     <article class="reel" data-yt="{{ v.yt_id }}">
-      <div class="media">
+      <div class="media short">
         {% if v.thumb %}<img src="{{ v.thumb }}" alt="" loading="lazy" decoding="async">{% else %}<div class="ph"><span>{{ v.title }}</span></div>{% endif %}
         {% if v.yt_id %}
         <button type="button" class="play" aria-label="{{ S.play }}"><span aria-hidden="true">▶</span></button>
         {% else %}
         <a class="play" href="{{ v.url }}" target="_blank" rel="noopener noreferrer" aria-label="{{ S.watch }}"><span aria-hidden="true">▶</span></a>
         {% endif %}
-      </div>
-      <div class="meta">
-        {% if v.group %}<span class="chip">{{ v.group }}</span>{% endif %}
-        <h3 class="rt">{{ v.title }}</h3>
-        <a class="watch" href="{{ v.url }}" target="_blank" rel="noopener noreferrer">{{ S.watch }} ›</a>
+        <div class="overlay">
+          {% if v.group %}<span class="chip">{{ v.group }}</span>{% endif %}
+          <h3 class="rt">{{ v.title }}</h3>
+          <a class="watch" href="{{ v.url }}" target="_blank" rel="noopener noreferrer">{{ S.watch }} ›</a>
+        </div>
       </div>
     </article>
     {% endfor %}
   </div>
+  {% endif %}
+  {% if longs %}
+  <div class="longs" id="longs"{% if shorts %} hidden{% endif %}>
+    {% for v in longs %}
+    <article class="lcard" data-yt="{{ v.yt_id }}">
+      <div class="media wide">
+        {% if v.thumb %}<img src="{{ v.thumb }}" alt="" loading="lazy" decoding="async">{% else %}<div class="ph"><span>{{ v.title }}</span></div>{% endif %}
+        {% if v.yt_id %}
+        <button type="button" class="play" aria-label="{{ S.play }}"><span aria-hidden="true">▶</span></button>
+        {% else %}
+        <a class="play" href="{{ v.url }}" target="_blank" rel="noopener noreferrer" aria-label="{{ S.watch }}"><span aria-hidden="true">▶</span></a>
+        {% endif %}
+        {% if v.duration %}<span class="dur tnum">{{ v.duration }}</span>{% endif %}
+      </div>
+      <div class="lmeta">
+        <h3 class="lt">{{ v.title }}</h3>
+        <p>{% if v.group %}<span class="chip">{{ v.group }}</span>{% endif %}<a class="watch" href="{{ v.url }}" target="_blank" rel="noopener noreferrer">{{ S.watch }} ›</a></p>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
   {% else %}
   <p class="muted pad">{{ S.videos_empty }}</p>
   {% endif %}
@@ -75,6 +110,7 @@
     <div class="check" aria-hidden="true">✓</div>
     <h1 class="done-title">{{ S.done_title }}</h1>
     <p class="muted" id="d-replaced" hidden>{{ S.replaced }}</p>
+    <p class="shot" id="d-shot"></p>
     <ul class="stats">
       <li id="d-streak"></li>
       <li id="d-class"></li>
@@ -90,17 +126,22 @@
 <section id="tab-me" class="panel" role="tabpanel" hidden>
   <div class="profile">
     <span class="av ring lg"><span>{{ me.initial }}</span></span>
-    <div class="pname"><b>{{ me.display_name }}</b><span class="muted">{{ me.class_name }}</span></div>
+    <div class="pname"><b>{{ me.display_name }}</b><span class="bio">{{ me.bio }}</span></div>
   </div>
   <ul class="counters">
     <li><b class="tnum" id="c-streak">{{ me.streak }}</b><span>{{ S.count_streak }}</span></li>
     <li><b class="tnum" id="c-sub">{{ me.n_sub }}</b><span>{{ S.count_sub }}</span></li>
     <li><b class="tnum">{{ me.cumulative }}</b><span>{{ S.count_points }}</span></li>
   </ul>
+  {% if me.months|length > 1 %}
+  <div class="highlights" id="highlights">
+    {% for m in me.months %}<button type="button" class="hl-b" data-month="{{ m.key }}"><span class="ring"><span class="hl-in tnum">{{ m.n }}</span></span><span class="hl-l">{{ m.label }}</span></button>{% endfor %}
+  </div>
+  {% endif %}
   <ol class="tiles" id="tiles">
-    {% for t in me.tiles %}<li class="tile {{ t.st }}" data-date="{{ t.date }}"><span class="tl tnum">{{ t.label }}</span><span class="tw">{{ t.wd }}</span>{% if t.heart %}<span class="hrt" title="{{ S.tile_heart }}">♥</span>{% endif %}</li>{% endfor %}
+    {% for t in me.tiles %}{% if t.month %}<li class="mhead" id="m-{{ t.key }}">{{ t.month }}</li>{% else %}<li class="tile {{ t.st }}" data-date="{{ t.date }}"><span class="tl tnum">{{ t.label }}</span><span class="tw">{{ t.wd }}</span>{% if t.heart %}<span class="hrt" title="{{ S.tile_heart }}">♥</span>{% endif %}{% if t.st == 'miss' %}<span class="mdot" aria-hidden="true"></span>{% endif %}</li>{% endif %}{% endfor %}
   </ol>
-  <p class="legend"><span class="lg-sw sub"></span>{{ S.tile_sub }}<span class="lg-sw miss"></span>{{ S.tile_miss }}<span class="lg-sw off"></span>{{ S.tile_off }}<span class="hrt">♥</span>{{ S.tile_heart }}</p>
+  <p class="legend"><span class="lg-sw sub"></span>{{ S.tile_sub }}<span class="lg-sw hl"></span>{{ S.tile_heart }}<span class="lg-sw miss"></span>{{ S.tile_miss }}<span class="lg-sw off"></span>{{ S.tile_off }}</p>
 
   <h2 class="sec-h">{{ S.teacher_messages }}</h2>
   <div class="msgs">
@@ -135,7 +176,7 @@
     {% for v in st['items'] %}
     <div class="slide s-video">
       <p class="sv-kicker">{{ S.story_new_videos }}</p>
-      {% if v.thumb %}<img src="{{ v.thumb }}" alt="" loading="lazy" decoding="async">{% else %}<div class="ph"><span>{{ v.title }}</span></div>{% endif %}
+      {% if v.thumb %}<img class="{{ v.kind }}" src="{{ v.thumb }}" alt="" loading="lazy" decoding="async">{% else %}<div class="ph {{ v.kind }}"><span>{{ v.title }}</span></div>{% endif %}
       <h2>{{ v.title }}</h2>
       {% if v.group %}<span class="chip">{{ v.group }}</span>{% endif %}
       <a class="btn primary sv-link" href="{{ v.url }}" target="_blank" rel="noopener noreferrer">{{ S.watch }}</a>

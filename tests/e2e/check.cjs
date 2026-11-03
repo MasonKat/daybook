@@ -9,7 +9,7 @@
  * - /go/?set=… redirects a phone that opened its link once, shows the message on one that never did
  * - daybook pull + publish -> the ✓ and time show on the parent page and on the board
  * - board: an attitude button writes the score and moves the class bar
- * - screenshots (360 px) into demo/screenshots/
+ * - screenshots (390 px) into demo/screenshots/
  * Env: DAYBOOK_BIN (default .venv/bin/daybook), DAYBOOK_DB (demo.sqlite), DAYBOOK_CONFIG (demo/daybook.demo.json)
  */
 'use strict';
@@ -175,7 +175,8 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today], { encoding: 'utf-8' }));
     const tok = pick.student_token;
 
     console.log('\n[2] student 오늘 tab: photo -> shrink -> Worker -> 오늘 완료');
-    const phone = await browser.newContext({ viewport: { width: 360, height: 740 } });
+    const PHONE = { width: 390, height: 844 };
+    const phone = await browser.newContext({ viewport: PHONE });
     const page = await phone.newPage();
     const errs = [];
     page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
@@ -198,6 +199,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today], { encoding: 'utf-8' }));
     check(/연속 \d+일/.test(await page.textContent('#d-streak')), `streak shown: ${await page.textContent('#d-streak')}`);
     check(/반 누적 \+\d+/.test(await page.textContent('#d-class')), `class total shown: ${await page.textContent('#d-class')}`);
     check(await page.isVisible('#st-done label.small'), '"다시 올리기" offered');
+    check(/^오늘의 한 장 · \d+\/\d+ 기록됨 \d\d:\d\d$/.test(await page.textContent('#d-shot')), `"${await page.textContent('#d-shot')}" (no photo)`);
     await page.waitForTimeout(250);
     await page.screenshot({ path: path.join(SHOTS, 'student-done.png') });
     let subs = await workerGet('/submissions');
@@ -221,6 +223,12 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today], { encoding: 'utf-8' }));
     console.log('\n[2b] stories, reels, profile');
     const nStories = await page.locator('.story').count();
     check(nStories >= 3, `${nStories} story rings (새 영상, 연속, 반 목표, 선생님)`);
+    const rings = await page.evaluate(() => ({
+      img: !!document.querySelector('.story[data-story="videos"] .story-in img[src^="/t/"]'),
+      prog: (document.querySelector('.story[data-story="streak"] .ring.prog') || { style: {} }).style.getPropertyValue('--p'),
+      donut: !!document.querySelector('.story[data-story="goal"] svg.donut .d-fill'),
+      mono: (document.querySelector('.story[data-story="teacher"] .mono') || {}).textContent }));
+    check(rings.img && rings.prog !== '' && rings.donut && rings.mono === 'AMP', `rings hold content: newest thumbnail, streak progress (${rings.prog}%), goal donut, AMP monogram`);
     await page.click('.story[data-story="videos"]');
     await page.waitForSelector('#sv:not([hidden])', { timeout: 3000 });
     const segN = await page.locator('#sv-segs .sv-seg').count();
@@ -238,11 +246,16 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today], { encoding: 'utf-8' }));
     check(await page.getAttribute('.story[data-story="videos"]', 'class').then((c) => c.includes('seen')), 'seen state survives a reload (localStorage)');
 
     await page.click('#t-videos');
+    const nShorts = JSON.parse(fs.readFileSync(path.join(ROOT, 'demo', 'videos.demo.json'), 'utf-8')).filter((v) => v.kind === 'short').length;
     const feedInfo = await page.evaluate(() => {
       const f = document.getElementById('feed'), reels = Array.from(f.querySelectorAll('.reel'));
-      return { snap: getComputedStyle(f).scrollSnapType, h: f.clientHeight, heights: reels.map((r) => r.getBoundingClientRect().height), n: reels.length };
+      const m = f.querySelector('.media.short').getBoundingClientRect();
+      return { snap: getComputedStyle(f).scrollSnapType, h: f.clientHeight, heights: reels.map((r) => r.getBoundingClientRect().height), n: reels.length,
+        ratio: m.width / m.height, longInFeed: f.querySelectorAll('.media.wide').length };
     });
-    check(feedInfo.snap.includes('y') && feedInfo.snap.includes('mandatory') && feedInfo.heights.every((h) => Math.abs(h - feedInfo.h) <= 1), `snap feed: ${feedInfo.n} reels, each exactly one screen (${feedInfo.h}px)`);
+    check(feedInfo.n === nShorts && feedInfo.longInFeed === 0, `reels show only kind "short" (${feedInfo.n}/${nShorts})`);
+    check(feedInfo.snap.includes('y') && feedInfo.snap.includes('mandatory') && feedInfo.heights.every((h) => Math.abs(h - feedInfo.h) <= 1), `snap feed: each reel exactly one screen (${feedInfo.h}px)`);
+    check(Math.abs(feedInfo.ratio - 9 / 16) < 0.02, `reel media is 9:16 (${feedInfo.ratio.toFixed(3)})`);
     await page.screenshot({ path: path.join(SHOTS, 'student-reels.png') });
     await page.evaluate(() => { const f = document.getElementById('feed'); f.scrollTop = f.clientHeight; });
     await page.waitForTimeout(400);
@@ -254,19 +267,54 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today], { encoding: 'utf-8' }));
     check(/^https:\/\/www\.youtube-nocookie\.com\/embed\/[A-Za-z0-9_-]{11}\?/.test(src || ''), `tapping ▶ inserts the nocookie iframe (${(src || '').split('?')[0]})`);
     check((await page.locator('.reel').nth(1).locator('iframe').getAttribute('referrerpolicy')) === 'strict-origin', 'iframe sends only the origin as referrer');
     await page.click('#grid-toggle');
-    const grid = await page.evaluate(() => { const r = document.querySelectorAll('#feed .reel'); return { cls: document.getElementById('feed').className, sameRow: Math.abs(r[0].getBoundingClientRect().top - r[1].getBoundingClientRect().top) < 2, frames: document.querySelectorAll('#feed iframe').length }; });
+    const grid = await page.evaluate(() => { const r = document.querySelectorAll('#feed .reel'); return { cls: document.getElementById('feed').className, sameRow: Math.abs(r[0].getBoundingClientRect().top - r[1].getBoundingClientRect().top) < 2 }; });
     check(grid.cls.includes('grid') && grid.sameRow && (await page.getAttribute('#grid-toggle', 'aria-pressed')) === 'true', '목록 toggle switches to a 2-column grid');
     await page.click('#grid-toggle');
     check(!(await page.getAttribute('#feed', 'class')).includes('grid'), 'and back to the feed');
+    await page.click('#v-long');
+    check((await page.locator('#tab-videos iframe').count()) === 0 && await page.isHidden('#feed') && await page.isVisible('#longs'), '강의 sub-tab: the shorts feed hides and its video stops');
+    const longInfo = await page.evaluate(() => {
+      const box = document.getElementById('longs').getBoundingClientRect();
+      const cards = Array.from(document.querySelectorAll('#longs .lcard'));
+      const visible = cards.filter((c) => { const r = c.getBoundingClientRect(); return r.top >= box.top - 1 && r.bottom <= box.bottom + 1; }).length;
+      const m = cards[0].querySelector('.media.wide').getBoundingClientRect();
+      return { n: cards.length, visible, ratio: m.width / m.height, shortInLongs: document.querySelectorAll('#longs .media.short').length };
+    });
+    check(longInfo.visible >= 2 && longInfo.shortInLongs === 0 && Math.abs(longInfo.ratio - 16 / 9) < 0.02, `long videos: 16:9 cards, ${longInfo.visible} fully on one 844 px screen (of ${longInfo.n})`);
+    await page.screenshot({ path: path.join(SHOTS, 'student-long.png') });
+    await page.locator('#longs .lcard').first().locator('button.play').click();
+    check(/youtube-nocookie\.com\/embed\//.test(await page.locator('#longs .lcard').first().locator('iframe').getAttribute('src') || ''), 'tapping ▶ on a long card plays it inline');
 
     await page.click('#t-me');
     check(await page.isHidden('#stories'), 'stories row hidden on 내 기록');
-    check((await page.getAttribute(`#tiles li[data-date="${today}"]`, 'class') || '').includes('sub'), '내 기록 grid marks today as submitted');
-    check((await page.locator('#tiles li').count()) >= 21 && (await page.locator('#tiles img').count()) === 0, `day tiles for the term (${await page.locator('#tiles li').count()}), no photos`);
+    check((await page.getAttribute(`#tiles li[data-date="${today}"]`, 'class') || '').match(/\b(sub|hl)\b/), '내 기록 grid marks today as submitted');
+    const tileInfo = await page.evaluate(() => {
+      const t = Array.from(document.querySelectorAll('#tiles .tile'));
+      const kinds = {};
+      t.forEach((x) => { const k = ['hl', 'sub', 'miss', 'off', 'open'].find((c) => x.classList.contains(c)) || 'none'; kinds[k] = (kinds[k] || 0) + 1; });
+      const bg = (sel) => { const e = document.querySelector('#tiles .tile.' + sel); return e ? getComputedStyle(e).backgroundImage : ''; };
+      return { n: t.length, kinds, heads: Array.from(document.querySelectorAll('#tiles .mhead')).map((h) => h.textContent),
+        hearts: document.querySelectorAll('#tiles .tile.hl .hrt').length, hl: document.querySelectorAll('#tiles .tile.hl').length,
+        subBg: bg('sub'), hlBg: bg('hl'), missShadow: (() => { const e = document.querySelector('#tiles .tile.miss'); return e ? getComputedStyle(e).boxShadow : 'none'; })(),
+        imgs: document.querySelectorAll('#tiles img').length };
+    });
+    check(tileInfo.n >= 21 && tileInfo.imgs === 0 && !tileInfo.kinds.none, `day tiles by status ${JSON.stringify(tileInfo.kinds)}, no photos`);
+    check(tileInfo.hl > 0 && tileInfo.hearts === tileInfo.hl && tileInfo.subBg !== tileInfo.hlBg && /0\.16/.test(tileInfo.subBg), 'submitted = soft tint; only 3-point days get the full gradient + ♥');
+    check(!tileInfo.kinds.miss || tileInfo.missShadow !== 'none', 'a missed class day has a thin outline');
+    check(tileInfo.heads.length >= 2 && tileInfo.heads.every((h) => /^\d{1,2}월$/.test(h)), `month headers ${tileInfo.heads.join(', ')}`);
+    const months = await page.locator('.hl-b').count();
+    check(months === tileInfo.heads.length, `${months} month highlights`);
+    const lastKey = await page.locator('.hl-b').last().getAttribute('data-month');
+    await page.locator('.hl-b').last().click();
+    await page.waitForTimeout(700);
+    const jump = await page.evaluate((k) => { const h = document.getElementById('m-' + k).getBoundingClientRect(), m = document.getElementById('s-main').getBoundingClientRect(); return Math.round(h.top - m.top); }, lastKey);
+    check(jump >= -2 && jump <= 24, `tapping a month highlight scrolls the grid to it (${jump}px from the top)`);
+    await page.evaluate(() => { document.getElementById('s-main').scrollTop = 0; });
+    await page.waitForTimeout(500);
     check((await page.locator('.msgs .bubble').count()) >= 1 && (await page.locator('#tab-me input, #tab-me textarea').count()) === 0, 'teacher messages as bubbles, no input box');
     const meOverflow = await page.evaluate(() => { const m = document.getElementById('s-main'); return m.scrollWidth - m.clientWidth; });
-    const tileW = await page.evaluate(() => Array.from(document.querySelectorAll('#tiles li')).slice(0, 3).map((t) => t.getBoundingClientRect().right));
-    check(meOverflow === 0 && Math.max(...tileW) <= 360, `profile grid fits 3 per row inside 360 px (overflow ${meOverflow}px)`);
+    const tileW = await page.evaluate(() => Array.from(document.querySelectorAll('#tiles .tile')).slice(0, 3).map((t) => t.getBoundingClientRect().right));
+    check(meOverflow === 0 && Math.max(...tileW) <= PHONE.width, `profile grid fits 3 per row inside ${PHONE.width} px (overflow ${meOverflow}px)`);
     await page.screenshot({ path: path.join(SHOTS, 'student-profile.png') });
     check(errs.length === 0, `no console errors during the student flows (${errs.length}) ${errs.slice(0, 2).join(' | ')}`);
 
@@ -291,24 +339,40 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today], { encoding: 'utf-8' }));
     console.log('      ' + daybook('pull').trim());
     console.log('      ' + daybook('publish').trim().split('\n').pop());
     for (const cs of SCHEMES) {
-      const pctx = await browser.newContext({ viewport: { width: 360, height: 740 }, colorScheme: cs });
+      const pctx = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: cs });
       const pp = await pctx.newPage();
       await pp.goto(`${PAGES}/p/${pick.parent_token}/`, { waitUntil: 'networkidle' });
       await pp.waitForTimeout(150);
       const atBottom = await pp.evaluate(() => window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2);
       check(atBottom, `parent page (${cs}) loads scrolled to the bottom`);
       if (cs === 'light') {
-        const last = pp.locator('.msg').last();
+        const room = await pp.evaluate(() => ({
+          weeks: document.querySelectorAll('.msg').length, past: document.querySelectorAll('details.past').length,
+          openPast: document.querySelectorAll('details.past[open]').length, newest: document.querySelectorAll('.msg.newest .report').length,
+          svgs: document.querySelectorAll('svg.trend').length, svgInNewest: document.querySelectorAll('.msg.newest svg.trend').length,
+          sums: Array.from(document.querySelectorAll('details.past > summary')).map((x) => x.textContent.trim()) }));
+        check(room.newest === 1 && room.past === room.weeks - 1 && room.openPast === 0, `one open report (newest), ${room.past} earlier weeks collapsed`);
+        check(room.svgs === 1 && room.svgInNewest === 1, 'the trend chart appears once, in the newest week');
+        check(room.sums.length > 0 && room.sums.every((x) => /^\d+\/\d+–\d+\/\d+ · 제출 \d+일( · 테스트 (상승|유지|조정))? · 태도 \+\d+$/.test(x)), `summary lines like "${room.sums[0]}"`);
+        const clipped = await pp.evaluate(() => Array.from(document.querySelectorAll('svg.trend text')).filter((t) => {
+          const b = t.getBBox(), v = t.ownerSVGElement.viewBox.baseVal;
+          return b.x < v.x - 0.5 || b.y < v.y - 0.5 || b.x + b.width > v.x + v.width + 0.5 || b.y + b.height > v.y + v.height + 0.5;
+        }).map((t) => t.textContent));
+        check(clipped.length === 0, `no axis label outside its SVG box (${clipped.join(', ') || 'none'})`);
+        const last = pp.locator('.msg.newest');
         const wd = (new Date(today + 'T00:00:00Z').getUTCDay() + 6) % 7;
-        const cell = (await last.locator('ol.week li').nth(wd).innerText()).replace(/\s+/g, ' ');
-        check(/✓ \d\d:\d\d/.test(cell), `latest week card shows today's ✓ and time (${cell})`);
-        check(/이번 주 \d+\/\d+회/.test(await last.innerText()), 'card shows "이번 주 k/n회"');
+        const cell = (await last.locator('ol.strip li').nth(wd).innerText()).replace(/\s+/g, ' ');
+        check(/✓ \d\d:\d\d/.test(cell), `newest report shows today's ✓ and time (${cell})`);
+        check(/제출 \d+일 \(수업일 \d+일 중 \d+일\)|제출 \d+일$/m.test(await last.innerText()), 'count reads "제출 k일 (수업일 c일 중 d일)"');
+        check(/^주간 리포트 · \d{1,2}월 \d주 \(\d+\/\d+–\d+\/\d+\)$/.test((await last.locator('.report h2').innerText()).trim()), `title "${(await last.locator('.report h2').innerText()).trim()}"`);
         check(/업데이트 \d{4}-\d\d-\d\d \d\d:\d\d/.test(await pp.textContent('footer')), 'footer update time');
-        check(await last.locator('svg.trend polyline').count() > 0 && /(상승|유지|조정)/.test(await last.locator('.dirs').innerText()), 'trend SVG with direction words');
-        check(/이번 주 \d+점/.test(await last.innerText()) && /누적 \d+점/.test(await last.innerText()) && await last.locator('.bar .fill').count() === 1, 'attitude week sum + cumulative + class bar');
-        check(await last.locator('.bubble').count() === 1, 'teacher note as a chat bubble');
-        check(await pp.locator('.sep').count() >= 2 && await pp.locator('input, textarea').count() === 0, `message history with date separators (${await pp.locator('.sep').count()} weeks), no input bar`);
-        check((await pp.textContent('.room-end')).includes('이 방은 주간 기록 전용입니다'), 'room note at the bottom');
+        check(/(상승|유지|조정)/.test(await last.innerText()) && /이번 주 \+\d+ · 누적 \d+점/.test(await last.innerText()) && await last.locator('.bar .fill').count() === 1, 'tests with direction words, attitude +week / cumulative, class bar');
+        check(await last.locator('.bubble').count() === 1 && /\d\d:\d\d/.test(await last.locator('.mtime').innerText()), 'teacher line as a separate bubble, time under the message');
+        check(await pp.locator('input, textarea').count() === 0 && (await pp.textContent('.room-end')).includes('이 방은 주간 기록 전용입니다'), 'no input bar; room note at the bottom');
+        await pp.locator('details.past > summary').last().click();
+        check(await pp.locator('details.past').last().locator('.report').isVisible(), 'tapping an earlier week opens its report');
+        await pp.locator('details.past > summary').last().click();
+        await pp.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
       }
       await pp.screenshot({ path: path.join(SHOTS, `parent-${cs}.png`) });
       await pctx.close();
@@ -317,7 +381,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today], { encoding: 'utf-8' }));
     console.log('\n[6] board (127.0.0.1): live ✓, attitude buttons write and move the bar');
     board = spawn(DAYBOOK, ['board', '고1A', '--port', String(BOARD_PORT)], { env, cwd: ROOT, stdio: 'ignore' });
     await waitFor(BOARD + '/api/state');
-    const bctx = await browser.newContext({ viewport: { width: 360, height: 740 } });
+    const bctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const bp = await bctx.newPage();
     const berrs = [];
     bp.on('console', (m) => { if (m.type() === 'error') berrs.push(m.text()); });
@@ -329,7 +393,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today], { encoding: 'utf-8' }));
     await bp.waitForFunction((b) => parseFloat(document.getElementById('b-fill').style.width) > b, before, { timeout: 5000 }).catch(() => {});
     const after = await bp.$eval('#b-fill', (e) => parseFloat(e.style.width));
     check(after > before && (await bp.textContent('#b-three')).includes(pick.display_name), `attitude 3 moved the class bar ${before}% -> ${after}% and lists the student under 오늘 3점`);
-    check(await bp.evaluate(() => document.documentElement.scrollWidth) <= 360 && berrs.length === 0, 'board fits 360 px with 0 console errors');
+    check(await bp.evaluate(() => document.documentElement.scrollWidth) <= 390 && berrs.length === 0, 'board fits 390 px with 0 console errors');
     await bp.screenshot({ path: path.join(SHOTS, 'board.png'), fullPage: true });
     await bctx.close();
   } finally {

@@ -38,7 +38,7 @@ def test_pull_inserts_and_parent_page_shows_check_and_time(conn, cfg, klass, tmp
     assert generate.publish(conn, cfg, tmp_path / "dist", today=TODAY, now=NOW).ok
     html = (tmp_path / "dist" / "p" / s["parent_token"] / "index.html").read_text(encoding="utf-8")
     # 08:15 UTC = 17:15 KST on Friday
-    assert re.search(r'<span class="dot">✓</span>\s*<span class="tm">17:15</span>', html)
+    assert re.search(r'<span class="dot">✓</span><span class="tm tnum">17:15</span>', html)
 
 
 def test_second_pull_uses_since_and_is_idempotent(conn, klass):

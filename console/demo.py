@@ -94,13 +94,17 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
 
 
 DEMO_VIDEOS = [
-    # title, group, days ago, yt_id (synthetic, 11 chars), thumb
-    ("11월 1주 프린트 풀이", "고1 · 풀이", 1, "AMPdemo0001", "thumbs/v1.jpg"),
-    ("나머지정리 한 번에 정리", "고1 · 개념", 3, "AMPdemo0002", "thumbs/v2.jpg"),
-    ("10월 4주 프린트 풀이", "고1 · 풀이", 9, "AMPdemo0003", "thumbs/v3.jpg"),
-    ("다항식의 연산 (개념)", "고1 · 개념", 14, "AMPdemo0004", "thumbs/v4.jpg"),
-    ("항등식과 미정계수법", "고1 · 개념", 20, "AMPdemo0005", None),
-    ("기초 연산 점검 영상", "기초 · 개념", 25, None, "thumbs/v5.jpg"),
+    # title, group, days ago, kind, yt_id (synthetic, 11 chars), thumb, duration
+    ("이차함수 꼭짓점 30초 컷", "고1 · 쇼츠", 0, "short", "AMPshort001", "thumbs/s1.jpg", ""),
+    ("삼각형 넓이 한 번에", "고1 · 쇼츠", 1, "short", "AMPshort002", "thumbs/s2.jpg", ""),
+    ("나머지정리 빠른 확인", "고1 · 쇼츠", 2, "short", "AMPshort003", "thumbs/s3.jpg", ""),
+    ("부호 실수 줄이는 법", "기초 · 쇼츠", 4, "short", "AMPshort004", "thumbs/s4.jpg", ""),
+    ("11월 1주 프린트 풀이", "고1 · 풀이", 1, "long", "AMPdemo0001", "thumbs/l1.jpg", "18:42"),
+    ("나머지정리 개념 정리", "고1 · 개념", 3, "long", "AMPdemo0002", "thumbs/l2.jpg", "12:05"),
+    ("10월 4주 프린트 풀이", "고1 · 풀이", 9, "long", "AMPdemo0003", "thumbs/l3.jpg", "21:17"),
+    ("다항식의 연산", "고1 · 개념", 14, "long", "AMPdemo0004", "thumbs/l4.jpg", "9:48"),
+    ("항등식과 미정계수법", "고1 · 개념", 20, "long", "AMPdemo0005", "thumbs/l5.jpg", "14:30"),
+    ("기초 연산 점검", "기초 · 개념", 25, "long", None, None, "7:12"),
 ]
 
 
@@ -109,9 +113,11 @@ def write_demo_videos(today: date | None = None, out: Path | None = None) -> Pat
     today = today or M.kst_today()
     out = out or ROOT / "demo" / "videos.demo.json"
     items = []
-    for i, (title, group, ago, yt, thumb) in enumerate(DEMO_VIDEOS, start=1):
-        v = {"title": title, "url": f"https://example.com/q/demo/{i}/", "group": group,
+    for i, (title, group, ago, kind, yt, thumb, dur) in enumerate(DEMO_VIDEOS, start=1):
+        v = {"title": title, "url": f"https://example.com/q/demo/{i}/", "group": group, "kind": kind,
              "added": (today - timedelta(days=ago)).isoformat()}
+        if dur:
+            v["duration"] = dur
         if yt:
             v["yt_id"] = yt
         if thumb:

@@ -90,6 +90,17 @@ One line each. "deferred" = not built in P0, on purpose.
 - Raw ids: a student page never contains a set/round id. It carries `{fnv1a(set_id): label}` and maps `?set=` in the browser; label = `assignments.json` (optional, gitignored; example in `mappings/`), else the session topic, else "{M/D} 과제" of the session date, else today's date.
 - Lint `raw_id` (student and parent pages): `Adaptive_`, `round_`, `_G1`..`_G12`, `.json`. A note that quotes a round id now stops publish.
 
+## Design pass v2 (2026-11-03)
+- `videos.json` gains `kind` ("short" | "long", default long) and `duration`. 영상 = 쇼츠 (9:16 full-screen snap reels, shorts only) and 강의 (16:9 cards, 2+ per 844 px screen) as sub-tabs; with no shorts only 강의 shows. Short thumbnails are shrunk to 360 px wide, long to 480 px.
+- Story rings hold content: the newest video's thumbnail, the streak number inside a ring filled by this week's submission days / 7 (conic gradient), a goal donut (% of the class goal), an "AMP" monogram for the teacher. Seen = grey.
+- Profile tiles: submitted = 16 % tint of the gradient, a 3-point day = full gradient + ♥ (even without a submission), missed class day = thin rose outline + dot, no class = faint grey, today = accent outline. Month headers in the grid; month highlight rings (count of submitted days) jump to the month. Bio line "{class} · {n}번째 기록" (n = submission days).
+- Done screen adds "오늘의 한 장 · M/D 기록됨 HH:MM" (time from the upload response, kept per device; from the published data when published the same day). No photo.
+- Parent room: one report message per week (title "주간 리포트 · M월 N주 (range)", where N = which Thursday of the month); rows 제출 (7-day strip with ✓ + time; "제출 k일 (수업일 c일 중 d일)"), 주간 테스트 (latest 확보 효율 / 도전 도달 % + direction words; the chart only in the newest week), 태도 ("이번 주 +w · 누적 c점"; the class bar only in the newest week). The teacher's line is a separate bubble. Earlier weeks are one summary line each in a closed `<details>`; the summary uses the efficiency direction as "테스트 …".
+- Each past week is dated and timed by the last successful publish inside that week (from the `events` log); without one it is dated on its Saturday with no time.
+- Trend chart: the first date label is left-anchored and the last right-anchored, so no label is clipped (checked in e2e with getBBox).
+- Contrast: light muted text #5b6472 (≥ 5.2:1 on every light background), green/amber direction words darkened in light mode; all dark-mode muted text ≥ 6:1.
+- Screenshots are taken at 390×844; the audit still renders every page at 360 and 390 px, light and dark.
+
 ## Deferred
 - deferred (local agent will add after the clone, before 수능 week): `daybook class cancel <class> <date>` so a closed day does not break streaks.
 - deferred: `export pdf` (the command is a stub that exits 2 with a message).

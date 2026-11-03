@@ -126,15 +126,16 @@ def test_parent_page_blocks(conn, cfg, klass, tmp_path):
     conn.commit()
     assert publish(conn, cfg, tmp_path).ok
     html = (tmp_path / "dist" / "p" / s["parent_token"] / "index.html").read_text(encoding="utf-8")
-    last = "AMP 수학 · 가람" + html.rsplit('<div class="msg">', 1)[1]   # the latest week's report cards
-    order = [last.index(k) for k in ("AMP 수학 · 가람", "이번 주 제출", "주간 테스트", "태도 점수", "선생님 한 줄",
-                                       "이 방은 주간 기록 전용입니다", "업데이트 2026-11-06 10:00")]
+    newest = html.split('<div class="msg newest">')[1]
+    order = [html.index("AMP 수학 · 가람")] + [len(html) - len(newest) + newest.index(k) for k in (
+        "주간 리포트", ">제출<", "주간 테스트", ">태도<", "선생님 한 줄", "이 방은 주간 기록 전용입니다", "업데이트 2026-11-06 10:00")]
     assert order == sorted(order)
-    assert "<svg" in html and "<polyline" in html
+    assert "<svg" in newest and "<polyline" in newest
     assert re.search(r'class="dir (up|keep|adjust)">(상승|유지|조정)<', html)
-    assert "이번 주 3점" in html and "누적 3점" in html and "이번 주 1/5회" in html
-    assert 'class="bar"' in html and "피자까지" in html
-    assert "이번 주도 잘했어요." in html
+    assert "이번 주 +3 · 누적 3점" in newest
+    assert "제출 1일" in newest and "(수업일 2일 중 1일)" in newest      # Tue + Fri so far, Fri submitted
+    assert 'class="bar"' in newest and "피자까지" in newest
+    assert "이번 주도 잘했어요." in newest
     assert "<a " not in html and "<input" not in html and "<textarea" not in html  # no links out, no chat input
     assert re.findall(r"<script[^>]*>", html) == ['<script src="/static/app.js" defer>']  # only scroll-to-bottom
     assert "정답률" not in html
