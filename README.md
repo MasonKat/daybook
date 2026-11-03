@@ -1,11 +1,12 @@
 # DAYBOOK (P0)
 
-**Status (2026-11-03, cloud build + design pass v1):**
+**Status (2026-11-03: P0, design v2, features F1–F5):**
 1. P1 complete and tested: schema + `students_public`, `init`, `demo`, `roster add/list/import`, Worker `/submit` + `/submissions`, student 오늘 tab, `pull`, parent page, `publish` + no-PII lint, `import screeners`, deploy steps.
 2. P2 complete: board + attitude buttons, `score`, class reward bar, `note`, `weekly`, Playwright checks. P3: manifest/icons/standalone, `rotate-tokens`, `export pdf` stub, Worker node tests.
 3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 97 pytest + 22 Worker node tests + 136 Playwright checks (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
    Design v2: shorts reels + 강의 cards, story rings with content, status-coloured profile tiles, one weekly report per parent message.
-4. Not done here (needs the teacher): the Cloudflare deploy, and a real-phone install test on iPhone Safari / Android Chrome. Deferred items are listed in `DECISIONS.md`.
+4. Features: taste build (콩, `make deploy-taste`), 출석 with a 4-digit code, 오늘 한 줄, 오늘의 장면 + reactions, 휴강, QR sheet, class band, term report, note drafts.
+   Not done here (needs the teacher): the Cloudflare deploys (redeploy the Worker for 출석/장면), a real-phone install test. Deferred items: `DECISIONS.md`.
 5. Real data is attached by the local agents: see `HANDOFF.md`. This repo holds synthetic data only.
 
 DAYBOOK is a single-teacher student ledger. Each day a student photographs today's task and uploads it from their own

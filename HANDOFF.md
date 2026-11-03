@@ -4,18 +4,20 @@ The cloud build used synthetic data only. Real students, phones, scores and note
 in `daybook.sqlite` (gitignored), and on the deployed pages behind unguessable links. Never commit `daybook.sqlite`,
 `daybook.json`, `dist/`, a real roster CSV or real screener snapshots. Never deploy to GitHub Pages.
 
-## 0. State at handoff (2026-11-03)
+## 0. State at handoff (2026-11-03, after DESIGN v2 and features F1–F5)
 
-- `make demo` is green from a clean clone (Python 3.12 and 3.13, Node 22): 64 pytest, 10 Worker node tests, 83 e2e checks.
-- Design pass v1 (11-03): story/reels/profile student page, messenger-room parent page; screenshots in `demo/screenshots/`.
-- Every item of §0.1 is built: P1, P2, and P3 except a real-phone install test. See `DECISIONS.md` for every choice and
-  every deferred item.
-- Not done, needs the teacher: the Cloudflare deploy (README, "Teacher deploy steps"), and pushing this repo (below).
+- `main` on GitHub is green from a clean clone (Python 3.12/3.13, Node 22): 97 pytest, 22 Worker node tests,
+  136 Playwright checks. Windows: `scripts\demo.ps1`, `scripts\check.ps1` (written without a PowerShell to run them
+  here: please run them once on the laptop and report).
+- Built: P0 (P1–P3), DESIGN v1 + v2, Windows/UTF-8 fixes, the raw-id lint, F1 taste build (콩), F2 출석, F3 오늘 한 줄,
+  F4 오늘의 장면, F5 (class cancel, QR, class band, term report, note suggest). See `DECISIONS.md`.
+- **The live Worker must be redeployed** after pulling (`cd worker && npx wrangler deploy`): 출석, 장면 and reactions
+  need the new endpoints. Uploads keep working on the old one.
+- Schema is v5; an existing `daybook.sqlite` is migrated automatically (additive, no data lost) by the next command.
+- Not done here: the Cloudflare deploys, a real-phone install test, live webcam capture on the board (deferred).
 
-### Push this repo
-The cloud session had no `daybook` repository attached, so the commits are local to the session's container.
-The teacher creates an empty **private** GitHub repo (e.g. `MasonKat/daybook`), attaches it to the cloud session
-(or allows the session to add it), and the cloud agent pushes `main`. If you receive a git bundle instead:
+### The repo
+Everything is on `https://github.com/MasonKat/daybook` (private), branch `main`. If you ever receive a git bundle instead:
 
 ```bash
 git clone daybook-p0.bundle daybook
