@@ -36,19 +36,19 @@
 
 <main class="s-main" id="s-main">
 <section id="tab-videos" class="panel" role="tabpanel" hidden>
-  {% if shorts or longs %}
+  {% if me.shorts or me.longs %}
   <div class="feedbar">
-    {% if shorts and longs %}
+    {% if me.shorts and me.longs %}
     <div class="seg" role="tablist">
       <button type="button" class="seg-b" id="v-shorts" data-v="shorts" aria-selected="true">{{ S.tab_shorts }}</button>
       <button type="button" class="seg-b" id="v-long" data-v="long" aria-selected="false">{{ S.tab_long }}</button>
     </div>
     {% else %}<span></span>{% endif %}
-    {% if shorts %}<button type="button" class="toggle" id="grid-toggle" aria-pressed="false" data-grid="{{ S.grid_toggle }}" data-feed="{{ S.feed_toggle }}">{{ S.grid_toggle }}</button>{% endif %}
+    {% if me.shorts %}<button type="button" class="toggle" id="grid-toggle" aria-pressed="false" data-grid="{{ S.grid_toggle }}" data-feed="{{ S.feed_toggle }}">{{ S.grid_toggle }}</button>{% endif %}
   </div>
-  {% if shorts %}
+  {% if me.shorts %}
   <div class="feed" id="feed">
-    {% for v in shorts %}
+    {% for v in me.shorts %}
     <article class="reel" data-yt="{{ v.yt_id }}">
       <div class="media short">
         {% if v.thumb %}<img src="{{ v.thumb }}" alt="" loading="lazy" decoding="async">{% else %}<div class="ph"><span>{{ v.title }}</span></div>{% endif %}
@@ -67,9 +67,9 @@
     {% endfor %}
   </div>
   {% endif %}
-  {% if longs %}
-  <div class="longs" id="longs"{% if shorts %} hidden{% endif %}>
-    {% for v in longs %}
+  {% if me.longs %}
+  <div class="longs" id="longs"{% if me.shorts %} hidden{% endif %}>
+    {% for v in me.longs %}
     <article class="lcard" data-yt="{{ v.yt_id }}">
       <div class="media wide">
         {% if v.thumb %}<img src="{{ v.thumb }}" alt="" loading="lazy" decoding="async">{% else %}<div class="ph"><span>{{ v.title }}</span></div>{% endif %}

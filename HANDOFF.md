@@ -6,7 +6,7 @@ in `daybook.sqlite` (gitignored), and on the deployed pages behind unguessable l
 
 ## 0. State at handoff (2026-11-04, after F6–F9, F13 and F14)
 
-- `main` is green from a clean clone: 149 pytest, 39 Worker node tests (incl. the class-day budget with an AMP Live
+- `main` is green from a clean clone: 153 pytest, 39 Worker node tests (incl. the class-day budget with an AMP Live
   round), the full Playwright check. A normal check run leaves `git status` clean (F0); `make screenshots` /
   `scripts\check.ps1 -Screenshots` refresh the committed screenshots on purpose.
 - Built: P0, design v2, F1–F9, hotfix H1–H6, F13 (the parent-contact desk), F14 (the weekly-test report). F10–F12 arrived
@@ -247,6 +247,11 @@ Students tap "AMP Live" on the 오늘 tab and type the code. Re-check Cloudflare
 
 Offline (F9): the student page keeps working on bad Wi-Fi; a photo taken offline waits on the phone and is sent the
 next time the page opens with a connection. Answer cards (F8) are a spike only: `daybook omr --spike --eval 200`.
+
+Videos per class (F10): in `videos.json` (or a folder of `*.json` files: set `"videos_path": "videos/"`), tag an item
+with `"classes": ["고1A"]` and/or `"grades": ["고1"]` and give each class its grade once
+(`daybook class edit 고1A --grade 고1`). Untagged items show to everyone; `"pin": true` keeps this week's solution set
+on top. A typo in a tag is a publish warning (the item then shows to nobody).
 
 주간 테스트 (F14): before each weekly test, `daybook round add <round id> --grade 1학년 --classes 고1A --quizzes 20
 --open "2026-11-06 20:00" --close "2026-11-08 23:59"` (or Teacher tab → 주간 테스트; redeploy the Worker once first:

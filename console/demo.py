@@ -81,8 +81,9 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
     for cname, days, reward, t0, t1, self_study, late_min, kind in CLASSES:
         cur = conn.execute(
             """INSERT INTO classes (name, term, weekday_mask, reward_label, start_time, end_time, self_study_until, late_min,
-                                    late_avg_min) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (cname, term, M.mask_from_days(days), reward, t0, t1, self_study, late_min, max(15, late_min)))
+                                    late_avg_min, grade) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (cname, term, M.mask_from_days(days), reward, t0, t1, self_study, late_min, max(15, late_min),
+             "기초" if kind == "basic" else "고1"))
         cid = cur.lastrowid
         cls = conn.execute("SELECT * FROM classes WHERE id = ?", (cid,)).fetchone()
         studs = [add_student(conn, cid, full, ext_id=ext) for full, ext in STUDENTS[cname]]
@@ -239,17 +240,17 @@ def _seed_kong(conn: sqlite3.Connection, class_id: int, sess: dict, today: date,
 
 
 DEMO_VIDEOS = [
-    # title, group, days ago, kind, yt_id (synthetic, 11 chars), thumb, duration
-    ("이차함수 꼭짓점 30초 컷", "고1 · 쇼츠", 0, "short", "AMPshort001", "thumbs/s1.jpg", ""),
-    ("삼각형 넓이 한 번에", "고1 · 쇼츠", 1, "short", "AMPshort002", "thumbs/s2.jpg", ""),
-    ("나머지정리 빠른 확인", "고1 · 쇼츠", 2, "short", "AMPshort003", "thumbs/s3.jpg", ""),
-    ("부호 실수 줄이는 법", "기초 · 쇼츠", 4, "short", "AMPshort004", "thumbs/s4.jpg", ""),
-    ("11월 1주 프린트 풀이", "고1 · 풀이", 1, "long", "AMPdemo0001", "thumbs/l1.jpg", "18:42"),
-    ("나머지정리 개념 정리", "고1 · 개념", 3, "long", "AMPdemo0002", "thumbs/l2.jpg", "12:05"),
-    ("10월 4주 프린트 풀이", "고1 · 풀이", 9, "long", "AMPdemo0003", "thumbs/l3.jpg", "21:17"),
-    ("다항식의 연산", "고1 · 개념", 14, "long", "AMPdemo0004", "thumbs/l4.jpg", "9:48"),
-    ("항등식과 미정계수법", "고1 · 개념", 20, "long", "AMPdemo0005", "thumbs/l5.jpg", "14:30"),
-    ("기초 연산 점검", "기초 · 개념", 25, "long", None, None, "7:12"),
+    # title, group, days ago, kind, yt_id (synthetic, 11 chars), thumb, duration, F10 tags (classes / grades / pin)
+    ("이차함수 꼭짓점 30초 컷", "고1 · 쇼츠", 0, "short", "AMPshort001", "thumbs/s1.jpg", "", {}),
+    ("삼각형 넓이 한 번에", "고1 · 쇼츠", 1, "short", "AMPshort002", "thumbs/s2.jpg", "", {}),
+    ("나머지정리 빠른 확인", "고1 · 쇼츠", 2, "short", "AMPshort003", "thumbs/s3.jpg", "", {}),
+    ("부호 실수 줄이는 법", "기초 · 쇼츠", 4, "short", "AMPshort004", "thumbs/s4.jpg", "", {"grades": ["기초"]}),
+    ("11월 1주 프린트 풀이", "고1 · 풀이", 1, "long", "AMPdemo0001", "thumbs/l1.jpg", "18:42", {"classes": ["고1A", "심화C"], "pin": True}),
+    ("나머지정리 개념 정리", "고1 · 개념", 3, "long", "AMPdemo0002", "thumbs/l2.jpg", "12:05", {"grades": ["고1"]}),
+    ("10월 4주 프린트 풀이", "고1 · 풀이", 9, "long", "AMPdemo0003", "thumbs/l3.jpg", "21:17", {}),
+    ("다항식의 연산", "고1 · 개념", 14, "long", "AMPdemo0004", "thumbs/l4.jpg", "9:48", {"grades": ["고1"]}),
+    ("항등식과 미정계수법", "고1 · 개념", 20, "long", "AMPdemo0005", "thumbs/l5.jpg", "14:30", {"grades": ["고1"]}),
+    ("기초 연산 점검", "기초 · 개념", 25, "long", None, None, "7:12", {"grades": ["기초"]}),
 ]
 
 
@@ -258,7 +259,7 @@ def write_demo_videos(today: date | None = None, out: Path | None = None) -> Pat
     today = today or M.kst_today()
     out = out or ROOT / "demo" / "videos.demo.json"
     items = []
-    for i, (title, group, ago, kind, yt, thumb, dur) in enumerate(DEMO_VIDEOS, start=1):
+    for i, (title, group, ago, kind, yt, thumb, dur, tags) in enumerate(DEMO_VIDEOS, start=1):
         v = {"title": title, "url": f"https://example.com/q/demo/{i}/", "group": group, "kind": kind,
              "added": (today - timedelta(days=ago)).isoformat()}
         if dur:
@@ -267,6 +268,7 @@ def write_demo_videos(today: date | None = None, out: Path | None = None) -> Pat
             v["yt_id"] = yt
         if thumb:
             v["thumb"] = thumb
+        v.update(tags)
         items.append(v)
     out.write_text(json.dumps(items, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return out

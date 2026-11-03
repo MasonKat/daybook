@@ -248,6 +248,15 @@ One line each. "deferred" = not built in P0, on purpose.
 - **Budget:** the class-day test now includes an open round with 20 students × (report + one edit) and the open-round lookup in every `/status`; the totals stay at or below 13.8 % of every free limit.
 - **next (not built):** the Google Form → make.com → Notion intake can retire once the teacher has tried this (the teacher decides after the trial).
 
+## F10: videos per class (2026-11-04)
+- Each item in `videos.json` may carry `classes` (e.g. `["고1A"]`) and/or `grades` (e.g. `["고1"]`); a class has a `grade` (`daybook class add/edit --grade 고1`; schema v8 adds `classes.grade`). An item with neither shows to everyone; otherwise only to students of a matching class or grade (story ring, shorts and 강의 alike). A string instead of a list is accepted.
+- `pin: true` puts an item on top of the 강의 list for the students who see it (the rest stays newest first).
+- `videos_path` may be a folder: every `*.json` in it is merged in name order; the same URL twice is kept once (the first file wins), so per-source files (solutions.json, shorts.json, concepts.json) can overlap safely. A file that is not valid JSON is skipped.
+- An unknown class or grade in the tags is a publish **warning** (`video_tag`, listing the item); the item then shows to nobody until it is fixed.
+- Thumbnails are still made for every item (a thumbnail is not personal data).
+- Demo: 고1A, 심화C and 케어D are 고1, 기초B is 기초; the November solution set is pinned for 고1A and 심화C; two 기초 items show only to 기초B.
+- `daybook session start` now defaults to the class start time (F11 "start time"), then to now.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

@@ -125,7 +125,7 @@ def start_session(conn: sqlite3.Connection, cls: sqlite3.Row, day: date, at: str
         raise OpError("--at must be HH:MM (24 h)")
     sid = ensure_session(conn, cls["id"], day, set_id, topic)
     row = conn.execute("SELECT * FROM sessions WHERE id = ?", (sid,)).fetchone()
-    start = at or row["start_time"] or datetime.now(KST).strftime("%H:%M")
+    start = at or row["start_time"] or cls["start_time"] or datetime.now(KST).strftime("%H:%M")   # F11: the class's start
     code = row["code"] if row["code"] and not new_code else f"{secrets.randbelow(10000):04d}"
     if (start, code) != (row["start_time"], row["code"]):
         conn.execute("UPDATE sessions SET start_time = ?, code = ? WHERE id = ?", (start, code, sid))

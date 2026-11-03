@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS classes (
     reward_goal_points INTEGER,           -- NULL = computed (and frozen) at the next publish
     goal_coef          REAL DEFAULT 2.4,
     milestone_fracs    TEXT DEFAULT '0.33,0.67',
+    grade              TEXT,              -- F10: e.g. 고1 / 고2 / 기초 (videos.json `grades` match it)
     start_time         TEXT,              -- F13: class hours HH:MM (sessions may override the start)
     end_time           TEXT,
     self_study_until   TEXT,              -- F13.5: e.g. 21:00 after a 17:30-20:00 class
@@ -245,7 +246,7 @@ def migrate(conn: sqlite3.Connection) -> None:
     added = {   # table -> {column: declaration} for columns that arrived after v1 (additive only)
         "sessions": {"start_time": "TEXT", "code": "TEXT", "cancelled": "TEXT"},
         "submissions": {"reflection": "TEXT", "chip": "TEXT", "solved": "INTEGER"},
-        "classes": {"start_time": "TEXT", "end_time": "TEXT", "self_study_until": "TEXT", "late_min": "INTEGER DEFAULT 10",
+        "classes": {"grade": "TEXT", "start_time": "TEXT", "end_time": "TEXT", "self_study_until": "TEXT", "late_min": "INTEGER DEFAULT 10",
                     "late_count": "INTEGER DEFAULT 3", "late_avg_min": "INTEGER DEFAULT 15"},
     }
     for table, new_cols in added.items():

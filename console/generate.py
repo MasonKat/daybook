@@ -106,35 +106,86 @@ def videos_file(cfg: Config) -> Path | None:
     return p if p.exists() else None
 
 
-def load_videos(cfg: Config) -> list[dict]:
-    """videos.json: [{title, url, group, added, kind?, yt_id?, thumb?, duration?}] -> flat list, newest first.
+def _tags(v) -> list[str]:
+    if isinstance(v, str):
+        v = [v]
+    return [str(x).strip() for x in (v or []) if str(x).strip()] if isinstance(v, list) else []
 
-    `kind` is "short" (vertical, shown as reels) or "long" (default; shown as 16:9 cards).
 
-    `thumb` is a local image path (relative to videos.json); it is shrunk into dist/t/<id>.jpg at publish.
-    """
+def video_files(cfg: Config) -> list[Path]:
+    """F10: `videos_path` is one JSON file or a folder whose *.json files are merged (one per source, e.g.
+    solutions.json, shorts.json, concepts.json), in name order."""
     p = videos_file(cfg)
     if p is None:
         return []
-    out = []
-    for v in json.loads(p.read_text(encoding="utf-8")):
-        url = str(v.get("url", ""))
-        if not url.startswith(("https://", "http://")):
+    return sorted(f for f in p.glob("*.json") if f.is_file()) if p.is_dir() else [p]
+
+
+def load_videos(cfg: Config) -> list[dict]:
+    """videos.json: [{title, url, group, added, kind?, yt_id?, thumb?, duration?, classes?, grades?, pin?}]
+    -> flat list, newest first.
+
+    `kind` is "short" (vertical, shown as reels) or "long" (default; shown as 16:9 cards).
+    `thumb` is a local image path (relative to its JSON file); it is shrunk into dist/t/<id>.jpg at publish.
+    F10: `classes` (e.g. ["고1A"]) and/or `grades` (e.g. ["고1"]) limit an item to matching students; an item with
+    neither is for everyone. `pin: true` keeps it on top of the 강의 list for its students. The same URL in two files
+    is kept once (the first file wins).
+    """
+    out, seen = [], set()
+    for p in video_files(cfg):
+        try:
+            items = json.loads(p.read_text(encoding="utf-8"))
+        except ValueError:
             continue
-        yt = str(v.get("yt_id", "") or "")
-        yt = yt if YT_RE.match(yt) else ""
-        vid = yt or hashlib.sha1(url.encode()).hexdigest()[:12]
-        thumb_src = None
-        if v.get("thumb"):
-            cand = (p.parent / str(v["thumb"])).resolve()
-            thumb_src = cand if cand.is_file() else None
-        kind = "short" if str(v.get("kind", "")).lower() == "short" else "long"
-        dur = str(v.get("duration", "") or "")
-        out.append({"id": vid, "title": str(v.get("title", "")), "url": url, "group": str(v.get("group", "")),
-                    "added": str(v.get("added", "")), "yt_id": yt, "thumb_src": thumb_src, "kind": kind,
-                    "duration": dur if re.fullmatch(r"\d{1,2}(:\d{2}){1,2}", dur) else "",
-                    "thumb": f"/t/{vid}.jpg" if thumb_src else ""})
+        for v in items if isinstance(items, list) else []:
+            if not isinstance(v, dict):
+                continue
+            item = _video_item(p, v)
+            if item and item["url"] not in seen:
+                seen.add(item["url"])
+                out.append(item)
     out.sort(key=lambda v: v["added"], reverse=True)
+    return out
+
+
+def _video_item(p: Path, v: dict) -> dict | None:
+    url = str(v.get("url", ""))
+    if not url.startswith(("https://", "http://")):
+        return None
+    yt = str(v.get("yt_id", "") or "")
+    yt = yt if YT_RE.match(yt) else ""
+    vid = yt or hashlib.sha1(url.encode()).hexdigest()[:12]
+    thumb_src = None
+    if v.get("thumb"):
+        cand = (p.parent / str(v["thumb"])).resolve()
+        thumb_src = cand if cand.is_file() else None
+    kind = "short" if str(v.get("kind", "")).lower() == "short" else "long"
+    dur = str(v.get("duration", "") or "")
+    return {"id": vid, "title": str(v.get("title", "")), "url": url, "group": str(v.get("group", "")),
+            "added": str(v.get("added", "")), "yt_id": yt, "thumb_src": thumb_src, "kind": kind,
+            "duration": dur if re.fullmatch(r"\d{1,2}(:\d{2}){1,2}", dur) else "",
+            "thumb": f"/t/{vid}.jpg" if thumb_src else "",
+            "classes": _tags(v.get("classes")), "grades": _tags(v.get("grades")), "pin": v.get("pin") is True}
+
+
+def video_for(v: dict, cls) -> bool:
+    """F10: an untagged item is for everyone; a tagged one only for a matching class or grade."""
+    if not v["classes"] and not v["grades"]:
+        return True
+    if cls is None:
+        return False
+    return cls["name"] in v["classes"] or bool(cls["grade"] and cls["grade"] in v["grades"])
+
+
+def video_tag_warnings(conn: sqlite3.Connection, videos: list[dict]) -> list:
+    """F10: an unknown class or grade in `classes`/`grades` is a publish warning (the item shows to nobody)."""
+    names = {r["name"] for r in conn.execute("SELECT name FROM classes")}
+    grades = {r["grade"] for r in conn.execute("SELECT grade FROM classes WHERE grade IS NOT NULL AND grade != ''")}
+    out = []
+    for v in videos:
+        bad = [c for c in v["classes"] if c not in names] + [g for g in v["grades"] if g not in grades]
+        if bad:
+            out.append(lintmod.Finding("warning", "videos", "video_tag", f"{v['title']!r}: unknown {', '.join(bad)}"))
     return out
 
 
@@ -315,10 +366,9 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         st = class_rounds.setdefault(r["class_id"], {}).setdefault((r["test_name"], r["date"]), {"eff": [], "reach": []})
         st["eff"].append(r["efficiency"])
         st["reach"].append(r["reach"])
-    new_videos = [v for v in videos if v["added"] and v["added"] >= (today - timedelta(days=6)).isoformat()]
+    week_ago = (today - timedelta(days=6)).isoformat()
     shorts = [v for v in videos if v["kind"] == "short"]
     longs = [v for v in videos if v["kind"] == "long"]
-    newest_thumb = next((v["thumb"] for v in (new_videos or videos) if v["thumb"]), "")
     published_at = _publish_times(conn)
     show_late = bool(cfg.extra.get("show_late", False))
     show_lines = bool(cfg.extra.get("parent_shows_reflection", False))   # off by default: students write honestly
@@ -383,6 +433,12 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             d -= timedelta(days=1)
         week_k = sum(1 for x in week if x["done"])
 
+        # F10: this student's videos (untagged + their class / grade), pinned 강의 first
+        my_videos = [v for v in videos if video_for(v, cls)]
+        my_shorts = [v for v in my_videos if v["kind"] == "short"]
+        my_longs = sorted((v for v in my_videos if v["kind"] == "long"), key=lambda v: not v["pin"])
+        new_videos = [v for v in my_videos if v["added"] and v["added"] >= week_ago]
+        newest_thumb = next((v["thumb"] for v in (new_videos or my_videos) if v["thumb"]), "")
         # stories (own data only; 오늘의 장면 is class-wide, never another student's)
         stories = []
         week_moments = [m for m in class_moments.get(s["class_id"], [])
@@ -520,6 +576,8 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "lines": lines[:30],
             "bio": S["bio"].format(cls=cls["name"] if cls else "", n=len(sub_days)),
             "solved_week": _solved(subs, mon, today),
+            "shorts": my_shorts,
+            "longs": my_longs,
             "hours": class_hours(cls, S),
             "js": json_script(js),
         })
@@ -633,6 +691,7 @@ def publish(conn: sqlite3.Connection, cfg: Config, out: Path, today: date | None
     staging = out.parent / (".taste-staging" if taste else ".dist-staging")
     ctx = render_site(conn, cfg, staging, today, now, taste=taste)
     findings = lintmod.lint_dir(staging, lintmod.private_rows(conn), ctx["S"]["page_title"])
+    findings += video_tag_warnings(conn, ctx["videos"])
     if taste:
         findings += lintmod.lint_taste(staging, lintmod.private_rows(conn), TASTE_SLUG, [cfg.worker] if cfg.worker else [])
         if len(ctx["students"]) != 1:

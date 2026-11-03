@@ -132,8 +132,10 @@ def class_():
 @click.option("--reward", "reward_label", default="", help="Reward label shown on the class bar")
 @click.option("--goal", type=int, default=None, help="Fixed reward goal (default: computed and frozen at publish)")
 @click.option("--coef", type=float, default=2.4, show_default=True)
+@click.option("--grade", default=None, help="F10: e.g. 고1 (videos.json `grades` match it)")
+@click.option("--start", "start_time", default=None, help="Class start HH:MM (the default for `session start`)")
 @click.pass_obj
-def class_add(obj: Ctx, name, term, days, reward_label, goal, coef):
+def class_add(obj: Ctx, name, term, days, reward_label, goal, coef, grade, start_time):
     if M.parse_term(term) == (None, None):
         fail("--term must be START..END with ISO dates")
     try:
@@ -143,9 +145,12 @@ def class_add(obj: Ctx, name, term, days, reward_label, goal, coef):
     conn = obj.conn
     if conn.execute("SELECT 1 FROM classes WHERE name = ?", (name,)).fetchone():
         fail(f"class {name!r} exists")
+    if start_time and not ops._HHMM.match(start_time):
+        fail("--start must be HH:MM")
     cur = conn.execute(
-        "INSERT INTO classes (name, term, weekday_mask, reward_label, reward_goal_points, goal_coef) VALUES (?,?,?,?,?,?)",
-        (name, term, mask, reward_label, goal, coef))
+        """INSERT INTO classes (name, term, weekday_mask, reward_label, reward_goal_points, goal_coef, grade, start_time)
+           VALUES (?,?,?,?,?,?,?,?)""",
+        (name, term, mask, reward_label, goal, coef, (grade or "").strip() or None, start_time or None))
     dbmod.log_event(conn, "class_add", {"class_id": cur.lastrowid, "name": name})
     conn.commit()
     click.echo(f"class {name} added")
@@ -158,6 +163,7 @@ def class_add(obj: Ctx, name, term, days, reward_label, goal, coef):
 @click.option("--reward", "reward_label", default=None)
 @click.option("--goal", type=int, default=None, help="Set the goal; 0 = recompute at the next publish")
 @click.option("--coef", type=float, default=None)
+@click.option("--grade", default=None, help="F10: e.g. 고1 ('' clears it)")
 @click.option("--start", "start_time", default=None, help="Class start HH:MM (F13: lateness is measured from it)")
 @click.option("--end", "end_time", default=None, help="Class end HH:MM")
 @click.option("--self-study", "self_study_until", default=None, help="Self-study until HH:MM ('' clears it)")
@@ -165,7 +171,7 @@ def class_add(obj: Ctx, name, term, days, reward_label, goal, coef):
 @click.option("--late-count", type=int, default=None, help="... on >= N of the last 6 class days (default 3)")
 @click.option("--late-avg-min", type=int, default=None, help="... or an average lateness >= N min (default 15)")
 @click.pass_obj
-def class_edit(obj: Ctx, name, term, days, reward_label, goal, coef, **policy):
+def class_edit(obj: Ctx, name, term, days, reward_label, goal, coef, grade, **policy):
     conn = obj.conn
     cls = ops.get_class(conn, name)
     try:
@@ -185,6 +191,8 @@ def class_edit(obj: Ctx, name, term, days, reward_label, goal, coef, **policy):
         fields["reward_goal_points"] = goal or None
     if coef is not None:
         fields["goal_coef"] = coef
+    if grade is not None:
+        fields["grade"] = grade.strip() or None
     if not fields and not pol:
         fail("nothing to change")
     if fields:
@@ -218,7 +226,7 @@ def class_list(obj: Ctx):
     for c in conn.execute("SELECT * FROM classes ORDER BY id"):
         days = "".join(M.WEEKDAYS_KO[i] for i in M.mask_days(c["weekday_mask"]))
         r = M.reward_for(conn, c, today)
-        click.echo(f"{c['name']}\tterm {c['term']}\tdays {days}\tstudents {M.active_count(conn, c['id'])}\t"
+        click.echo(f"{c['name']}\t{c['grade'] or '-'}\tterm {c['term']}\tdays {days}\tstudents {M.active_count(conn, c['id'])}\t"
                    f"reward {c['reward_label']!r} {r.total}/{r.goal}\t"
                    f"hours {c['start_time'] or '-'}-{c['end_time'] or '-'}"
                    f"{(' self-study ~' + c['self_study_until']) if c['self_study_until'] else ''}\t"
@@ -341,7 +349,7 @@ def session():
 @session.command("start")
 @click.argument("class_name")
 @click.option("--date", "d", default=None)
-@click.option("--at", "at", default=None, help="Start time HH:MM (default: now). 출석 opens 30 min before, closes 60 min after.")
+@click.option("--at", "at", default=None, help="Start time HH:MM (default: the class start, else now). 출석 opens 30 min before, closes 60 min after.")
 @click.option("--set", "set_id", default=None)
 @click.option("--topic", default=None, help="Label students see for this set (else \"M/D 과제\")")
 @click.option("--new-code", is_flag=True, help="Draw a new 4-digit code even if the session has one")
