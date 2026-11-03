@@ -3,7 +3,7 @@
 **Status (2026-11-03: P0, design v2, features F1–F5):**
 1. P1 complete and tested: schema + `students_public`, `init`, `demo`, `roster add/list/import`, Worker `/submit` + `/submissions`, student 오늘 tab, `pull`, parent page, `publish` + no-PII lint, `import screeners`, deploy steps.
 2. P2 complete: board + attitude buttons, `score`, class reward bar, `note`, `weekly`, Playwright checks. P3: manifest/icons/standalone, `rotate-tokens`, `export pdf` stub, Worker node tests.
-3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 97 pytest + 22 Worker node tests + 136 Playwright checks (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
+3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 104 pytest + 27 Worker node tests (incl. the class-day budget) + 136 Playwright checks (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
    Design v2: shorts reels + 강의 cards, story rings with content, status-coloured profile tiles, one weekly report per parent message.
 4. Features: taste build (콩, `make deploy-taste`), 출석 with a 4-digit code, 오늘 한 줄, 오늘의 장면 + reactions, 휴강, QR sheet, class band, term report, note drafts.
    Not done here (needs the teacher): the Cloudflare deploys (redeploy the Worker for 출석/장면), a real-phone install test. Deferred items: `DECISIONS.md`.
@@ -23,7 +23,7 @@ and a small Cloudflare Worker receives the photos.
 
 ## Setup (≤ 10 commands)
 
-Needs Python ≥ 3.11 (with Pillow, installed by `make`) and Node ≥ 20.
+Needs Python ≥ 3.11 (Pillow and segno are installed by `make`) and Node ≥ 22 (the local Worker tests use `node:sqlite`).
 
 ```bash
 git clone <this private repo> daybook
@@ -37,7 +37,7 @@ cd daybook
 make demo
 ```
 
-Windows (no `make`): `powershell -ExecutionPolicy Bypass -File scripts\demo.ps1`, then `scripts\check.ps1`;
+Windows (no `make`), Windows PowerShell 5.1 or PowerShell 7: `powershell -ExecutionPolicy Bypass -File scripts\demo.ps1`, then `scripts\check.ps1`;
 `scripts\deploy-pages.ps1` replaces `make deploy-pages`.
 
 `make demo` creates `.venv`, installs the console, seeds the synthetic demo into `demo.sqlite`, publishes it into
@@ -106,10 +106,15 @@ Run these on the laptop, in the repo. You need a Cloudflare account; no payment 
    cd worker && npm install && npx wrangler login
    ```
 
-2. Create the KV namespace and paste the printed `id` into `worker/wrangler.toml` (`REPLACE_WITH_KV_NAMESPACE_ID`):
+2. Create the KV namespace (photos) and the D1 database (records), and paste the printed ids into
+   `worker/wrangler.toml` (`REPLACE_WITH_KV_NAMESPACE_ID`, `REPLACE_WITH_D1_DATABASE_ID`). The Worker creates its tables itself.
 
    ```bash
    npx wrangler kv namespace create SUBMISSIONS
+   ```
+
+   ```bash
+   npx wrangler d1 create daybook
    ```
 
 3. Create the Pages project once (it prints the URL, usually `https://<name>.pages.dev`; use the printed one):
@@ -140,6 +145,9 @@ Run these on the laptop, in the repo. You need a Cloudflare account; no payment 
    (`make deploy-pages` = `daybook publish`, then `wrangler pages deploy ./dist --project-name daybook --branch main`;
    it stops if the no-PII lint fails. Another project name: `make deploy-pages PAGES_PROJECT=<name>`.)
 
+**Free plan.** Records live in D1, photos in KV; a simulated class day uses under 3 % of every free daily limit
+(`worker/test/budget.test.mjs`, table in DECISIONS). The board polls every 60 s, only around class time.
+
 **Retention (7 days).** KV photos expire by themselves (`expirationTtl` = `PHOTO_TTL_DAYS` = 7 in `wrangler.toml`).
 Submission records (token, day, time, no photo) are kept 14 days so a weekly pull never misses one.
 Optional R2 photo store (needs a payment method): uncomment `[[r2_buckets]]`, set `PHOTO_STORE = "r2"`, then
@@ -165,6 +173,7 @@ history. `dist/` and `*.sqlite` are gitignored. Every page sends `noindex` and h
 | PUT | `/session` | `X-Teacher-Token` | `{class, date, code, open_from, open_until, start, tokmap}`: today's 출석 code and window (class = an opaque key) |
 | POST | `/checkin` | Pages origin only | form `t`, `code` → `{ok, ts, already}` or `{ok: false, error: bad_code\|closed\|no_class_today\|rate_limited}` |
 | GET | `/checkins?since=<iso>` | `X-Teacher-Token` | `{now, items: [{token, class, day, ts}]}` |
+| PUT | `/tokmap` | `X-Teacher-Token` | `{tokmap: {token: class key}}`: the only tokens `/submit` accepts (sent after every publish and roster change) |
 | PUT | `/moment-put` | `X-Teacher-Token` | `{class, date, n (1–3), text, image (base64 JPEG ≤ 200 KB)}`: 오늘의 장면 for the same-day view |
 | GET | `/moments?t=<token>` · `/moment?t=&k=` | Pages origin, own class only | moments (text, date, counts, own reaction) · the JPEG |
 | POST | `/react` | Pages origin, own class only | form `t`, `k`, `r` (fire\|clap\|mind) → `{counts, mine, already}`; one per token per moment |

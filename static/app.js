@@ -128,6 +128,7 @@
       setText('[data-live="streak-label"]', fmt(S.story_streak, { n: n }));
       $('c-streak').textContent = n;
       $('c-sub').textContent = nSubNow();
+      $('bio').textContent = fmt(S.bio, { cls: D.className || '', n: nSubNow() });   /* H6: one value for both */
       /* profile tiles: add the days since publish, then colour every known day */
       var tiles = $('tiles'), firstTile = tiles.querySelector('.tile');
       var top = firstTile ? firstTile.getAttribute('data-date') : addDays(today, -1);

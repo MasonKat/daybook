@@ -17,7 +17,7 @@ class Config:
     videos_path: str = "videos.json"
     assignments_path: str = "assignments.json"   # optional {set_id: label}; students never see a raw set id
     moments_dir: str = "moments"                  # local store of 오늘의 장면 images (gitignored)
-    board_poll_seconds: int = 30
+    board_poll_seconds: int = 60
     extra: dict = field(default_factory=dict)
 
     @property
@@ -41,7 +41,7 @@ def load(path: str | Path | None = None) -> Config:
         videos_path=data.get("videos_path", "videos.json"),
         assignments_path=data.get("assignments_path", "assignments.json"),
         moments_dir=data.get("moments_dir", "moments"),
-        board_poll_seconds=int(data.get("board_poll_seconds", 30)),
+        board_poll_seconds=int(data.get("board_poll_seconds", 60)),
         extra={k: v for k, v in data.items()},
     )
     cfg.worker_url = os.environ.get("DAYBOOK_WORKER_URL", cfg.worker_url)

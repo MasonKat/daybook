@@ -46,6 +46,7 @@ class Board:
         return dbmod.connect(self.db_path)
 
     reactions_text = ""
+    polling = False
 
     def refresh_reactions(self, fetch) -> None:
         """Totals of this class's moments (anonymous counters) for the board, e.g. "11/3 🔥 9 👏 3"."""
@@ -132,8 +133,17 @@ class Board:
 
     def poll_loop(self, stop: threading.Event) -> None:
         fetch = http_fetch(self.cfg)
-        self.refresh_reactions(fetch)
-        while not stop.wait(self.cfg.board_poll_seconds):
+        with self.conn() as conn:
+            start = conn.execute("SELECT start_time FROM sessions WHERE id = ?", (self.session_id,)).fetchone()[0]
+        window = ops.board_window(self.day, start)
+        first = True
+        while first or not stop.wait(self.cfg.board_poll_seconds):
+            first = False
+            now = M.kst_now()
+            if window and not (window[0] <= now <= window[1]):
+                self.polling = False          # H1: outside class time the board does not touch the Worker
+                continue
+            self.polling = True
             try:
                 with self.lock, self.conn() as conn:
                     pull(conn, fetch)

@@ -4,6 +4,6 @@
  "pages_url": "http://127.0.0.1:8790",
  "teacher_token": "dev-teacher-token",
  "videos_path": "demo/videos.demo.json",
- "board_poll_seconds": 30,
+ "board_poll_seconds": 60,
  "moments_dir": "demo/moments-store"
 }

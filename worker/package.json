@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test test/*.test.mjs",
-    "dev": "node test/dev_server.mjs",
+    "test": "node --experimental-sqlite --no-warnings --test test/*.test.mjs",
+    "dev": "node --experimental-sqlite --no-warnings test/dev_server.mjs",
     "deploy": "wrangler deploy"
   },
   "devDependencies": {

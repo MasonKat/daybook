@@ -29,7 +29,7 @@ JS_STRINGS = ("done_title", "streak_label", "class_plus", "reward_to_go", "uploa
               "upload_rate", "upload_offline", "replaced", "no_worker", "today_set", "set_default", "weekdays", "story_streak",
               "recorded_at", "recorded", "ritual_class", "ritual_study", "study_cta", "end_cta", "ck_done", "ck_bad",
               "ck_closed", "ck_none", "ck_rate", "ck_error", "chip_ok", "chip_confused", "chip_rewatch", "day_class",
-              "day_study", "day_class_m", "story_moments", "react_fire", "react_clap", "react_mind")
+              "day_study", "day_class_m", "bio", "story_moments", "react_fire", "react_clap", "react_mind")
 YT_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 WEEKDAYS_FULL = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
 PARENT_WEEKS = 8      # weeks kept in the parent room
@@ -472,6 +472,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "momentsFrom": (today - timedelta(days=6)).isoformat(),
             "sets": set_labels(conn, cfg, s["class_id"]),
             "todayTime": _fmt_time(today_sub["ts"]) if today_sub else "",
+            "className": cls["name"] if cls else "",
             "classDays": sorted(x.isoformat() for x in cd if x >= today),
             "cancelled": sorted(x.isoformat() for x in cancelled if x >= today - timedelta(days=30)),
             "checkinTime": _fmt_time(checkins[today.isoformat()]["ts"]) if today.isoformat() in checkins else "",

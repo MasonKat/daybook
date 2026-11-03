@@ -1,6 +1,8 @@
 # Windows twin of `make demo`: venv, schema, synthetic seed, publish, then every check (scripts\check.ps1).
 # Run from anywhere:  powershell -ExecutionPolicy Bypass -File scripts\demo.ps1
-$ErrorActionPreference = 'Stop'
+# Windows PowerShell 5.1 turns a native command's stderr into a terminating error under 'Stop' (H5):
+# keep 'Continue' and check $LASTEXITCODE after every native command instead.
+$ErrorActionPreference = 'Continue'
 Set-Location (Split-Path -Parent $PSScriptRoot)
 
 function Invoke-Step([string]$Label, [scriptblock]$Block) {

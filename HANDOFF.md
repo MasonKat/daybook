@@ -11,9 +11,12 @@ in `daybook.sqlite` (gitignored), and on the deployed pages behind unguessable l
   here: please run them once on the laptop and report).
 - Built: P0 (P1–P3), DESIGN v1 + v2, Windows/UTF-8 fixes, the raw-id lint, F1 taste build (콩), F2 출석, F3 오늘 한 줄,
   F4 오늘의 장면, F5 (class cancel, QR, class band, term report, note suggest). See `DECISIONS.md`.
-- **The live Worker must be redeployed** after pulling (`cd worker && npx wrangler deploy`): 출석, 장면 and reactions
-  need the new endpoints. Uploads keep working on the old one.
-- Schema is v5; an existing `daybook.sqlite` is migrated automatically (additive, no data lost) by the next command.
+- **Hotfix H1–H6 (D1).** Before the Worker deploy, create the D1 database once and paste its id into
+  `worker/wrangler.toml`: `cd worker && npx wrangler d1 create daybook`, then `npx wrangler deploy`. Then run
+  `daybook publish` once: it sends the student links (token map) the Worker now requires for uploads.
+- Node ≥ 22 for the Worker tests. Please run `scripts\demo.ps1` on Windows PowerShell 5.1 and report (H5 was fixed
+  without a PowerShell to run it here).
+- Console schema is v5; an existing `daybook.sqlite` is migrated automatically (additive, no data lost) by the next command.
 - Not done here: the Cloudflare deploys, a real-phone install test, live webcam capture on the board (deferred).
 
 ### The repo

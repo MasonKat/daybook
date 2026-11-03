@@ -16,6 +16,18 @@ RATE_PER_HOUR = "10"
 
 # Secret (not in this file): npx wrangler secret put TEACHER_TOKEN
 
+# Records (submissions, check-ins, sessions, token map, moments, reactions, rate counters): D1, Cloudflare's SQLite.
+# Create once: npx wrangler d1 create daybook   -> paste the printed database_id below. The Worker creates its tables.
+[[d1_databases]]
+binding = "DB"
+database_name = "daybook"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+# Daily cleanup at 04:17 KST: records older than RECORD_TTL_DAYS, rate counters older than 2 days.
+[triggers]
+crons = ["17 19 * * *"]
+
+# Photos and moment images only (KV with TTLs); no KV list is ever used.
 [[kv_namespaces]]
 binding = "SUBMISSIONS"
 id = "REPLACE_WITH_KV_NAMESPACE_ID"   # from: npx wrangler kv namespace create SUBMISSIONS

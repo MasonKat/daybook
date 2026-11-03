@@ -143,6 +143,8 @@ def lint_dir(root: Path, students: list[PrivateRow], page_title: str) -> list[Fi
     return findings
 
 
+# H4: words that mean test data leaked into the build students see
+TEST_WORD_RE = re.compile(r"(?<![A-Za-z])(e2e|test|tests|fixture|fixtures|dummy)(?![A-Za-z])", re.I)
 WORKER_HINT_RE = re.compile(r"workers\.dev|/submit\b|/status\?|/checkin\b|/react\b|X-Teacher-Token", re.I)
 
 
@@ -175,6 +177,11 @@ def lint_taste(root: Path, students: list[PrivateRow], taste_slug_display: str, 
         for u in worker_urls:
             if u and u in text:
                 out.append(Finding("error", rel, "taste_worker", u))
+        if path.suffix.lower() in (".html", ".htm"):
+            visible = re.sub(r"<(script|style)\b.*?</\1>", " ", text, flags=re.S | re.I)
+            visible = re.sub(r"<[^>]+>", " ", visible)
+            for m in TEST_WORD_RE.finditer(visible):
+                out.append(Finding("error", rel, "taste_test_text", m.group(0)))
         if path.suffix.lower() in (".html", ".htm", ".json", ".webmanifest"):
             for m in WORKER_HINT_RE.finditer(text):
                 out.append(Finding("error", rel, "taste_worker", m.group(0)))

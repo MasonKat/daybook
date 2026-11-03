@@ -11,7 +11,7 @@ import click
 from . import config as configmod
 from . import db as dbmod
 from . import generate, importers, models as M, ops
-from .pull import PullError, http_fetch, pull as do_pull
+from .pull import PullError, http_fetch, pull as do_pull, push_tokmap
 
 
 class Ctx:
@@ -232,6 +232,7 @@ def roster_add(obj: Ctx, class_name, full_name, display, ext_id, phone, track):
     s = importers.add_student(conn, cls["id"], full_name, display, ext_id, phone, track)
     conn.commit()
     click.echo(f"added {s['slug']} (display {s['display_name']})")
+    _send_links(obj, conn)
     if s["display_name"] == s["full_name"]:
         click.echo(f"warning: display name equals the full name; publish will refuse it. "
                    f"Run: daybook roster edit {s['slug']} --display <given name>", err=True)
@@ -273,6 +274,7 @@ def roster_import(obj: Ctx, csv_path, map_path, class_name):
     except ValueError as e:
         fail(str(e))
     click.echo(f"added {len(rep.added)}, updated {len(rep.updated)}, unchanged {len(rep.unchanged)}, skipped {len(rep.skipped)}")
+    _send_links(obj, conn)
     for s in rep.skipped:
         click.echo(f"  skipped: {s}")
     for w in rep.warnings:
@@ -307,6 +309,8 @@ def roster_edit(obj: Ctx, slug, display, new_slug, track, class_name, active):
     dbmod.log_event(conn, "student_update", {"student_id": s["id"], "fields": sorted(fields)})
     conn.commit()
     click.echo("ok")
+    if {"active", "class_id"} & set(fields):
+        _send_links(obj, conn)
 
 
 @roster.command("rotate-tokens")
@@ -325,6 +329,7 @@ def roster_rotate(obj: Ctx, class_name, slug, which):
     conn.commit()
     click.echo(f"rotated {which} tokens for {len(rows)} student(s); run `daybook publish`, then deploy and send the "
                f"new links (`daybook roster list {class_name} --links`)")
+    _send_links(obj, conn)
 
 
 # ---------------------------------------------------------------- sessions / board / score / submit
@@ -630,6 +635,12 @@ def weekly(obj: Ctx, class_name, d):
         click.echo("-" * 24)
 
 
+def _send_links(obj, conn) -> None:
+    msg = push_tokmap(conn, obj.cfg)
+    if msg:
+        click.echo(msg, err=msg.startswith("warning"))
+
+
 def _report_publish(res):
     for f in res.findings:
         click.echo(str(f), err=True)
@@ -655,6 +666,8 @@ def publish(obj: Ctx, out, d, taste):
     _report_publish(res)
     if not res.ok:
         sys.exit(1)
+    if not taste:
+        _send_links(obj, obj.conn)
 
 
 @cli.group()

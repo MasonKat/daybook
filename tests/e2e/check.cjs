@@ -32,11 +32,19 @@ const PAGES_PORT = 8790, WORKER_PORT = 8788, BOARD_PORT = 8787;
 const PAGES = `http://127.0.0.1:${PAGES_PORT}`, WORKER = `http://127.0.0.1:${WORKER_PORT}`, BOARD = `http://127.0.0.1:${BOARD_PORT}`;
 const TEACHER = 'dev-teacher-token';
 const TITLE = 'AMP 학습 기록';
-const env = {
-  ...process.env,
-  DAYBOOK_DB: process.env.DAYBOOK_DB || path.join(ROOT, 'demo.sqlite'),
-  DAYBOOK_CONFIG: process.env.DAYBOOK_CONFIG || path.join(ROOT, 'demo', 'daybook.demo.json'),
-};
+/* H4: the checks never touch the demo data. They run on a throw-away copy of the demo database, config and
+   moment store; the taste build they make goes to a temp folder, not dist-taste/. */
+const SRC_DB = process.env.DAYBOOK_DB || path.join(ROOT, 'demo.sqlite');
+const SRC_CFG = process.env.DAYBOOK_CONFIG || path.join(ROOT, 'demo', 'daybook.demo.json');
+const TMP = fs.mkdtempSync(path.join(require('os').tmpdir(), 'daybook-e2e-'));
+const cfgCopy = JSON.parse(fs.readFileSync(SRC_CFG, 'utf-8'));
+const srcMoments = path.resolve(ROOT, cfgCopy.moments_dir || 'moments');
+cfgCopy.moments_dir = path.join(TMP, 'moments');
+if (fs.existsSync(srcMoments)) fs.cpSync(srcMoments, cfgCopy.moments_dir, { recursive: true });
+fs.writeFileSync(path.join(TMP, 'daybook.json'), JSON.stringify(cfgCopy));
+if (fs.existsSync(SRC_DB)) fs.copyFileSync(SRC_DB, path.join(TMP, 'e2e.sqlite'));
+const env = { ...process.env, DAYBOOK_DB: path.join(TMP, 'e2e.sqlite'), DAYBOOK_CONFIG: path.join(TMP, 'daybook.json') };
+const TASTE_OUT = path.join(TMP, 'dist-taste');
 const WIN = process.platform === 'win32';
 const VENV_BIN = path.join(ROOT, '.venv', WIN ? 'Scripts' : 'bin');
 const DAYBOOK = process.env.DAYBOOK_BIN || path.join(VENV_BIN, WIN ? 'daybook.exe' : 'daybook');
@@ -136,7 +144,7 @@ async function audit(browser, url, file, label, viewport, colorScheme) {
   if (!fs.existsSync(path.join(DIST, 'go', 'index.html'))) { console.error('dist/ is empty: run `make demo` (or daybook demo) first'); process.exit(1); }
   fs.mkdirSync(SHOTS, { recursive: true });
   const srv = staticServer();
-  const worker = spawn(process.execPath, [path.join(ROOT, 'worker', 'test', 'dev_server.mjs'), '--port', String(WORKER_PORT), '--origin', PAGES, '--teacher', TEACHER], { stdio: 'ignore' });
+  const worker = spawn(process.execPath, ['--experimental-sqlite', '--no-warnings', path.join(ROOT, 'worker', 'test', 'dev_server.mjs'), '--port', String(WORKER_PORT), '--origin', PAGES, '--teacher', TEACHER], { stdio: 'ignore' });
   let board;
   const browser = await chromium.launch();
   try {
@@ -181,8 +189,8 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     const started = daybook('session', 'start', CLASS_ON, '--at', nowHM);
     const CODE = (started.match(/오늘의 코드: (\d{4})/) || [])[1];
     check(!!CODE && /sent to the Worker/.test(started), `daybook session start ${CLASS_ON} --at ${nowHM}: code drawn and sent to the Worker`);
-    const MTEXT = 'e2e 오늘의 장면';
-    const mAdd = (answer) => { try { return execFileSync(DAYBOOK, ['moment', 'add', CLASS_ON, '--photo', path.join(ROOT, 'demo', 'moments-store', '_demo_src', 'm3.jpg'), '--text', MTEXT],
+    const MTEXT = '다 같이 찾은 꼭짓점';
+    const mAdd = (answer) => { try { return execFileSync(DAYBOOK, ['moment', 'add', CLASS_ON, '--photo', path.join(cfgCopy.moments_dir, '_demo_src', 'm3.jpg'), '--text', MTEXT],
       { env: { ...env, PYTHONIOENCODING: 'utf-8' }, cwd: ROOT, input: answer, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }); } catch (e) { return 'EXIT ' + e.status + ' ' + e.stdout; } };
     check(/^EXIT [12] /.test(mAdd('n\n')), 'daybook moment add: answering N to the faces/names check posts nothing');
     check(/EXIF removed\) sent to the Worker/.test(mAdd('y\n')), 'daybook moment add: y → EXIF stripped, sent to the Worker for the same-day view');
@@ -478,8 +486,8 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     await bctx.close();
 
     console.log('\n[7] taste build (F1): only 콩, no Worker, nothing stored');
-    console.log('      ' + daybook('publish', '--taste').trim().split('\n').pop());
-    const TASTE = 'http://127.0.0.1:8791', TDIST = path.join(ROOT, 'dist-taste');
+    console.log('      ' + daybook('publish', '--taste', '--out', TASTE_OUT).trim().split('\n').pop());
+    const TASTE = 'http://127.0.0.1:8791', TDIST = TASTE_OUT;
     const tsrv = staticServer(TDIST, 8791);
     try {
       await waitFor(TASTE + '/');
@@ -524,6 +532,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     worker.kill();
     if (board) board.kill();
   }
+  fs.rmSync(TMP, { recursive: true, force: true });
   console.log(failures ? `\nE2E: ${failures} check(s) FAILED` : '\nE2E: all checks passed');
   process.exit(failures ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -143,10 +143,23 @@ def session_payload(conn: sqlite3.Connection, sess: sqlite3.Row) -> dict:
     """PUT /session body: the session (class key, code, window) + the token -> class-key map of all active students."""
     day = date.fromisoformat(sess["date"])
     t_from, t_until = session_window(day, sess["start_time"])
-    tokmap = {r["student_token"]: class_key(r["class_id"]) for r in conn.execute(
+    return {"tokmap": tokmap(conn), "class": class_key(sess["class_id"]), "date": sess["date"], "code": sess["code"], "start": sess["start_time"],
+            "open_from": t_from.isoformat(), "open_until": t_until.isoformat()}
+
+
+def tokmap(conn: sqlite3.Connection) -> dict[str, str]:
+    """token -> opaque class key for every active student (H3: the Worker accepts only these tokens)."""
+    return {r["student_token"]: class_key(r["class_id"]) for r in conn.execute(
         "SELECT student_token, class_id FROM students_public WHERE active = 1 AND class_id IS NOT NULL")}
-    return {"class": class_key(sess["class_id"]), "date": sess["date"], "code": sess["code"], "start": sess["start_time"],
-            "open_from": t_from.isoformat(), "open_until": t_until.isoformat(), "tokmap": tokmap}
+
+
+def board_window(day: date, start: str | None) -> tuple[datetime, datetime] | None:
+    """H1: the board polls the Worker only from 30 min before the start until 2 h after it."""
+    if not start or not TIME_RE.match(start):
+        return None
+    t0, _ = session_window(day, start)
+    h, m = map(int, start.split(":"))
+    return t0, datetime(day.year, day.month, day.day, h, m, tzinfo=KST) + timedelta(hours=2)
 
 
 def record_checkin(conn: sqlite3.Connection, student_id: int, session_id: int, ts: str, source: str) -> bool:

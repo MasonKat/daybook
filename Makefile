@@ -38,7 +38,7 @@ test: setup
 	$(BIN)/pytest -q
 
 test-worker:
-	cd worker && node --test test/*.test.mjs
+	cd worker && node --experimental-sqlite --no-warnings --test test/*.test.mjs
 
 # Playwright: use an installed copy if Node can resolve it, else install it locally (needs network once).
 node-deps:

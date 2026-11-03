@@ -56,7 +56,6 @@ One line each. "deferred" = not built in P0, on purpose.
 - If the browser cannot decode the photo (e.g. HEIC on desktop Chrome), the original is sent if ≤ 8 MB.
 - Pull reads since the previous Worker `now` − 5 minutes (KV list is eventually consistent); upserts are idempotent.
 - Old student tokens from `roster rotate-tokens` still map to their student on pull (kept in the event log).
-- Free-plan budget: each upload = 3 KV writes (1,000/day free); the board polls the Worker with `list` (1,000/day free). Default `board_poll_seconds` = 30 (2026-11-03, local agent's review): about 180 list calls per 90-minute class instead of 540 at 10 s. The board page still refreshes from the laptop every 10 s; `board_poll_seconds` in daybook.json overrides.
 
 ## Console and board
 - Extra commands beyond the brief: `class add|edit|list` (roster commands need a class), `roster edit`, `roster list --links` (to send links), `submit` (paper/teacher mark), `pull --photos`.
@@ -146,6 +145,27 @@ One line each. "deferred" = not built in P0, on purpose.
 - Class band on the parent trend: the class's middle 50 % (p25–p75) per round, for 확보 효율 and 도전 도달, as a faint polygon; only when every shown round has ≥ 5 active students in the class, so no single student's value can be read back. Never another student's point.
 - `daybook export report <slug>`: one A4 page (print → PDF in the browser): current and longest streak in the term, submission rate on class days, attitude total, the trend (with the band), every teacher note, the number of class moments. Written to `reports/` (gitignored); display name only.
 - `daybook note suggest <class> [--date]`: prints a ready `daybook note …` command per student without a note this week, e.g. "이번 주 수업일 2일 모두 제출, 태도 5/6, 확보 효율 상승"; the teacher edits and runs it. Nothing is written by itself.
+
+## Hotfix H1–H6 after the local review of `0419974` (2026-11-03)
+- H1 (choice (a)): the Worker's records moved from KV to **D1** (Cloudflare's SQLite): submissions, check-ins, sessions, the token map, moments, reactions and rate counters. KV keeps only the photos and moment JPEGs (with TTLs). No KV `list` is used anywhere; the board's poll is three indexed `SELECT … WHERE updated/ts > ?` queries.
+- The Worker creates its tables itself (`CREATE TABLE IF NOT EXISTS`, once per database binding); a daily cron (04:17 KST) deletes records older than `RECORD_TTL_DAYS` and rate counters older than 2 days.
+- The board polls every **60 s** (`board_poll_seconds`) and only from 30 min before the session start to 2 h after it; outside that window it does not call the Worker at all.
+- Class-day budget (`worker/test/budget.test.mjs`, the real Worker code against a SQLite-backed D1 stand-in): 20 students, a 3 h board at 60 s, 3 moments × 20 reactions, 5 page opens per student, 20 check-ins, 21 uploads, one pull. Free plan per day; the test fails at 30 %.
+
+  | resource | used | free limit | share |
+  |---|---|---|---|
+  | Worker requests | 910 | 100,000 | 0.9 % |
+  | KV reads | 60 | 100,000 | 0.06 % |
+  | KV writes | 24 | 1,000 | 2.4 % |
+  | KV lists | 0 | 1,000 | 0 % |
+  | D1 rows read (estimate: rows returned + 1 per query) | 10,103 | 5,000,000 | 0.2 % |
+  | D1 rows written | 188 | 100,000 | 0.19 % |
+- H2: a reaction is one row `(moment, token)` inserted with `INSERT OR IGNORE`; totals are `COUNT(*) … GROUP BY r`. No shared counter key, so 20 simultaneous taps all count (tested). Rate limits are atomic `INSERT … ON CONFLICT DO UPDATE SET n = n + 1 RETURNING n`. Any storage error answers `{ok: false, error: "storage"}` with 200 on student endpoints (503 on teacher endpoints), never a 500.
+- H3: `/submit` accepts only tokens in the token map (`not_ready` while there is none, `unknown_token` otherwise; both 200 + ok:false, nothing written, no rate-limit row). The console sends the map (`PUT /tokmap`, replaces it) after every successful publish, after `roster add|import|rotate-tokens` and after `roster edit --active/--inactive/--class`, and with every `session start`. A send failure is a warning, never a failed publish.
+- H4: the e2e copies `demo.sqlite`, the demo config and the moment store into a temp folder and works only there; its taste build goes to the temp folder; its texts read like class content. The taste lint rejects the words e2e, test(s), fixture(s), dummy in visible text (not in scripts or attributes).
+- H5: all four `.ps1` scripts use `$ErrorActionPreference = 'Continue'` and test `$LASTEXITCODE` after each native command; the Playwright probe runs through `cmd /c`. Static pytest checks: ASCII only (5.1 reads BOM-less scripts as ANSI), no 'Stop', no native `2>$null`. They were not executed here (no PowerShell in the cloud build): the local agent confirms on 5.1.
+- H6: the profile bio's "{n}번째 기록" is recomputed in the browser from the same value as the 제출 counter. Demo times are realistic: 출석 17:40–18:09, 과제 끝 19:50–21:00 (earlier the same day when the seed runs before then).
+- Node ≥ 22 is now needed for the local Worker tests and the dev server (`node:sqlite`); they run with `--experimental-sqlite --no-warnings` so Node 22.5–22.12 works too. The deployed Worker is unaffected.
 
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).

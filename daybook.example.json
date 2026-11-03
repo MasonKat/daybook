@@ -4,5 +4,5 @@
   "pages_url": "https://daybook.pages.dev",
   "teacher_token": "<long random string, same as `wrangler secret put TEACHER_TOKEN`>",
   "videos_path": "videos.json",
-  "board_poll_seconds": 30
+  "board_poll_seconds": 60
 }

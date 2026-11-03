@@ -75,3 +75,33 @@ def test_taste_refuses_a_real_database(conn, klass, cfg, tmp_path):
     with pytest.raises(ValueError, match="demo database"):
         generate.publish(conn, cfg, tmp_path / "t", today=TODAY, now=NOW, taste=True)
     assert not (tmp_path / "t").exists()
+
+
+def test_taste_lint_rejects_test_text(demo_db, tmp_path):
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "index.html").write_text(
+        '<title>AMP 학습 기록</title><p class="mtext">e2e 오늘의 장면</p><p>Dummy line</p>'
+        '<script>var tests = 1;</script><div data-x="test">주간 테스트</div>', encoding="utf-8")
+    found = [f.detail.lower() for f in lint.lint_taste(tmp_path, lint.private_rows(demo_db), "콩", []) if f.kind == "taste_test_text"]
+    assert found == ["e2e", "dummy"]          # script code, attributes and Korean 테스트 are not visible test text
+
+
+def test_push_tokmap_after_publish(demo_db, monkeypatch):
+    from console import pull
+    sent = {}
+    monkeypatch.setattr(pull, "http_put_json", lambda cfg, path, payload: sent.update(path=path, payload=payload) or {"n": len(payload["tokmap"])})
+    msg = pull.push_tokmap(demo_db, Config(worker_url="https://w.example", teacher_token="t"))
+    assert sent["path"] == "/tokmap" and len(sent["payload"]["tokmap"]) == 13 and "13 student links" in msg
+    assert pull.push_tokmap(demo_db, Config()) == ""                  # no Worker configured: nothing to do
+    def boom(*a):
+        raise pull.PullError("offline")
+    monkeypatch.setattr(pull, "http_put_json", boom)
+    assert pull.push_tokmap(demo_db, Config(worker_url="https://w.example", teacher_token="t")).startswith("warning")
+
+
+def test_board_polls_only_in_class_time():
+    from datetime import date
+    from console import ops
+    w = ops.board_window(date(2026, 11, 6), "18:00")
+    assert (w[0].strftime("%H:%M"), w[1].strftime("%H:%M")) == ("17:30", "20:00")
+    assert ops.board_window(date(2026, 11, 6), None) is None
