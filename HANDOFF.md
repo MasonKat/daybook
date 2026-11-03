@@ -4,22 +4,40 @@ The cloud build used synthetic data only. Real students, phones, scores and note
 in `daybook.sqlite` (gitignored), and on the deployed pages behind unguessable links. Never commit `daybook.sqlite`,
 `daybook.json`, `dist/`, a real roster CSV or real screener snapshots. Never deploy to GitHub Pages.
 
-## 0. State at handoff (2026-11-04, after F6–F14)
+## 0. State at 11-04 (after F6–F14 and G1–G5): what to do before Friday 11-06
 
-- `main` is green from a clean clone: 180 pytest, 40 Worker node tests (incl. the class-day budget with an AMP Live
-  round), the full Playwright check. A normal check run leaves `git status` clean (F0); `make screenshots` /
-  `scripts\check.ps1 -Screenshots` refresh the committed screenshots on purpose.
-- Built: P0, design v2, F1–F9, hotfix H1–H6, F13 (the parent-contact desk), F14 (the weekly-test report), then F10 (videos per
-  class), F11 (members in the Teacher tab) and F12 (insights), in the order of the combined prompt. See `DECISIONS.md` for every choice; F8 (answer cards) is a spike only.
-- Deploy order for the real Worker: `wrangler d1 create daybook` (paste the id), `wrangler deploy` (also creates the
-  AMP Live Durable Object), then `daybook publish` once (sends the student links).
-- Re-check Cloudflare's Durable Objects free-plan page once before the first Live class (the cloud build could not
-  reach developers.cloudflare.com; DECISIONS, F7).
-- Console schema is v8 (F14: `rounds`, `test_reports`; F12: `insights`; F11: `students.left_on`; F10: `classes.grade`; F13: `parent_profiles`, `contacts`, `snoozes`, class hours and 지각 policy, `submissions.solved`);
-  an existing `daybook.sqlite` is migrated automatically. The Worker adds `subs.solved` by itself on first use
-  (redeploy it once: `cd worker && npx wrangler deploy`).
-- Not done here: the Cloudflare deploys, a real-phone install test, Live over WebSockets (polling is used),
-  a webcam capture on the board.
+`main` is green from a clean clone: 180 pytest, 40 Worker node tests (incl. the class-day budget with an AMP Live round
+and a weekly-test round), the full Playwright check. Built: P0, design v2, F1–F14, hotfix H1–H6, G1 doctor, G2 backup,
+G3 운영 가이드, G4 안내 cards, G5 taste refresh. Every choice is in `DECISIONS.md`. Console schema v8 (migrates by itself);
+Worker v6. The pilot: two Mon/Wed/Fri 고1 classes from Friday 11-06; the weekly test restarts that day (고2 on Saturday).
+
+**Before Friday, in this order (Windows, PowerShell, in the repo folder):**
+
+1. Pull `main`, then `scripts\demo.ps1` once: everything green (it uses only demo data).
+2. **D1**: `cd worker`, `npx wrangler d1 create daybook`, paste the printed `database_id` into `worker/wrangler.toml`.
+3. **Worker**: `npx wrangler secret put TEACHER_TOKEN` (a long random string), then `npx wrangler deploy`
+   (also creates the AMP Live Durable Object). Put the same token and the Worker URL into `daybook.json`
+   (copy `daybook.example.json`; set `pages_url`, and `backup_dir` to a folder on the BitLocker-encrypted USB drive).
+4. **Classes**: `daybook class add 고1A --term 2026-11-06..2027-02-26 --days 월,수,금 --grade 고1 --start 18:00 --reward "…"`
+   (and the second class), then `daybook class edit <class> --end 20:00` and the 지각 rule if it differs
+   (`--late-min 30` for a class that drifts in). Or the Teacher tab → 명단 · 반 관리 → 반 만들기 and 반 규칙 · 수업 시간.
+5. **Roster**: Teacher tab → 명단 · 반 관리 → 가져오기 미리보기 with the roster CSV (`mappings/roster.json`), check the
+   new / updated rows, then 이대로 가져오기 (or `daybook roster import roster.csv --map mappings/roster.json --class 고1A`).
+   Fix any display name that equals a full name. Set each parent's profile in 연락 현황 (전화/카톡, 매주/필요할 때만, 호칭).
+6. **Publish + deploy**: Teacher tab → 발행 (sends the student links and the rounds to the Worker, then backs up) →
+   배포 (or `make deploy-pages`).
+7. **Rounds**: `daybook round add Adaptive_Screeners_1S_Nov06_G10 --grade 1학년 --classes 고1A,<second class> --quizzes <N>
+   --open "2026-11-06 20:00" --close "2026-11-08 23:59"` for Friday, and the 고2 round for Saturday the same way
+   (or Teacher tab → 주간 테스트 → 새 회차). Use the teacher's real round ids; students never see them.
+8. **Links**: Teacher tab → 명단 · 반 관리 → 학생 안내 복사 / 학부모 안내 복사 per student → the teacher's own 1:1
+   KakaoTalk. Print `daybook cards students <class>` and `daybook cards parents <class>` (fill `{원장·학원 문구}` and
+   `{개인정보 안내 문구}`); paper never carries a link. Print `daybook guide` for the teacher.
+9. **doctor green**: `daybook doctor` (or 점검): no ✗. Before Friday's class, "session not started" is a normal ⚠;
+   it turns ✓ when the board starts.
+10. Taste build for curious students: `make deploy-taste` (amp-taste.pages.dev; nothing is stored).
+
+Still not done here: the Cloudflare deploys (above), a real-phone install test, Live over WebSockets (polling is used),
+a webcam capture on the board. Re-check Cloudflare's Durable Objects free-plan page once before the first Live class.
 
 ### The repo
 Everything is on `https://github.com/MasonKat/daybook` (private), branch `main`. If you ever receive a git bundle instead:
