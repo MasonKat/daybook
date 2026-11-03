@@ -286,6 +286,10 @@ One line each. "deferred" = not built in P0, on purpose.
 - Every 발행 ends with a backup (CLI `publish` and the Teacher tab; a failed backup is a warning, never a failed publish), plus the 백업 button.
 - No encryption library: point `backup_dir` at a BitLocker-encrypted USB drive or folder; doctor shows whether it is removable.
 
+## G3: the Korean operations guide (2026-11-04)
+- `docs/운영가이드.md` (plain Korean, short sentences): 수업 전, 수업 중, 수업 끝, 토요일, 학생 추가 · 퇴원 · 링크 재발급, and 문제가 생기면 with the ten likeliest failures. Buttons are named exactly as the screens show them (a test compares them with strings.ko.json).
+- `daybook guide [--out cards/운영가이드.html]`: printable A4 HTML, one routine per page, from a small built-in Markdown subset (no new dependency). No link or token appears on paper.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

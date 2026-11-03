@@ -1049,5 +1049,13 @@ def backup(obj: Ctx, to, keep):
     click.echo(f"{r.path}  (integrity {r.integrity}; removed {len(r.removed)} old)")
 
 
+@cli.command()
+@click.option("--out", default="cards/운영가이드.html", show_default=True, help="Output file (cards/ is gitignored)")
+def guide(out):
+    """G3: the Korean operations guide (docs/운영가이드.md) as printable A4 HTML."""
+    from . import guide as G
+    click.echo(f"{G.write(out)}  (open it in a browser and print, A4)")
+
+
 if __name__ == "__main__":
     main()
