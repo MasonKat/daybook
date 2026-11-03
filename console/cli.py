@@ -796,6 +796,25 @@ def export_reports(obj: Ctx, round_id, fmt, out_dir):
         click.echo("not reported yet: " + ", ".join(missing))
 
 
+@export.command("portfolio")
+@click.option("--synthetic", is_flag=True, help="Required: real names are replaced; the folder is checked for any leak")
+@click.option("--out", "out", default=None, help="Folder (default reports/portfolio-<date>, gitignored)")
+@click.option("--date", "d", default=None)
+@click.pass_obj
+def export_portfolio(obj: Ctx, synthetic, out, d):
+    """F16.5: class-level metrics, 3 demo screenshots and 12 example comments under generated names."""
+    from . import portfolio as PF
+    if not synthetic:
+        fail("only --synthetic exists: real names never leave the laptop in a portfolio")
+    day = parse_date(d)
+    try:
+        folder = PF.export(obj.conn, obj.cfg, out or f"reports/portfolio-{day.isoformat()}", day)
+    except PF.PortfolioError as e:
+        fail(str(e))
+    obj.conn.rollback()
+    click.echo(f"{folder}  (" + ", ".join(sorted(p.name for p in folder.iterdir())) + ")")
+
+
 @export.command("pdf")
 @click.argument("slug")
 def export_pdf(slug):
