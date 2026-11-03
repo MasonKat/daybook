@@ -337,6 +337,7 @@ One line each. "deferred" = not built in P0, on purpose.
 ## F16: practice_mode (korea default, manitoba opt-in) (2026-11-04)
 - The teacher's classes are Korean students in a Korean hagwon; Manitoba (Canada) norms are the teacher's personal practice. `practice_mode` is `korea` by default (daybook.json may set the starting value) and the Teacher tab's "캐나다 연습 모드" switch stores the mode in the local database (`settings`), logged in events. **Rule for every item: when a Canadian norm is the opposite of normal Korean hagwon practice, it goes behind `practice_mode = manitoba`, never into the default.**
 - **F16.1:** korea keeps the original design: the projected board names today's 3-point students (public praise by name; 1–2 points never appear by name; only positive things are public). manitoba: no names on the projected view (the section is not rendered and `/api/state` carries none); "선생님 보기" shows them to the teacher. Attitude stays a private tap and the class reward bar stays in both modes; parent pages keep the weekly sum and the cumulative only.
+- **F16.2 (both modes):** `contacts.tag` = rotation | trigger | positive, required for a call (a message may go without). 통화함 / 메시지 보냄 from a 연락 필요 card log `trigger`; a planner item logs `rotation` (or `trigger` for a 연락 필요 item); 이달의 좋은 소식 logs `positive`; the 연락 현황 quick log has a tag select (default rotation); `daybook contact log --tag`. 연락 현황 shows the last 4 weeks' mix.
 
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).

@@ -853,13 +853,15 @@ def contact_status(obj: Ctx, d):
 @click.option("--in", "inbound", is_flag=True, help="The parent reached out (direction in)")
 @click.option("--summary", default="", help="One line, <= 120 characters")
 @click.option("--follow-up", default=None, help="YYYY-MM-DD")
+@click.option("--tag", type=click.Choice(["rotation", "trigger", "positive"]), default=None,
+              help="Why: rotation (the 4-week round), trigger (연락 필요), positive (good news). Required for a call")
 @click.pass_obj
-def contact_log_cmd(obj: Ctx, slug, kind, inbound, summary, follow_up):
+def contact_log_cmd(obj: Ctx, slug, kind, inbound, summary, follow_up, tag):
     """Record a call/message/meeting (clears 연락 필요 until new data)."""
     from . import contact as C
     conn = obj.conn
     try:
-        C.log_contact(conn, ops.get_student(conn, slug)["id"], kind, summary, "in" if inbound else "out", follow_up)
+        C.log_contact(conn, ops.get_student(conn, slug)["id"], kind, summary, "in" if inbound else "out", follow_up, tag=tag)
     except (C.ContactError, ops.OpError) as e:
         fail(str(e))
     conn.commit()

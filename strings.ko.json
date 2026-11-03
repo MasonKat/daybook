@@ -412,6 +412,10 @@
   "pm_title": "캐나다 연습 모드",
   "pm_help_korea": "지금은 기본(한국 학원) 모드예요. 보드는 오늘 3점 받은 학생을 이름으로 칭찬하고, 한 줄 초안은 따뜻한 한국어로 써요.",
   "pm_help_manitoba": "캐나다(매니토바) 연습 모드: 기록은 일관되고, 선생님은 따뜻하다. 보드에 개인 점수나 이름을 띄우지 않고(선생님 보기에서만), 한 줄은 강점·과제·다음 단계로 쓰고, 단정·비교·얼버무림·전문용어를 알려 줘요. 이 노트북에서만 바뀌어요.",
+  "c_mix": "최근 4주: 순환 {r} · 연락 필요 {t} · 좋은 소식 {p}",
+  "c_tag_rotation": "순환",
+  "c_tag_trigger": "연락 필요",
+  "c_tag_positive": "좋은 소식",
   "parent_msg": {
     "_note": "Parent-facing drafts (F13.6): warm and formal, no emoji, never playful. reason_* lines are for the teacher only.",
     "greeting": "안녕하세요, {g}. AMP 수학입니다.",

@@ -212,10 +212,11 @@ def _seed_contacts(conn: sqlite3.Connection, today: date, rng: random.Random) ->
             ago = [first, first + rng.randint(25, 40)]
         for j, a in enumerate(ago):
             at = datetime.combine(today - timedelta(days=a), time(13 + rng.randint(0, 4), rng.randint(0, 59)), KST)
-            conn.execute("INSERT INTO contacts (student_id, ts, kind, direction, summary) VALUES (?, ?, ?, ?, ?)",
+            kind = "meeting" if a >= 150 else ("message" if ch == "kakao" else "call")
+            tag = None if kind == "meeting" else ("positive" if (k + j) % 5 == 2 else "rotation")      # F16.2
+            conn.execute("INSERT INTO contacts (student_id, ts, kind, direction, summary, tag) VALUES (?, ?, ?, ?, ?, ?)",
                          (r["id"], at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
-                          "meeting" if a >= 150 else ("message" if ch == "kakao" else "call"), "in" if j == 1 and k % 4 == 0 else "out",
-                          CONTACT_SUMMARIES[(k + j) % len(CONTACT_SUMMARIES)]))
+                          kind, "in" if j == 1 and k % 4 == 0 else "out", CONTACT_SUMMARIES[(k + j) % len(CONTACT_SUMMARIES)], tag))
 
 
 MOMENT_TEXTS = ["칠판 위 인수분해 3단 콤보", "다 같이 풀어낸 마지막 문제", "오늘의 명풀이: 거꾸로 생각하기",

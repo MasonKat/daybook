@@ -28,7 +28,7 @@ def k(conn, klass):
     old = utc(TODAY - timedelta(days=60), 12, 0)
     conn.execute("UPDATE students SET created_at = ?", (old,))
     for s in studs:     # a recent contact so that only the rule under test fires
-        C.log_contact(conn, s["id"], "call", "학기 초 상담", ts=utc(date(2026, 10, 15), 13, 0))
+        C.log_contact(conn, s["id"], "call", "학기 초 상담", tag="rotation", ts=utc(date(2026, 10, 15), 13, 0))
     conn.commit()
     return conn.execute("SELECT * FROM classes WHERE id = ?", (cls["id"],)).fetchone(), studs
 
@@ -69,7 +69,7 @@ def test_late_by_count_fires_with_dates_and_times_and_clears_after_a_call(conn, 
     assert set(r) == {"late"} and r["late"]["level"] == "need"
     assert "6회 중 3회 지각" in r["late"]["reason"] and "11/6 18:25" in r["late"]["reason"] and "10/27 18:14" in r["late"]["reason"]
     # 통화함 on the day of the latest evidence clears it until new data
-    C.log_contact(conn, s["id"], "call", "출석 시간 이야기", ts=utc(TODAY, 21, 0))
+    C.log_contact(conn, s["id"], "call", "출석 시간 이야기", tag="trigger", ts=utc(TODAY, 21, 0))
     assert rules(conn, cfg, s) == {}
     # new data after the call: late again on the next class day -> fires again
     nxt = date(2026, 11, 10)
@@ -148,7 +148,7 @@ def test_stale_is_the_red_state_and_a_call_clears_it(conn, cfg, k):
     assert C.status(conn, cfg, TODAY)[0]["id"] == s["id"]                 # longest without contact first
     assert st[studs[0]["id"]]["level"] == "amber" and st[studs[0]["id"]]["days"] == 22
     assert "stale" in rules(conn, cfg, s)
-    C.log_contact(conn, s["id"], "call", "", ts=utc(TODAY, 15, 0))
+    C.log_contact(conn, s["id"], "call", "", tag="trigger", ts=utc(TODAY, 15, 0))
     assert rules(conn, cfg, s) == {}
     assert C.status(conn, cfg, TODAY, )[-1]["days"] == 0
 
@@ -169,11 +169,11 @@ def test_snooze_holds_for_seven_days_and_is_logged(conn, cfg, k):
 def test_contact_log_validates_and_goes_to_events(conn, k):
     _, studs = k
     with pytest.raises(C.ContactError):
-        C.log_contact(conn, studs[0]["id"], "call", "가" * 121)
+        C.log_contact(conn, studs[0]["id"], "call", "가" * 121, tag="rotation")
     with pytest.raises(C.ContactError):
         C.log_contact(conn, studs[0]["id"], "sms")
     with pytest.raises(C.ContactError):
-        C.log_contact(conn, studs[0]["id"], "call", follow_up="next week")
+        C.log_contact(conn, studs[0]["id"], "call", follow_up="next week", tag="rotation")
     n = conn.execute("SELECT COUNT(*) FROM events WHERE type = 'contact'").fetchone()[0]
     C.log_contact(conn, studs[0]["id"], "meeting", "  면담:  진로  ", direction="in", follow_up="2026-11-20")
     row = conn.execute("SELECT * FROM contacts ORDER BY id DESC LIMIT 1").fetchone()
@@ -198,7 +198,7 @@ def big(conn):
     conn.execute("UPDATE students SET created_at = ?", (utc(start - timedelta(days=120), 12, 0),))
     for i, s in enumerate(studs):
         C.set_profile(conn, s["id"], style="weekly" if i % 2 else "needed", channel="kakao" if i % 5 == 0 else "call")
-        C.log_contact(conn, s["id"], "call", "", ts=utc(start - timedelta(days=i % 27), 13, 0))
+        C.log_contact(conn, s["id"], "call", "", tag="rotation", ts=utc(start - timedelta(days=i % 27), 13, 0))
     conn.commit()
     return studs, start
 
@@ -211,7 +211,7 @@ def test_rotation_covers_every_parent_within_four_weeks_over_eight_weeks(conn, c
         assert pw["total"] <= pw["budget"] or all(i["locked"] for i in pw["items"] if i["type"] != "line")
         for it in pw["items"]:
             if it["type"] in ("call", "message") and not it["done"]:
-                C.log_contact(conn, it["id"], it["type"], "", ts=utc(sat, 14, 0))
+                C.log_contact(conn, it["id"], it["type"], "", tag=it["tag"], ts=utc(sat, 14, 0))
         conn.commit()
         for x in C.status(conn, cfg, sat):
             assert x["days"] <= 28, (w, x)
@@ -317,3 +317,22 @@ def test_flags_never_reach_dist_the_taste_build_or_the_projected_board(conn, tmp
     for r in fl[0]["rules"]:
         assert r["reason"] not in html
     assert "회 지각" not in html and "연락 기록 없음" not in html
+
+
+def test_f16_2_a_call_needs_a_tag_and_the_4_week_mix_counts_them(conn, k):
+    _, studs = k
+    with pytest.raises(C.ContactError, match="tag"):
+        C.log_contact(conn, studs[0]["id"], "call", "태그 없음")
+    with pytest.raises(C.ContactError):
+        C.log_contact(conn, studs[0]["id"], "call", "", tag="random")
+    C.log_contact(conn, studs[0]["id"], "message", "")                       # a message may go without one
+    for tag in ("rotation", "trigger", "trigger", "positive"):
+        C.log_contact(conn, studs[1]["id"], "call", "", tag=tag, ts=utc(TODAY - timedelta(days=3), 12, 0))
+    C.log_contact(conn, studs[2]["id"], "call", "", tag="positive", ts=utc(TODAY - timedelta(days=40), 12, 0))   # too old
+    mix = C.tag_mix(conn, TODAY)
+    assert (mix["rotation"], mix["trigger"], mix["positive"]) == (3 + 1, 2, 1)       # + the fixture's 3 rotation calls
+    assert conn.execute("SELECT tag FROM contacts ORDER BY id DESC LIMIT 1").fetchone()[0] == "positive"
+    ev = json.loads(conn.execute("SELECT payload_json FROM events WHERE type = 'contact' ORDER BY id DESC LIMIT 1").fetchone()[0])
+    assert ev["tag"] == "positive"
+    pw = C.plan_week(conn, Config(), TODAY)
+    assert all(i.get("tag") in ("trigger", "rotation") for i in pw["items"] if i["type"] != "line")

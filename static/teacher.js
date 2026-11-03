@@ -288,7 +288,7 @@
     var called = btn(C.called, 'primary'), sent = btn(C.messaged), hold = btn(C.hold);
     var msg = el('span', { 'class': 'muted' });
     function log(kind) {
-      api('/api/teacher/contact', { slug: f.slug, kind: kind, summary: sum.value, follow_up: fu.value || null }).then(function (j) {
+      api('/api/teacher/contact', { slug: f.slug, kind: kind, tag: 'trigger', summary: sum.value, follow_up: fu.value || null }).then(function (j) {
         if (j.ok) reloadContacts(); else msg.textContent = j.error || '';
       });
     }
@@ -310,7 +310,7 @@
       cb.disabled = true;
       var p = it.type === 'line'
         ? api('/api/teacher/note', { slug: it.slug, week: planWeek, text: it.why })
-        : api('/api/teacher/contact', { slug: it.slug, kind: it.type, summary: '' });
+        : api('/api/teacher/contact', { slug: it.slug, kind: it.type, tag: it.tag || 'rotation', summary: '' });
       p.then(function (j) { if (j.ok) reloadContacts(); else { cb.disabled = false; cb.checked = false; } });
     };
     var lab = el('label');
@@ -344,11 +344,13 @@
     ['call', 'message', 'meeting'].forEach(function (k) { kind.appendChild(el('option', { value: k }, C.kind[k])); });
     var b = btn(C.log);
     b.onclick = function () {
-      api('/api/teacher/contact', { slug: x.slug, kind: kind.value, summary: sum.value }).then(function (j) {
+      api('/api/teacher/contact', { slug: x.slug, kind: kind.value, tag: tg.value, summary: sum.value }).then(function (j) {
         if (j.ok) reloadContacts(); else $('status-msg').textContent = j.error || '';
       });
     };
-    td2.appendChild(kind); td2.appendChild(sum); td2.appendChild(b);
+    var tg = el('select', { 'aria-label': 'tag' });
+    ['rotation', 'trigger', 'positive'].forEach(function (k) { tg.appendChild(el('option', { value: k }, C.tag[k])); });
+    td2.appendChild(kind); td2.appendChild(tg); td2.appendChild(sum); td2.appendChild(b);
     tr.appendChild(td2);
     return tr;
   }
@@ -367,7 +369,8 @@
       $('plan-total').textContent = fmt(C.total, { t: j.plan.total, b: j.plan.budget });
       $('plan-cover').textContent = j.plan.coverage.text;
 
-      $('status-hint').textContent = fmt(C.status_hint, { a: j.settings.amber, r: j.settings.red });
+      $('status-hint').textContent = fmt(C.status_hint, { a: j.settings.amber, r: j.settings.red })
+        + ' · ' + fmt(C.mix, { r: j.mix.rotation, t: j.mix.trigger, p: j.mix.positive });
       var sr = $('status-rows'); sr.innerHTML = '';
       j.status.forEach(function (x) { sr.appendChild(statusRow(x)); });
 
@@ -380,7 +383,7 @@
         var cp = btn(S.copy); cp.onclick = function () { copy(ta.value, cp); };
         var sent = btn(C.messaged);
         sent.onclick = function () {
-          api('/api/teacher/contact', { slug: g.slug, kind: 'message', summary: '이달의 좋은 소식' }).then(function (r) {
+          api('/api/teacher/contact', { slug: g.slug, kind: 'message', tag: 'positive', summary: '이달의 좋은 소식' }).then(function (r) {
             if (r.ok) { sent.disabled = true; sent.textContent = '✓ ' + C.messaged; loadContacts(); }
           });
         };

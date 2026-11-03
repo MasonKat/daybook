@@ -188,6 +188,7 @@ def contacts(conn: sqlite3.Connection, cfg: Config, cls: sqlite3.Row, day: date)
     """Everything the Teacher tab's contact sections show: 연락 필요, 이번 주 할 일, 연락 현황, monthly good news."""
     from . import contact as C
     return {"flags": C.flags(conn, cfg, day), "plan": C.plan_week(conn, cfg, day), "status": C.status(conn, cfg, day),
+            "mix": C.tag_mix(conn, day),
             "month_end": C.last_week_of_month(day), "good_news": C.good_news(conn, cfg, day),
             "policy": C.policy(cls), "settings": C.settings(cfg)}
 
@@ -210,7 +211,8 @@ def contact_log(conn: sqlite3.Connection, body: dict) -> dict:
     from . import contact as C
     s = ops.get_student(conn, str(body.get("slug", "")))
     cid = C.log_contact(conn, s["id"], str(body.get("kind", "call")), str(body.get("summary", "") or ""),
-                        str(body.get("direction", "out") or "out"), str(body.get("follow_up") or "") or None)
+                        str(body.get("direction", "out") or "out"), str(body.get("follow_up") or "") or None,
+                        tag=str(body["tag"]) if body.get("tag") else None)
     conn.commit()
     return {"ok": True, "id": cid}
 

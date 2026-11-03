@@ -13,6 +13,7 @@ from .config import Config, strings
 from .db import log_event, now_utc_iso
 
 KINDS = ("call", "message", "meeting")
+TAGS = ("rotation", "trigger", "positive")     # F16.2: why the teacher reached out (required for a call)
 CHANNELS = ("call", "kakao", "both")
 STYLES = ("weekly", "needed")
 GREETINGS = ("어머님", "아버님", "보호자님")
@@ -58,9 +59,13 @@ def set_profile(conn: sqlite3.Connection, student_id: int, channel: str | None =
 
 
 def log_contact(conn: sqlite3.Connection, student_id: int, kind: str, summary: str = "", direction: str = "out",
-                follow_up: str | None = None, ts: str | None = None) -> int:
+                follow_up: str | None = None, ts: str | None = None, tag: str | None = None) -> int:
     if kind not in KINDS or direction not in ("out", "in"):
         raise ContactError("kind: call|message|meeting, direction: out|in")
+    if tag is not None and tag not in TAGS:
+        raise ContactError("tag: rotation | trigger | positive")
+    if kind == "call" and tag is None:
+        raise ContactError("a call needs a tag: rotation | trigger | positive")
     summary = " ".join((summary or "").split())
     if len(summary) > 120:
         raise ContactError("the summary is longer than 120 characters")
@@ -70,9 +75,9 @@ def log_contact(conn: sqlite3.Connection, student_id: int, kind: str, summary: s
         except ValueError as e:
             raise ContactError("follow-up must be YYYY-MM-DD") from e
     ts = ts or now_utc_iso()
-    cur = conn.execute("INSERT INTO contacts (student_id, ts, kind, direction, summary, follow_up) VALUES (?, ?, ?, ?, ?, ?)",
-                       (student_id, ts, kind, direction, summary or None, follow_up or None))
-    log_event(conn, "contact", {"student_id": student_id, "kind": kind, "direction": direction}, ts)
+    cur = conn.execute("INSERT INTO contacts (student_id, ts, kind, direction, summary, follow_up, tag) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                       (student_id, ts, kind, direction, summary or None, follow_up or None, tag))
+    log_event(conn, "contact", {"student_id": student_id, "kind": kind, "direction": direction, "tag": tag}, ts)
     return cur.lastrowid
 
 
@@ -117,6 +122,16 @@ def status(conn: sqlite3.Connection, cfg: Config, today: date, class_id: int | N
                     "days": d, "level": "red" if d >= st["red"] else "amber" if d >= st["amber"] else "ok",
                     "last": last.isoformat() if last else None, **profile(conn, s["id"])})
     out.sort(key=lambda x: (-x["days"], x["class_name"] or "", x["display_name"]))
+    return out
+
+
+def tag_mix(conn: sqlite3.Connection, today: date, days: int = 28) -> dict:
+    """F16.2: the last 4 weeks of contacts by why (rotation / trigger / positive; untagged = older or non-call)."""
+    since = (today - timedelta(days=days - 1)).isoformat()
+    out = {t: 0 for t in TAGS} | {"untagged": 0}
+    for r in conn.execute("SELECT tag, ts FROM contacts"):
+        if _kst_day(r["ts"]).isoformat() >= since:
+            out[r["tag"] if r["tag"] in TAGS else "untagged"] += 1
     return out
 
 
@@ -317,7 +332,7 @@ def plan_week(conn: sqlite3.Connection, cfg: Config, today: date) -> dict:
     for sid, f in flagged.items():                                   # locked: never moves
         kind = "message" if f["channel"] == "kakao" else "call"
         items.append({"id": sid, "slug": f["slug"], "display_name": f["display_name"], "class_name": f["class_name"],
-                      "type": kind, "minutes": mins[kind], "locked": True, "why": f["rules"][0]["reason"],
+                      "type": kind, "tag": "trigger", "minutes": mins[kind], "locked": True, "why": f["rules"][0]["reason"],
                       "done": done_contact(sid)})
         total += mins[kind]
     due = sorted((x for x in stat.values() if x["id"] not in flagged and x["days"] >= st["rotation_days"] - 7),
@@ -326,7 +341,7 @@ def plan_week(conn: sqlite3.Connection, cfg: Config, today: date) -> dict:
         kind = "message" if x["channel"] == "kakao" else "call"
         locked = x["level"] == "red"
         it = {"id": x["id"], "slug": x["slug"], "display_name": x["display_name"], "class_name": x["class_name"], "type": kind,
-              "minutes": mins[kind], "locked": locked, "why": P()["why_rotation"].format(n=x["days"]), "done": done_contact(x["id"])}
+              "tag": "rotation", "minutes": mins[kind], "locked": locked, "why": P()["why_rotation"].format(n=x["days"]), "done": done_contact(x["id"])}
         if locked or total + it["minutes"] <= st["budget"] or it["done"]:
             items.append(it); total += it["minutes"]
         else:

@@ -86,7 +86,8 @@ CREATE TABLE IF NOT EXISTS contacts (       -- F13.1: the teacher's parent-conta
     kind       TEXT NOT NULL CHECK (kind IN ('call', 'message', 'meeting')),
     direction  TEXT NOT NULL DEFAULT 'out' CHECK (direction IN ('out', 'in')),
     summary    TEXT,                       -- <= 120 characters
-    follow_up  TEXT                        -- YYYY-MM-DD
+    follow_up  TEXT,                       -- YYYY-MM-DD
+    tag        TEXT                        -- F16.2: rotation | trigger | positive (required for a call)
 );
 
 CREATE TABLE IF NOT EXISTS snoozes (        -- F13.2: "이번 주는 보류" (7 days)
@@ -283,6 +284,7 @@ def migrate(conn: sqlite3.Connection) -> None:
     added = {   # table -> {column: declaration} for columns that arrived after v1 (additive only)
         "sessions": {"start_time": "TEXT", "code": "TEXT", "cancelled": "TEXT"},
         "students": {"left_on": "TEXT"},
+        "contacts": {"tag": "TEXT"},
         "submissions": {"reflection": "TEXT", "chip": "TEXT", "solved": "INTEGER"},
         "classes": {"grade": "TEXT", "start_time": "TEXT", "end_time": "TEXT", "self_study_until": "TEXT", "late_min": "INTEGER DEFAULT 10",
                     "late_count": "INTEGER DEFAULT 3", "late_avg_min": "INTEGER DEFAULT 15"},
