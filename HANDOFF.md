@@ -243,6 +243,9 @@ leaves the laptop), open http://127.0.0.1:8787/live from the board, 방 열기, 
 Students tap "AMP Live" on the 오늘 tab and type the code. Re-check Cloudflare's Durable Objects free-plan page once
 (DECISIONS, F7).
 
+Offline (F9): the student page keeps working on bad Wi-Fi; a photo taken offline waits on the phone and is sent the
+next time the page opens with a connection. Answer cards (F8) are a spike only: `daybook omr --spike --eval 200`.
+
 In class (P2, from the week after the pilot): `daybook board 고1A` → http://127.0.0.1:8787 (attitude 1·2·3, live ✓,
 "대신 제출"). Without the board: `daybook score 고1A <date> <slug> <0-3>` and `daybook submit <slug> --source paper`.
 

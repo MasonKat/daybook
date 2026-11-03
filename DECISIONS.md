@@ -188,6 +188,27 @@ One line each. "deferred" = not built in P0, on purpose.
 - The taste build has a self-playing 8-student practice room (5 questions, nothing sent).
 - deferred: a WebSocket transport (hibernation API) for Live; polling is enough for one class.
 
+## F8: answer-card reading spike (2026-11-03)
+- `console/omr.py`, pure Pillow (no numpy/OpenCV): the card is 20 items × ①–⑤ with four solid corner squares. Find the squares with a **local** (adaptive) threshold and connected components (largest solid blobs nearest each image corner), solve the 4-point perspective, warp to the canonical sheet, compare each bubble's interior with the paper right next to it (filled when below 62 %), and report per item blank / one choice / several.
+- Synthetic test cards: perspective (corners jittered ±3.6 %), blur σ 0.6–1.8, a shading gradient from a random side, a hard-edged shadow on 25 % of cards, a light pencil on 20 %, 8 % blank and 4 % double-marked items, JPEG q 55–85, a darker table around the paper.
+- Accuracy on 200 cards (4,000 items, seed 20261104), as the reader evolved:
+
+  | version | not located | item accuracy | cards fully right |
+  |---|---|---|---|
+  | global (Otsu) threshold | 44 / 200 | 78.0 % | 77.5 % |
+  | local threshold | 13 / 200 | 93.5 % | 92.5 % |
+  | local threshold + fill rule 0.6 (current) | 2 / 200 | **98.9 %** | **97.5 %** |
+
+  On located cards: blank 100 %, single 99.97 %, double-marked 98.9 %. The misses left are a corner square cut by a hard shadow edge.
+- `daybook omr --spike` (`--eval N`, `--sample out.jpg`, `--image card.jpg --student <slug> --set <id> [--key 3,1,4,…]`) writes one `effort` row per item (`source = 'card'`, attempted = any bubble filled, correct only with a key). Without `--spike` it refuses; nothing reaches the pages or publish.
+- Next steps if it graduates: real phone photos of a printed card (the synthetic set is only a proxy), a printable card template from `blank_sheet()`, and a "retake" answer when the squares are not found.
+
+## F9: offline and install (2026-11-03)
+- A service worker (`dist/sw.js`, served from the root, scope `/s/` only) caches the student page shell: pages network-first with the last copy as the offline fallback (so a new publish shows as soon as there is a connection), `/static/` cache-first. It never touches the Worker (another origin) or the parent pages.
+- A photo submitted without a connection is shrunk as usual and kept in IndexedDB (`daybook` → `queue`, one record per student per day, the newest photo wins); the 오늘 tab shows "보낼 준비 완료". It is sent on the next page open with a connection or on the browser's `online` event, then removed; the e2e checks it arrives exactly once.
+- The Worker dates a queued photo by when it arrives (it never trusts a date from the phone), so a photo queued at 23:50 and sent after midnight counts for the next day.
+- "홈 화면에 추가" card (iPhone Safari steps, Android Chrome steps) on the 오늘 tab, shown once per phone and never inside the installed app.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

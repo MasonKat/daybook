@@ -440,6 +440,45 @@ def qr(obj: Ctx, first, second, set_id, out):
         fail(str(e))
 
 
+@cli.command()
+@click.option("--spike", is_flag=True, help="Required: answer-card reading is an experiment (F8)")
+@click.option("--eval", "n_eval", type=int, default=None, help="Accuracy on N synthetic phone photos")
+@click.option("--sample", default=None, type=click.Path(dir_okay=False), help="Write one synthetic card photo here")
+@click.option("--image", default=None, type=click.Path(exists=True, dir_okay=False), help="A photographed card to read")
+@click.option("--student", "slug", default=None, help="With --image: write the read into effort for this student")
+@click.option("--set", "set_id", default=None, help="With --student: the set id the card belongs to")
+@click.option("--key", default=None, help="Optional answer key, e.g. 3,1,4,2,5,…")
+@click.pass_obj
+def omr(obj: Ctx, spike, n_eval, sample, image, slug, set_id, key):
+    """Answer-card reading spike: 20 items × ①–⑤ with four corner squares. Not wired to publish."""
+    import json as _json
+    import random as _random
+    from . import omr as om
+    if not spike:
+        fail("answer-card reading is a spike: run it with --spike (its results never reach the pages)")
+    if n_eval:
+        click.echo(_json.dumps(om.evaluate(n_eval), ensure_ascii=False, indent=1))
+    if sample:
+        img, truth = om.synthetic_card(_random.Random())
+        img.save(sample)
+        click.echo(f"{sample}  (truth: {[sorted(t) for t in truth]})")
+    if image:
+        from PIL import Image
+        try:
+            read = om.read_card(Image.open(image))
+        except ValueError as e:
+            fail(f"could not read the card: {e}")
+        click.echo(" ".join(f"{i}:{''.join(map(str, sorted(p))) or '-'}" for i, p in enumerate(read, 1)))
+        if slug:
+            if not set_id:
+                fail("--set is needed with --student")
+            k = [int(x) for x in key.split(",")] if key else None
+            n = om.to_effort(obj.conn, ops.get_student(obj.conn, slug)["id"], set_id, read, k)
+            click.echo(f"effort: {n} items (source card)")
+    if not (n_eval or sample or image):
+        fail("nothing to do: --eval N, --sample out.jpg or --image card.jpg")
+
+
 @cli.command("lines")
 @click.argument("class_name")
 @click.option("--date", "d", default=None, help="Day (default today); --days for more")

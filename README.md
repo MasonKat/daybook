@@ -77,6 +77,7 @@ Then follow `HANDOFF.md` (classes, roster import, links).
 Other commands: `daybook class cancel <class> <date>` (휴강), `daybook qr <class> --set <id>` / `daybook qr sheet <class>`
 (handout QR, never a token), `daybook note suggest <class>` (draft notes), `daybook export report <slug>` (one-page
 상담 자료, print to PDF), `daybook lines <class>`, `daybook checkin <slug>`, `daybook moment add|list`,
+`daybook omr --spike --eval 200` / `--image card.jpg --student <slug> --set <id>` (answer-card reading spike),
 `daybook score <class> <date> <slug> <0-3>`, `daybook submit <slug> [--source paper]`,
 `daybook roster edit <slug> --display <name>`, `daybook roster rotate-tokens <class> [--student slug]`,
 `daybook import tests <csv>`, `daybook pull --photos photos/`, `daybook class list|edit`, `daybook export pdf` (stub).
