@@ -37,10 +37,11 @@ def backup_dir(cfg: Config, db_path: str | Path) -> Path:
 
 
 def existing(folder: Path) -> list[Path]:
-    """Backups in the folder, newest first (names sort by time)."""
+    """Backups in the folder, newest first (by modification time, then name)."""
     if not folder.is_dir():
         return []
-    return sorted((p for p in folder.glob(f"{NAME_PREFIX}*.sqlite") if p.is_file()), key=lambda p: p.name, reverse=True)
+    files = [p for p in folder.glob(f"{NAME_PREFIX}*.sqlite") if p.is_file()]
+    return sorted(files, key=lambda p: (p.stat().st_mtime_ns, p.name), reverse=True)
 
 
 def newest_age_days(folder: Path, now: datetime | None = None) -> float | None:

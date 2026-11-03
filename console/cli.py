@@ -732,6 +732,17 @@ def publish(obj: Ctx, out, d, taste):
         sys.exit(1)
     if not taste:
         _send_links(obj, obj.conn)
+        click.echo(_auto_backup(obj.db_path, obj.cfg))
+
+
+def _auto_backup(db_path, cfg) -> str:
+    """G2: every 발행 ends with a backup (never stops the publish)."""
+    from . import backup as B
+    try:
+        r = B.run(db_path, cfg, keep=int(cfg.extra.get("backup_keep", 30)))
+        return f"backup: {r.path}"
+    except (B.BackupError, OSError) as e:
+        return f"warning: backup failed ({e}); run `daybook backup`"
 
 
 @cli.group()
@@ -1022,6 +1033,20 @@ def doctor(obj: Ctx, dist, as_json):
     click.echo(json.dumps(D.as_json(lines), ensure_ascii=False, indent=1) if as_json else D.text(lines))
     if not D.ok(lines):
         sys.exit(1)
+
+
+@cli.command()
+@click.option("--to", "to", default=None, help='Folder (default: "backup_dir" in daybook.json, else backups/ next to the database)')
+@click.option("--keep", type=int, default=30, show_default=True, help="Keep the newest N backups")
+@click.pass_obj
+def backup(obj: Ctx, to, keep):
+    """A consistent copy of the database (safe while the board runs), checked with integrity_check."""
+    from . import backup as B
+    try:
+        r = B.run(obj.db_path, obj.cfg, to, keep)
+    except B.BackupError as e:
+        fail(str(e))
+    click.echo(f"{r.path}  (integrity {r.integrity}; removed {len(r.removed)} old)")
 
 
 if __name__ == "__main__":

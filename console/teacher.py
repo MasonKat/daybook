@@ -135,7 +135,7 @@ def cancel(conn: sqlite3.Connection, cls: sqlite3.Row, body: dict) -> dict:
     return {"ok": True, "cancelled": cancelled}
 
 
-def publish(conn: sqlite3.Connection, cfg: Config, out: Path | None = None) -> dict:
+def publish(conn: sqlite3.Connection, cfg: Config, out: Path | None = None, db_path: str | None = None) -> dict:
     """Saturday button: pull (when a Worker is configured) -> publish -> lint, then send the student links."""
     steps = []
     if cfg.worker and cfg.teacher_token:
@@ -151,6 +151,8 @@ def publish(conn: sqlite3.Connection, cfg: Config, out: Path | None = None) -> d
         msg = push_tokmap(conn, cfg)
         if msg:
             steps.append(msg)
+        if db_path:
+            steps.append(backup_now(db_path, cfg)["message"])            # G2: every 발행 ends with a backup
     else:
         steps.append("publish STOPPED: the no-PII lint failed; dist/ was not changed")
     return {"ok": res.ok, "steps": steps, "findings": findings}
@@ -414,3 +416,14 @@ def doctor(conn: sqlite3.Connection, cfg: Config, db_path: str) -> dict:
     from . import doctor as D
     lines = D.run(conn, cfg, db_path, "dist")
     return {"ok": D.ok(lines), "lines": D.as_json(lines)}
+
+
+# ---------------------------------------------------------------- G2: 백업
+
+def backup_now(db_path: str, cfg: Config) -> dict:
+    from . import backup as B
+    try:
+        r = B.run(db_path, cfg, keep=int(cfg.extra.get("backup_keep", 30)))
+        return {"ok": True, "message": f"backup: {r.path.name} (integrity {r.integrity})", "path": str(r.path)}
+    except (B.BackupError, OSError) as e:
+        return {"ok": False, "message": f"warning: backup failed ({e})", "error": str(e)}

@@ -327,7 +327,9 @@ def make_handler(board: Board):
                     if self.path == "/api/teacher/cancel":
                         return self._json(T.cancel(conn, cls, body))
                     if self.path == "/api/teacher/publish":
-                        return self._json(T.publish(conn, board.cfg))
+                        return self._json(T.publish(conn, board.cfg, db_path=board.db_path))
+                    if self.path == "/api/teacher/backup":               # G2
+                        return self._json(T.backup_now(board.db_path, board.cfg))
                     if self.path == "/api/teacher/deploy":
                         res = T.deploy(board.cfg, runner=board.deploy_runner)
                         if res.get("ok"):                     # G1: doctor shows the last deploy

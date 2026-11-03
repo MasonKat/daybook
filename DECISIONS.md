@@ -277,6 +277,15 @@ One line each. "deferred" = not built in P0, on purpose.
 - `export reports` writes with `newline=""`: the CSV (UTF-8 BOM, `\n` line ends) and the JSON have identical bytes on every OS (Windows text mode had turned them into CRLF, so the exact-header check failed and the local Notion sync would see different bytes). A pytest reads the file in binary and asserts there is no `\r`; the e2e splits on `\r?\n`.
 - The board uses a **lingering close** on every path that closes the connection itself (a non-numeric Content-Length; a body over the drain cap): reply, half-close (`SHUT_WR`), read and discard until EOF, 2 s or 64 KB, then close, as Apache and nginx do. The bad-length test now sends a 32 KB body and stays strict. Linux does not reproduce the Windows reset (the old code passes there too), so the local 20x loop on Windows is the proof.
 
+## G1: `daybook doctor` (2026-11-04, Friday readiness)
+- One preflight (CLI and the Teacher tab's 점검): daybook.json and worker_url / pages_url / teacher_token; schema version and `PRAGMA integrity_check`; the Worker's `/health` (now with `version` and a cheap D1 read), the version against what this console needs (v6; ⚠ "redeploy: cd worker && npx wrangler deploy"); the pushed token map against the active roster through the teacher-only `/tokmap-info` (a count and a SHA-256 hash of the sorted `token:class` lines, never the tokens); for each class meeting today: start time, session started, open 주간 테스트 round; last publish, last deploy (recorded by the Teacher tab's 배포 button; "unknown" otherwise), last backup (⚠ none or over 7 days) and whether the backup folder is on a removable drive (Windows only; unknown elsewhere); dist/ through the no-PII lint.
+- ✓ / ⚠ / ✗ with a one-line fix each; exit 0 when there is no ✗ (a ⚠ such as "session not started" before class is normal). `--json` for the local agent. It only reads.
+
+## G2: `daybook backup` (2026-11-04)
+- SQLite's online backup API (consistent while the board writes), into `backup_dir` from daybook.json; the default `backups/` and any relative path sit next to the database file (not the current folder), so a test or a script never litters the repo. The copy is written as `.partial`, checked with `PRAGMA integrity_check`, then renamed to `daybook-YYYYMMDD-HHMM.sqlite` (`-2`, `-3` … within the same minute); the newest N are kept (`--keep 30`, or `"backup_keep"` in daybook.json).
+- Every 발행 ends with a backup (CLI `publish` and the Teacher tab; a failed backup is a warning, never a failed publish), plus the 백업 button.
+- No encryption library: point `backup_dir` at a BitLocker-encrypted USB drive or folder; doctor shows whether it is removable.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).
