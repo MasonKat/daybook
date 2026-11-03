@@ -516,7 +516,7 @@
           tr.appendChild(el('td', { 'class': 'tnum' }, fmt(VV.students, { n: v.students, t: c.active })));
           tr.appendChild(el('td', { 'class': 'tnum' }, fmt(VV.avg, { p: v.avg_pct }) + ' · ' + fmt(VV.minutes, { m: v.minutes })));
           tr.appendChild(el('td', { 'class': 'tnum muted' }, typeof v.views === 'number' || typeof v.views_7d === 'number'
-            ? fmt(VV.views, { a: (v.views || 0).toLocaleString('ko-KR'), w: (v.views_7d || 0).toLocaleString('ko-KR') }) : ''));
+            ? fmt(VV.views, { a: (v.views || 0).toLocaleString('ko-KR'), w: (v.views_7d || 0).toLocaleString('ko-KR'), n: v.students }) : ''));
           tb.appendChild(tr);
         });
         t.appendChild(tb); if (c.videos.length) box.appendChild(t);

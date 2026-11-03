@@ -522,3 +522,7 @@ tr.rc.skipped td:nth-child(2) { color: var(--err); }
 .doctor .dl.ok b { color: var(--ok); } .doctor .dl.warn b { color: var(--adjust); } .doctor .dl.bad b { color: var(--err); }
 .doctor .fix { margin-left: 18px; font-size: 12px; }
 .wt-leg { font-size: 13px; text-decoration: none; }
+
+/* F15.2: 인기 */
+.chip.hot { background: #fff1e6; color: #c2410c; border-color: #fdba74; }
+.s-popular { position: relative; } .s-popular .hot-ico { position: absolute; right: 2px; bottom: 0; font-size: 18px; }

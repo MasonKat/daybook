@@ -75,3 +75,42 @@ def test_teacher_view_per_class_and_per_student(conn, klass, tmp_path):
     assert {v["id"] for v in v14["classes"][0]["videos"]} == {"AMPvideo001", "AMPvideo002"}
     text = W.report_text(v14)
     assert "영상1: 3명 · 평균 80% · 6.0분 · 전체 조회 88 (7일)" in text and studs[0]["display_name"] not in text
+
+
+def test_popular_needs_three_students_and_shows_only_a_badge(conn, klass, tmp_path):
+    _, studs = klass
+    for s in studs[:2]:
+        put(conn, s["id"], "AMPvideo002", TODAY)
+    conn.commit()
+    cfg = cfg_with(tmp_path, [vid(1, added="2026-11-05"), vid(2, added="2026-10-01", views=1240, views_7d=88), vid(3, "long")])
+    ctx = generate.build_context(conn, cfg, TODAY, NOW)
+    assert not any(st["key"] == "popular" for s in ctx["students"] for st in s["stories"])        # 2 students: not yet
+    put(conn, studs[2]["id"], "AMPvideo002", TODAY - timedelta(days=6))
+    conn.commit()
+    ctx = generate.build_context(conn, cfg, TODAY, NOW)
+    for s in ctx["students"]:                          # the whole class sees it, watched or not
+        ring = [st for st in s["stories"] if st["key"] == "popular"]
+        assert ring and ring[0]["items"][0]["id"] == "AMPvideo002"
+        assert s["shorts"][0]["id"] == "AMPvideo002" and s["shorts"][0]["hot"]               # pinned first
+    res = generate.publish(conn, cfg, tmp_path / "dist", today=TODAY, now=NOW)
+    assert res.ok
+    html = (tmp_path / "dist" / "s" / studs[0]["student_token"] / "index.html").read_text(encoding="utf-8")
+    assert "🔥 인기" in html and "우리 반이 이번 주 많이 본 영상" in html
+    assert "1240" not in html and "1,240" not in html and "3명" not in html                    # no counters, no numbers
+    for s in studs:
+        assert s["full_name"] not in html
+    # 14-day window and no pin
+    put(conn, studs[0]["id"], "AMPvideo001", TODAY - timedelta(days=10), sec=600)
+    ctx = generate.build_context(conn, cfg_with(tmp_path, [vid(1), vid(2)], popular_days=14, popular_pin=False), TODAY, NOW)
+    me = next(s for s in ctx["students"] if s["id"] == studs[0]["id"])
+    assert [v["id"] for v in me["shorts"]] == ["AMPvideo001", "AMPvideo002"] and me["shorts"][1].get("hot")
+
+
+def test_another_class_never_counts(conn, klass, tmp_path):
+    _, studs = klass
+    conn.execute("INSERT INTO classes (name, term, weekday_mask) VALUES ('기초B', '2026-10-01..2026-12-31', 5)")
+    others = [add_student(conn, 2, n, ext_id=e) for n, e in (("오세린", "X1"), ("남다온", "X2"), ("표이안", "X3"))]
+    for s in others:
+        put(conn, s["id"], "AMPvideo002", TODAY)
+    conn.commit()
+    assert W.popular(conn, 1, TODAY) is None and W.popular(conn, 2, TODAY) == "AMPvideo002"

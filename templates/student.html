@@ -24,6 +24,8 @@
     <span class="ring prog" style="--p: {{ st.pct }}"><span class="story-in s-streak"><b class="tnum" data-live="streak">{{ st.streak }}</b></span></span>
     {% elif st.key == 'videos' %}
     <span class="ring"><span class="story-in s-videos">{% if st.thumb %}<img src="{{ st.thumb }}" alt="" decoding="async">{% else %}<span aria-hidden="true">▶</span>{% endif %}</span></span>
+    {% elif st.key == 'popular' %}
+    <span class="ring"><span class="story-in s-videos s-popular">{% if st.thumb %}<img src="{{ st.thumb }}" alt="" decoding="async">{% endif %}<span class="hot-ico" aria-hidden="true">🔥</span></span></span>
     {% elif st.key == 'review' %}
     <span class="ring"><span class="story-in s-review"><span aria-hidden="true">✎</span></span></span>
     {% elif st.key == 'goal' %}
@@ -60,7 +62,7 @@
         <a class="play" href="{{ v.url }}" target="_blank" rel="noopener noreferrer" aria-label="{{ S.watch }}"><span aria-hidden="true">▶</span></a>
         {% endif %}
         <div class="overlay">
-          {% if v.group %}<span class="chip">{{ v.group }}</span>{% endif %}
+          {% if v.hot %}<span class="chip hot">🔥 {{ S.story_popular }}</span>{% endif %}{% if v.group %}<span class="chip">{{ v.group }}</span>{% endif %}
           <h3 class="rt">{{ v.title }}</h3>
           <a class="watch" href="{{ v.url }}" target="_blank" rel="noopener noreferrer">{{ S.watch }} ›</a>
         </div>
@@ -84,7 +86,7 @@
       </div>
       <div class="lmeta">
         <h3 class="lt">{{ v.title }}</h3>
-        <p>{% if v.group %}<span class="chip">{{ v.group }}</span>{% endif %}<a class="watch" href="{{ v.url }}" target="_blank" rel="noopener noreferrer">{{ S.watch }} ›</a></p>
+        <p>{% if v.hot %}<span class="chip hot">🔥 {{ S.story_popular }}</span>{% endif %}{% if v.group %}<span class="chip">{{ v.group }}</span>{% endif %}<a class="watch" href="{{ v.url }}" target="_blank" rel="noopener noreferrer">{{ S.watch }} ›</a></p>
       </div>
     </article>
     {% endfor %}
@@ -283,6 +285,15 @@
       {% if v.thumb %}<img class="{{ v.kind }}" src="{{ v.thumb }}" alt="" loading="lazy" decoding="async">{% else %}<div class="ph {{ v.kind }}"><span>{{ v.title }}</span></div>{% endif %}
       <h2>{{ v.title }}</h2>
       {% if v.group %}<span class="chip">{{ v.group }}</span>{% endif %}
+      <a class="btn primary sv-link" href="{{ v.url }}" target="_blank" rel="noopener noreferrer">{{ S.watch }}</a>
+    </div>
+    {% endfor %}
+    {% elif st.key == 'popular' %}
+    {% for v in st['items'] %}
+    <div class="slide s-video">
+      <p class="sv-kicker">🔥 {{ S.story_popular_kicker }}</p>
+      {% if v.thumb %}<img class="{{ v.kind }}" src="{{ v.thumb }}" alt="" loading="lazy" decoding="async">{% else %}<div class="ph {{ v.kind }}"><span>{{ v.title }}</span></div>{% endif %}
+      <h2>{{ v.title }}</h2>
       <a class="btn primary sv-link" href="{{ v.url }}" target="_blank" rel="noopener noreferrer">{{ S.watch }}</a>
     </div>
     {% endfor %}

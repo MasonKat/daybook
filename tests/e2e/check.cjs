@@ -365,6 +365,12 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
         && (await grp.locator('.rchips .chip').count()) >= 2 && (await grp.locator('.rvids a').count()) >= 1
         && (await grp.locator('blockquote').count()) === 1, '이번 주 복습 ring: focus chips, recommended videos and the student line');
     }
+    {   // F15.2: the class's 인기 video (>= 3 students): a ring and a 🔥 badge, never a number or a name
+      const pop = page.locator('.story[data-story="popular"]');
+      const hotChips = await page.locator('#tab-videos .chip.hot').count();
+      const popText = await page.locator('.sv-group[data-story="popular"]').textContent();
+      check(await pop.count() === 1 && hotChips === 1 && !/\d+명|\d+회|조회/.test(popText), `인기 ring + one 🔥 badge (${hotChips}), no counts on the page`);
+    }
     check(nStories >= 3, `${nStories} story rings (새 영상, 연속, 반 목표, 선생님)`);
     const rings = await page.evaluate(() => ({
       img: !!document.querySelector('.story[data-story="videos"] .story-in img[src^="/t/"]'),
@@ -726,6 +732,12 @@ print(c.execute("SELECT COUNT(*), SUM(correct) FROM effort WHERE source = 'live'
     await tpage.selectOption('#rs-class', '');
     check((await tpage.locator('#notes-rows .nrow input').first().inputValue()).length > 0, 'notes are prefilled (note or data draft)');
     check((await tpage.locator('#weekly-rows pre').count()) >= 5, 'weekly paste messages with copy buttons');
+    // F15.1/F15.2: 영상 (class numbers, per student behind a fold); the 2주 리포트 as text
+    await tpage.waitForSelector('#vv-rows h3', { timeout: 5000 }).catch(() => {});
+    check((await tpage.locator('#vv-rows h3').count()) === 4 && /🔥/.test(await tpage.textContent('#vv-rows')) && /\d+\/\d+명/.test(await tpage.textContent('#vv-rows')),
+      `영상: per class (${await tpage.locator('#vv-rows h3').count()}), the 인기 video marked, n/total students`);
+    await tpage.click('#t-videos [data-days="14"]');
+    await tpage.waitForFunction(() => /~/.test(document.getElementById('vv-range').textContent), null, { timeout: 5000 }).catch(() => {});
     // F13: the parent-contact desk
     await tpage.waitForSelector('#need-rows .need', { timeout: 5000 }).catch(() => {});
     const needN = await tpage.locator('#need-rows .need').count();

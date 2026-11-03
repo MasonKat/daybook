@@ -397,6 +397,10 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
     show_late = bool(cfg.extra.get("show_late", False))
     show_lines = bool(cfg.extra.get("parent_shows_reflection", False))   # off by default: students write honestly
     show_videos = bool(cfg.extra.get("parent_shows_videos", True))       # F15.1: the parent card's 영상 count
+    # F15.2: each class's 인기 video (>= 3 different students over popular_days); never a name or a number on a page
+    pop_days = 14 if int(cfg.extra.get("popular_days", 7) or 7) == 14 else 7
+    popular = {cid: W.popular(conn, cid, today, pop_days) for cid in classes}
+    pop_pin = cfg.extra.get("popular_pin", True) is not False
 
     students = []
     only = " AND slug = ?" if taste else ""
@@ -461,9 +465,14 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         # F12: the teacher's own analysis, student-safe slice (scrubbed; the round id never reaches a page)
         insights = conn.execute("SELECT * FROM insights WHERE student_id = ? ORDER BY date, ts", (s["id"],)).fetchall()
         # F10: this student's videos (untagged + their class / grade), pinned 강의 first
-        my_videos = [v for v in videos if video_for(v, cls)]
+        hot = popular.get(s["class_id"])
+        my_videos = [dict(v, hot=True) if v["id"] == hot else v for v in videos if video_for(v, cls)]
         my_shorts = [v for v in my_videos if v["kind"] == "short"]
         my_longs = sorted((v for v in my_videos if v["kind"] == "long"), key=lambda v: not v["pin"])
+        if pop_pin:                                     # the 인기 video first in its own list (sorts are stable)
+            my_shorts.sort(key=lambda v: not v.get("hot"))
+            my_longs.sort(key=lambda v: not v.get("hot"))
+        hot_v = next((v for v in my_videos if v.get("hot")), None)
         new_videos = [v for v in my_videos if v["added"] and v["added"] >= week_ago]
         newest_thumb = next((v["thumb"] for v in (new_videos or my_videos) if v["thumb"]), "")
         # stories (own data only; 오늘의 장면 is class-wide, never another student's)
@@ -475,6 +484,8 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         if new_videos:
             stories.append({"key": "videos", "label": S["story_new_videos"], "items": new_videos,
                             "thumb": newest_thumb})
+        if hot_v:
+            stories.append({"key": "popular", "label": S["story_popular"], "items": [hot_v], "thumb": hot_v["thumb"]})
         stories.append({"key": "streak", "label": S["story_streak"].format(n=streak), "streak": streak,
                         "pct": round(100 * week_k / 7)})
         if rw and rw.goal > 0:
@@ -489,7 +500,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                             "week": _date_ko(M.week_monday(notes[-1]["week"]))})
         for st_ in stories:
             content = {k: v for k, v in st_.items() if k not in ("label", "streak", "pct", "thumb")}
-            if st_["key"] == "videos":
+            if st_["key"] in ("videos", "popular"):
                 content = [v["id"] for v in st_["items"]]
             if st_["key"] == "moments":
                 content = [m["k"] for m in st_["items"]]

@@ -380,10 +380,12 @@
   "v_students": "{n}/{t}명",
   "v_avg": "평균 {p}%",
   "v_minutes": "{m}분",
-  "v_views": "전체 조회 {a} · 7일 {w}",
+  "v_views": "전체 조회 {a} · 7일 {w} · 우리 반 {n}명",
   "v_hot": "인기",
   "v_none": "시청 기록 없음",
   "v_per_student": "학생별 (선생님만)",
+  "story_popular": "인기",
+  "story_popular_kicker": "우리 반이 이번 주 많이 본 영상",
   "parent_msg": {
     "_note": "Parent-facing drafts (F13.6): warm and formal, no emoji, never playful. reason_* lines are for the teacher only.",
     "greeting": "안녕하세요, {g}. AMP 수학입니다.",

@@ -315,6 +315,11 @@ One line each. "deferred" = not built in P0, on purpose.
 - "Watched" means at least 10 seconds. The student profile shows "이번 주 본 영상 n개" (their own); the parent card shows "이번 주 해설·개념 영상 n개 시청" (a count; `"parent_shows_videos": false` hides it). Teacher tab → 영상: per class and video, students who watched / average % / minutes; per student this week's videos (laptop only).
 - Worker v7 (doctor asks for a redeploy when older). The budget test now includes 3 watch records per student per day.
 
+## F15.2: rankings of videos, never of students (2026-11-04)
+- At publish, per class: "이번 주 인기 영상" = the video watched (≥ 10 s) by the most different students of the class over the last `popular_days` (7, or 14), then by watch minutes; shown only when at least 3 different students watched it. It appears to everyone in that class (who can see the video) as a story ring "인기" and a 🔥 인기 chip on its card, and it comes first in its reels/강의 list (`"popular_pin": false` keeps the normal order). Pages never carry a student name, a per-student number or any count.
+- `videos.json` may carry `views` and `views_7d` (YouTube's own counters, filled by the local agent; DAYBOOK never calls YouTube). The Teacher tab shows them beside the class numbers ("전체 조회 1,240 · 7일 88 · 우리 반 9명"); pages never use them.
+- Teacher tab → 영상 → 2주 리포트: per class and video, students who watched, average %, minutes and views_7d over 14 days, with a copy button (titles and class numbers only).
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).
