@@ -233,6 +233,10 @@ One line each. "deferred" = not built in P0, on purpose.
 - **`export report`** gains 연락 기록 (date, kind, in/out, summary, follow-up) for the term.
 - **Demo:** four classes, 22 students: 고1A (strong, 화목토 18–20, 5 incl. 콩), 기초B (basic, 월수금 20–22, 6, late_min 30), 심화C (strong, 월수금 18–20, 6), 케어D (care, 화목토 17:30–20:00, 자습 ~21:00, 5). 시온 (심화C, S916) arrives 18–45 min late (about 30 on average), tests about 90 %, last parent contact 180 days ago: always on top, script opens "확보 효율 …%로, 수학 실력이 …". Also seeded: one 2-in-a-row absence (기초B), one single absence (케어D, notice), one 3-day homework gap (심화C), one red parent (케어D, 38 days). Everyone enrolled 150 days ago with a contact history.
 
+## Fixes before F10–F12 (2026-11-04)
+- `scripts\check.ps1` runs every Worker test file (`node --test 'test/*.test.mjs'`, the glob is expanded by Node, so PowerShell needs no globbing); it had missed `test/live.test.mjs`.
+- The board reads the whole request body before any reply, refusals included (wrong Host, wrong Origin, too big; a body over 25 MB is drained in chunks up to 64 MB, then the connection closes). Answering first and closing with unread bytes made Windows reset the connection (WinError 10054 in `test_board_submit_for_and_guards`). A Content-Length that is not a number gets a 400 and a closed connection (nothing can be drained safely). `test_every_refusal_reads_the_body_first` sends 4 MB bodies on each refusal path; against the old board it fails the Origin and Host cases intermittently and the too-big case always; the board tests passed 20 runs in a row here (Linux; the Windows run is the teacher's check).
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

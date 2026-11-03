@@ -6,7 +6,7 @@ in `daybook.sqlite` (gitignored), and on the deployed pages behind unguessable l
 
 ## 0. State at handoff (2026-11-04, after F6–F9 and F13)
 
-- `main` is green from a clean clone: 137 pytest, 34 Worker node tests (incl. the class-day budget with an AMP Live
+- `main` is green from a clean clone: 141 pytest, 34 Worker node tests (incl. the class-day budget with an AMP Live
   round), the full Playwright check. A normal check run leaves `git status` clean (F0); `make screenshots` /
   `scripts\check.ps1 -Screenshots` refresh the committed screenshots on purpose.
 - Built: P0, design v2, F1–F9, hotfix H1–H6, F13 (the parent-contact desk). **F10–F12 were never received** by the cloud

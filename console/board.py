@@ -230,6 +230,10 @@ class Board:
                 print(f"board: pull failed: {e}")
 
 
+MAX_POST = 25 * 1024 * 1024        # a moment photo as a data URL fits easily
+DRAIN_CAP = 64 * 1024 * 1024       # beyond this a client is not a browser on this laptop: stop reading, close
+
+
 def make_handler(board: Board):
     static = generate.STATIC
 
@@ -314,6 +318,8 @@ def make_handler(board: Board):
             return self._json({"ok": False, "error": "not_found"}, 404)
 
         def do_GET(self):
+            if self.headers.get("Content-Length"):
+                self._read_body()             # a GET with a body: drain it too before answering
             if not self._host_ok():
                 return self._send(403, b"forbidden", "text/plain")
             path, _, query = self.path.partition("?")
@@ -349,18 +355,41 @@ def make_handler(board: Board):
             else:
                 self._send(404, b"not found", "text/plain")
 
+        def _read_body(self) -> bytes | None:
+            """Read the whole request body before any reply, refusals included: answering first and closing with
+            unread bytes makes Windows reset the connection (WinError 10054 on the client). Returns None when the
+            body is over the limit (it is still drained, in chunks, up to a hard cap); a length that is not a number gives
+            an unparseable body (400) and closes the connection."""
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                n = -1
+            if n < 0:                          # no usable length: nothing can be read safely; answer 400 and close
+                self.close_connection = True
+                return b"\x00"
+            if n > MAX_POST:
+                left = min(n, DRAIN_CAP)
+                while left > 0:
+                    chunk = self.rfile.read(min(65536, left))
+                    if not chunk:
+                        break
+                    left -= len(chunk)
+                self.close_connection = True
+                return None
+            return self.rfile.read(n) if n else b""
+
         def do_POST(self):
+            raw = self._read_body()           # first, on every path
             if not self._host_ok():
                 return self._json({"ok": False, "error": "host"}, 403)
             # only same-origin requests from the board page (a page elsewhere must not write scores)
             origin = self.headers.get("Origin")
             if origin and origin != f"http://{self.headers.get('Host')}":
                 return self._json({"ok": False, "error": "origin"}, 403)
+            if raw is None:
+                return self._json({"ok": False, "error": "too_big"}, 413)
             try:
-                n = int(self.headers.get("Content-Length") or 0)
-                if n > 25 * 1024 * 1024:
-                    return self._json({"ok": False, "error": "too_big"}, 413)
-                body = json.loads(self.rfile.read(n) or b"{}")
+                body = json.loads(raw or b"{}")
                 if self.path.startswith("/api/teacher/"):
                     return self._teacher_post(body)
                 if self.path.startswith("/api/live/"):
