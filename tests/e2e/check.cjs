@@ -37,7 +37,10 @@ const env = {
   DAYBOOK_DB: process.env.DAYBOOK_DB || path.join(ROOT, 'demo.sqlite'),
   DAYBOOK_CONFIG: process.env.DAYBOOK_CONFIG || path.join(ROOT, 'demo', 'daybook.demo.json'),
 };
-const DAYBOOK = process.env.DAYBOOK_BIN || path.join(ROOT, '.venv', 'bin', 'daybook');
+const WIN = process.platform === 'win32';
+const VENV_BIN = path.join(ROOT, '.venv', WIN ? 'Scripts' : 'bin');
+const DAYBOOK = process.env.DAYBOOK_BIN || path.join(VENV_BIN, WIN ? 'daybook.exe' : 'daybook');
+const PYTHON = path.join(VENV_BIN, WIN ? 'python.exe' : 'python');
 
 let failures = 0;
 function check(cond, msg) {
@@ -101,7 +104,7 @@ const workerGet = async (p) => {
   const r = await fetch(WORKER + p, { headers: { 'X-Teacher-Token': TEACHER } });
   return p.startsWith('/photo') ? Buffer.from(await r.arrayBuffer()) : r.json();
 };
-const daybook = (...args) => execFileSync(DAYBOOK, args, { env, cwd: ROOT, encoding: 'utf-8' });
+const daybook = (...args) => execFileSync(DAYBOOK, args, { env: { ...env, PYTHONIOENCODING: 'utf-8' }, cwd: ROOT, encoding: 'utf-8' });
 
 /* ---------- page audit */
 const VIEWPORTS = [{ width: 360, height: 740 }, { width: 390, height: 844 }];
@@ -155,14 +158,15 @@ async function audit(browser, url, file, label, viewport, colorScheme) {
       check(n === targets.length, `${n}/${targets.length} pages at ${vp.width}x${vp.height} ${cs}: 0 console errors, 0 third-party requests, 0 iframes, no horizontal scroll, <= 100 KB, generic title`);
     }
     let big = 0;
-    for (const f of execFileSync('find', [DIST, '-type', 'f'], { encoding: 'utf-8' }).trim().split('\n')) big = Math.max(big, fs.statSync(f).size);
+    const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
+    for (const f of walk(DIST)) big = Math.max(big, fs.statSync(f).size);
     check(big <= 100 * 1024, `every file in dist/ <= 100 KB (largest ${big} B)`);
     const thumbs = fs.existsSync(path.join(DIST, 't')) ? fs.readdirSync(path.join(DIST, 't')) : [];
     check(thumbs.length > 0 && thumbs.every((f) => fs.statSync(path.join(DIST, 't', f)).size <= 60 * 1024), `${thumbs.length} thumbnails in dist/t, each <= 60 KB`);
 
     /* pick a student of 고1A without a submission today (the demo leaves the first one open) */
     const today = kstToday();
-    const pick = JSON.parse(execFileSync(path.join(ROOT, '.venv', 'bin', 'python'), ['-c', `
+    const pick = JSON.parse(execFileSync(PYTHON, ['-c', `
 import json, sqlite3, sys
 c = sqlite3.connect(sys.argv[1]); c.row_factory = sqlite3.Row
 r = c.execute("""SELECT s.student_token, s.parent_token, s.display_name FROM students_public s JOIN classes k ON k.id = s.class_id

@@ -52,7 +52,25 @@ def cli(ctx, db_path, config_path):
     ctx.obj = Ctx(db_path, config_path)
 
 
+def utf8_console() -> None:
+    """Korean output on any console (Windows cp1252/cp949, a C locale): always write UTF-8."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
+def utf8_argv() -> None:
+    """POSIX with a non-UTF-8 locale hands Korean arguments over as undecoded bytes; recover them as UTF-8.
+    (Windows passes arguments as Unicode already.)"""
+    sys.argv = [a.encode("utf-8", "surrogateescape").decode("utf-8", "replace")
+                if any("\udc80" <= c <= "\udcff" for c in a) else a for a in sys.argv]
+
+
 def main():
+    utf8_console()
+    utf8_argv()
     try:
         cli(standalone_mode=True)
     except ops.OpError as e:

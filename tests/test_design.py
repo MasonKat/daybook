@@ -39,10 +39,10 @@ def test_videos_json_optional_fields_and_thumbs(conn, klass, tmp_path):
     with Image.open(t) as im:
         assert im.width == 480
     _, studs = klass
-    html = (tmp_path / "dist" / "s" / studs[0]["student_token"] / "index.html").read_text()
+    html = (tmp_path / "dist" / "s" / studs[0]["student_token"] / "index.html").read_text(encoding="utf-8")
     assert 'data-yt="AMPdemo0001"' in html and "youtube" not in html.lower()   # iframe only on tap (app.js)
     assert 'data-story="videos"' in html      # A was added within the last 7 days
-    assert "frame-src https://www.youtube-nocookie.com" in (tmp_path / "dist" / "_headers").read_text()
+    assert "frame-src https://www.youtube-nocookie.com" in (tmp_path / "dist" / "_headers").read_text(encoding="utf-8")
 
 
 def test_make_thumb_caps_size(tmp_path):
@@ -68,7 +68,7 @@ def test_student_stories_tiles_and_messages(conn, cfg, klass, tmp_path):
     conn.commit()
     cfg.videos_path = str(tmp_path / "none.json")
     assert generate.publish(conn, cfg, tmp_path / "dist", today=TODAY, now=NOW).ok
-    html = (tmp_path / "dist" / "s" / s["student_token"] / "index.html").read_text()
+    html = (tmp_path / "dist" / "s" / s["student_token"] / "index.html").read_text(encoding="utf-8")
     keys = re.findall(r'class="story" data-story="(\w+)"', html)
     assert keys == ["streak", "goal", "teacher"]                # no new videos in this config
     assert html.index("첫 메시지") < html.index("둘째 메시지")     # newest at the bottom
@@ -91,7 +91,7 @@ def test_parent_room_keeps_8_weeks_with_earlier_collapsed(conn, cfg, klass, tmp_
         ops.add_note(conn, s["id"], f"2026-W{36 + w:02d}", f"노트 {36 + w}")
     conn.commit()
     assert generate.publish(conn, cfg, tmp_path / "dist", today=TODAY, now=NOW).ok
-    html = (tmp_path / "dist" / "p" / s["parent_token"] / "index.html").read_text()
+    html = (tmp_path / "dist" / "p" / s["parent_token"] / "index.html").read_text(encoding="utf-8")
     assert html.count('class="sep"') == 8
     earlier = html.split('<details class="earlier">')[1].split("</details>")[0]
     assert earlier.count('class="sep"') == 6
@@ -100,9 +100,9 @@ def test_parent_room_keeps_8_weeks_with_earlier_collapsed(conn, cfg, klass, tmp_
 
 
 def test_lint_brand_words_and_photo_img(tmp_path):
-    (tmp_path / "a.html").write_text('<title>AMP 학습 기록</title><p style="color:#FEE500">Kakao</p>')
+    (tmp_path / "a.html").write_text('<title>AMP 학습 기록</title><p style="color:#FEE500">Kakao</p>', encoding="utf-8")
     (tmp_path / "b.html").write_text('<title>AMP 학습 기록</title><img src="https://w.example/photo?key=photo:2026-11-06:x">'
-                                     '<img src="/t/AMPdemo0001.jpg">')
+                                     '<img src="/t/AMPdemo0001.jpg">', encoding="utf-8")
     kinds = [f.kind for f in lint.errors(lint.lint_dir(tmp_path, [], "AMP 학습 기록"))]
     assert kinds.count("brand") == 2 and kinds.count("photo_img") == 1
 
@@ -114,5 +114,5 @@ def test_lint_thumbnail_size(tmp_path):
 
 
 def test_korean_messenger_words_are_allowed(tmp_path):
-    (tmp_path / "a.html").write_text("<title>AMP 학습 기록</title><p>답장·문의는 카카오톡으로</p>")
+    (tmp_path / "a.html").write_text("<title>AMP 학습 기록</title><p>답장·문의는 카카오톡으로</p>", encoding="utf-8")
     assert not lint.errors(lint.lint_dir(tmp_path, [], "AMP 학습 기록"))

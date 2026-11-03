@@ -36,7 +36,7 @@ def test_pull_inserts_and_parent_page_shows_check_and_time(conn, cfg, klass, tmp
     assert conn.execute("SELECT COUNT(*) FROM events WHERE type='submission'").fetchone()[0] == 1
     assert last_event(conn, "pull")["next_since"] == "2026-11-06T12:55:00.000Z"
     assert generate.publish(conn, cfg, tmp_path / "dist", today=TODAY, now=NOW).ok
-    html = (tmp_path / "dist" / "p" / s["parent_token"] / "index.html").read_text()
+    html = (tmp_path / "dist" / "p" / s["parent_token"] / "index.html").read_text(encoding="utf-8")
     # 08:15 UTC = 17:15 KST on Friday
     assert re.search(r'<span class="dot">✓</span>\s*<span class="tm">17:15</span>', html)
 

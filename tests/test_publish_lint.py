@@ -28,7 +28,7 @@ def test_clean_publish_renders_every_page(conn, cfg, klass, tmp_path):
         assert (dist / "p" / s["parent_token"] / "index.html").exists()
     assert (dist / "go" / "index.html").exists()
     for html in dist.rglob("*.html"):
-        text = html.read_text()
+        text = html.read_text(encoding="utf-8")
         assert re.findall(r"<title>(.*?)</title>", text) == ["AMP 학습 기록"]
         assert '<meta name="robots" content="noindex,nofollow">' in text
         assert html.stat().st_size <= 100 * 1024
@@ -42,7 +42,7 @@ def test_pages_show_only_their_own_student(conn, cfg, klass, tmp_path):
     dist = tmp_path / "dist"
     for s in studs:
         for kind, tok in (("s", s["student_token"]), ("p", s["parent_token"])):
-            text = (dist / kind / tok / "index.html").read_text()
+            text = (dist / kind / tok / "index.html").read_text(encoding="utf-8")
             assert s["display_name"] in text
             for other in studs:
                 if other["id"] != s["id"]:
@@ -54,8 +54,8 @@ def test_student_page_never_contains_parent_token_and_vice_versa(conn, cfg, klas
     _, studs = klass
     publish(conn, cfg, tmp_path)
     s = studs[0]
-    assert s["parent_token"] not in (tmp_path / "dist" / "s" / s["student_token"] / "index.html").read_text()
-    assert s["student_token"] not in (tmp_path / "dist" / "p" / s["parent_token"] / "index.html").read_text()
+    assert s["parent_token"] not in (tmp_path / "dist" / "s" / s["student_token"] / "index.html").read_text(encoding="utf-8")
+    assert s["student_token"] not in (tmp_path / "dist" / "p" / s["parent_token"] / "index.html").read_text(encoding="utf-8")
 
 
 def _assert_stopped(res, kind, dist):
@@ -102,14 +102,14 @@ def test_lint_catches_parent_phone_and_titles_and_third_party(tmp_path, conn, kl
     (d / "x").mkdir(parents=True)
     (d / "x" / "index.html").write_text(
         '<html><head><title>가람 기록</title><meta property="og:title" content="가람">'
-        '<script src="https://cdn.example/x.js"></script></head><body>01022223333</body></html>')
-    (d / "a.css").write_text("@import url(https://fonts.example/css);")
+        '<script src="https://cdn.example/x.js"></script></head><body>01022223333</body></html>', encoding="utf-8")
+    (d / "a.css").write_text("@import url(https://fonts.example/css);", encoding="utf-8")
     kinds = {f.kind for f in lint.errors(lint.lint_dir(d, lint.private_rows(conn), "AMP 학습 기록"))}
     assert {"title", "og", "third_party", "parent_phone", "phone"} <= kinds
 
 
 def test_lint_size_limit(tmp_path):
-    (tmp_path / "big.html").write_text("<title>AMP 학습 기록</title>" + "x" * (101 * 1024))
+    (tmp_path / "big.html").write_text("<title>AMP 학습 기록</title>" + "x" * (101 * 1024), encoding="utf-8")
     kinds = {f.kind for f in lint.lint_dir(tmp_path, [], "AMP 학습 기록")}
     assert "size" in kinds
 
@@ -125,7 +125,7 @@ def test_parent_page_blocks(conn, cfg, klass, tmp_path):
     importers.import_screeners(conn, Path(__file__).resolve().parent.parent / "demo" / "screeners")
     conn.commit()
     assert publish(conn, cfg, tmp_path).ok
-    html = (tmp_path / "dist" / "p" / s["parent_token"] / "index.html").read_text()
+    html = (tmp_path / "dist" / "p" / s["parent_token"] / "index.html").read_text(encoding="utf-8")
     last = "AMP 수학 · 가람" + html.rsplit('<div class="msg">', 1)[1]   # the latest week's report cards
     order = [last.index(k) for k in ("AMP 수학 · 가람", "이번 주 제출", "주간 테스트", "태도 점수", "선생님 한 줄",
                                        "이 방은 주간 기록 전용입니다", "업데이트 2026-11-06 10:00")]
@@ -143,16 +143,16 @@ def test_parent_page_blocks(conn, cfg, klass, tmp_path):
 def test_go_page_has_no_token(conn, cfg, klass, tmp_path):
     _, studs = klass
     publish(conn, cfg, tmp_path)
-    go = (tmp_path / "dist" / "go" / "index.html").read_text()
+    go = (tmp_path / "dist" / "go" / "index.html").read_text(encoding="utf-8")
     assert "먼저 선생님이 준 내 링크를 한 번 열어 주세요" in go
     assert not re.search(r"[a-z2-7]{26}", go)
 
 
 def test_headers_and_robots(conn, cfg, klass, tmp_path):
     publish(conn, cfg, tmp_path)
-    h = (tmp_path / "dist" / "_headers").read_text()
+    h = (tmp_path / "dist" / "_headers").read_text(encoding="utf-8")
     assert "X-Robots-Tag: noindex" in h and "connect-src 'self' https://w.example" in h
-    assert (tmp_path / "dist" / "robots.txt").read_text().strip().endswith("Disallow: /")
+    assert (tmp_path / "dist" / "robots.txt").read_text(encoding="utf-8").strip().endswith("Disallow: /")
 
 
 def test_inactive_and_rotated_pages_disappear(conn, cfg, klass, tmp_path):

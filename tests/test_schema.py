@@ -48,7 +48,7 @@ def test_check_constraints(conn, klass):
 def test_generator_reads_only_the_public_view():
     """generate.py (and the weekly message) never name the students table or a private column."""
     for name in ("generate.py", "weekly.py"):
-        src = (Path(__file__).resolve().parent.parent / "console" / name).read_text()
+        src = (Path(__file__).resolve().parent.parent / "console" / name).read_text(encoding="utf-8")
         assert not re.search(r"\b(FROM|JOIN)\s+students\b(?!_public)", src), name
         for col in ("full_name", "parent_phone", "ext_id"):
             assert col not in src, (name, col)
