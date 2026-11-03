@@ -167,6 +167,9 @@ One line each. "deferred" = not built in P0, on purpose.
 - H6: the profile bio's "{n}번째 기록" is recomputed in the browser from the same value as the 제출 counter. Demo times are realistic: 출석 17:40–18:09, 과제 끝 19:50–21:00 (earlier the same day when the seed runs before then).
 - Node ≥ 22 is now needed for the local Worker tests and the dev server (`node:sqlite`); they run with `--experimental-sqlite --no-warnings` so Node 22.5–22.12 works too. The deployed Worker is unaffected.
 
+## F0 (2026-11-03)
+- Checks never write tracked files: the e2e takes screenshots only with `--screenshots` (`make screenshots`, `scripts\check.ps1 -Screenshots`), which reseeds the demo first. A normal `make demo` / `demo.ps1` leaves `git status` clean, so the teacher's `git pull` always merges.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

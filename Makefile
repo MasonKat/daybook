@@ -4,7 +4,7 @@ VENV := .venv
 BIN := $(VENV)/bin
 DEMO_ENV := DAYBOOK_DB=demo.sqlite DAYBOOK_CONFIG=demo/daybook.demo.json
 
-.PHONY: help setup init demo check test test-worker e2e node-deps publish deploy-pages taste deploy-taste clean
+.PHONY: help setup init demo check test test-worker e2e node-deps publish deploy-pages taste deploy-taste screenshots clean
 PAGES_PROJECT ?= daybook
 
 help:
@@ -13,6 +13,7 @@ help:
 	@echo "make test        pytest only        make test-worker   node tests of the Worker"
 	@echo "make init        create daybook.sqlite (real data; see README)"
 	@echo "make deploy-pages  daybook publish + wrangler pages deploy ./dist (real data)"
+	@echo "make screenshots  refresh demo/screenshots/ on purpose (checks never write them)"
 	@echo "make taste       the taste build (demo student 콩 only) into dist-taste/; make deploy-taste deploys it"
 
 setup: $(BIN)/daybook
@@ -46,6 +47,13 @@ node-deps:
 
 e2e: setup node-deps
 	$(DEMO_ENV) node tests/e2e/check.cjs
+
+# Refresh the committed demo/screenshots/ on purpose (a normal check never writes them).
+screenshots: setup node-deps
+	rm -f demo.sqlite
+	$(DEMO_ENV) $(BIN)/daybook init
+	$(DEMO_ENV) $(BIN)/daybook demo
+	$(DEMO_ENV) node tests/e2e/check.cjs --screenshots
 
 publish: setup
 	$(BIN)/daybook publish

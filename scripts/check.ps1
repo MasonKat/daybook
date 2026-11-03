@@ -1,5 +1,7 @@
 # Windows twin of `make check`: pytest, the Worker node tests, the Playwright end-to-end check (needs `daybook demo` first).
-# Run from anywhere:  powershell -ExecutionPolicy Bypass -File scripts\check.ps1
+# Run from anywhere:  powershell -ExecutionPolicy Bypass -File scripts\check.ps1 [-Screenshots]
+# -Screenshots refreshes the committed demo\screenshots\ (on purpose only; a normal run never writes tracked files).
+param([switch]$Screenshots)
 # Windows PowerShell 5.1 turns a native command's stderr into a terminating error under 'Stop' (H5):
 # keep 'Continue' and check $LASTEXITCODE after every native command instead.
 $ErrorActionPreference = 'Continue'
@@ -27,7 +29,8 @@ $env:DAYBOOK_DB = 'demo.sqlite'
 $env:DAYBOOK_CONFIG = 'demo\daybook.demo.json'
 $env:DAYBOOK_BIN = (Resolve-Path '.venv\Scripts\daybook.exe').Path
 try {
-    Invoke-Step 'e2e (Playwright)' { node tests\e2e\check.cjs }
+    if ($Screenshots) { Invoke-Step 'e2e (Playwright) + screenshots' { node tests\e2e\check.cjs --screenshots } }
+    else { Invoke-Step 'e2e (Playwright)' { node tests\e2e\check.cjs } }
 } finally {
     Remove-Item Env:DAYBOOK_DB, Env:DAYBOOK_CONFIG, Env:DAYBOOK_BIN -ErrorAction SilentlyContinue
 }

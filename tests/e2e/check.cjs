@@ -28,6 +28,10 @@ try { ({ chromium } = require('playwright')); } catch (e) {
 const ROOT = path.resolve(__dirname, '..', '..');
 const DIST = path.join(ROOT, 'dist');
 const SHOTS = path.join(ROOT, 'demo', 'screenshots');
+/* F0: the committed screenshots change only on purpose (`make screenshots` / check.ps1 -Screenshots);
+   a normal check run never rewrites tracked files, so the teacher's clone stays clean for `git pull`. */
+const SHOOT = process.argv.includes('--screenshots') || process.env.DAYBOOK_SCREENSHOTS === '1';
+const shot = (pg, name, opts = {}) => (SHOOT ? pg.screenshot({ path: path.join(SHOTS, name), ...opts }) : Promise.resolve());
 const PAGES_PORT = 8790, WORKER_PORT = 8788, BOARD_PORT = 8787;
 const PAGES = `http://127.0.0.1:${PAGES_PORT}`, WORKER = `http://127.0.0.1:${WORKER_PORT}`, BOARD = `http://127.0.0.1:${BOARD_PORT}`;
 const TEACHER = 'dev-teacher-token';
@@ -142,7 +146,7 @@ async function audit(browser, url, file, label, viewport, colorScheme) {
 
 (async () => {
   if (!fs.existsSync(path.join(DIST, 'go', 'index.html'))) { console.error('dist/ is empty: run `make demo` (or daybook demo) first'); process.exit(1); }
-  fs.mkdirSync(SHOTS, { recursive: true });
+  if (SHOOT) fs.mkdirSync(SHOTS, { recursive: true });
   const srv = staticServer();
   const worker = spawn(process.execPath, ['--experimental-sqlite', '--no-warnings', path.join(ROOT, 'worker', 'test', 'dev_server.mjs'), '--port', String(WORKER_PORT), '--origin', PAGES, '--teacher', TEACHER], { stdio: 'ignore' });
   let board;
@@ -218,7 +222,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     for (const k of (CODE === '0000' ? '1111' : '0000')) await page.click(`#keys button[data-k="${k}"]`);
     await page.waitForFunction(() => /코드가 달라요/.test(document.getElementById('pad-err').textContent), null, { timeout: 5000 }).catch(() => {});
     check(/코드가 달라요 \(4번 남음\)/.test(await page.textContent('#pad-err')), `a wrong code is refused ("${await page.textContent('#pad-err')}")`);
-    await page.screenshot({ path: path.join(SHOTS, 'student-checkin-pad.png') });
+    await shot(page, 'student-checkin-pad.png');
     for (const k of CODE) await page.click(`#keys button[data-k="${k}"]`);
     await page.waitForSelector('#st-idle:not([hidden])', { timeout: 5000 }).catch(() => {});
     check(await page.isHidden('#pad') && /^\d\d:\d\d$/.test(await page.textContent('#sp-ck-v')) && await page.isVisible('#st-idle .plus'),
@@ -239,7 +243,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     await page.waitForTimeout(300);
     const rx = await liveSlide.locator('.reacts').innerText();
     check(/🔥\s*1/.test(rx) && !/👏\s*\d/.test(rx), `a reaction counts once per student (${rx.replace(/\s+/g, ' ')})`);
-    await page.screenshot({ path: path.join(SHOTS, 'student-moment.png') });
+    await shot(page, 'student-moment.png');
     await page.keyboard.press('Escape');
     check((await page.textContent('#sp-m-v')) === '🔥', 'step ② 장면 shows the reaction');
     const setText = await page.textContent('#today-set');
@@ -263,7 +267,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     check(/^출석 \d\d:\d\d → 장면 🔥 → 끝 \d\d:\d\d$/.test(await page.textContent('#d-day')), `day summary "${await page.textContent('#d-day')}"`);
     check(/^오늘의 한 장 · \d+\/\d+ 기록됨 \d\d:\d\d$/.test(await page.textContent('#d-shot')), `"${await page.textContent('#d-shot')}" (no photo)`);
     await page.waitForTimeout(250);
-    await page.screenshot({ path: path.join(SHOTS, 'student-done.png') });
+    await shot(page, 'student-done.png');
     let subs = await workerGet('/submissions');
     let rec = subs.items.find((i) => i.token === tok);
     check(rec && rec.day === today && rec.n === 1, 'record landed in KV with today\'s Seoul date');
@@ -303,7 +307,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     await page.waitForSelector('#sv:not([hidden])', { timeout: 3000 });
     const segN = await page.locator('#sv-segs .sv-seg').count();
     check(segN >= 1 && (await page.locator('.sv-group[data-story="videos"] .slide:not([hidden])').count()) === 1, `story viewer open with ${segN} segment(s), one slide visible`);
-    await page.screenshot({ path: path.join(SHOTS, 'student-stories.png') });
+    await shot(page, 'student-stories.png');
     await page.click('#sv-x');
     check(await page.isHidden('#sv'), 'story viewer closes');
     check(await page.getAttribute('.story[data-story="videos"]', 'class').then((c) => c.includes('seen')), 'opened ring turns grey (seen)');
@@ -326,7 +330,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     check(feedInfo.n === nShorts && feedInfo.longInFeed === 0, `reels show only kind "short" (${feedInfo.n}/${nShorts})`);
     check(feedInfo.snap.includes('y') && feedInfo.snap.includes('mandatory') && feedInfo.heights.every((h) => Math.abs(h - feedInfo.h) <= 1), `snap feed: each reel exactly one screen (${feedInfo.h}px)`);
     check(Math.abs(feedInfo.ratio - 9 / 16) < 0.02, `reel media is 9:16 (${feedInfo.ratio.toFixed(3)})`);
-    await page.screenshot({ path: path.join(SHOTS, 'student-reels.png') });
+    await shot(page, 'student-reels.png');
     await page.evaluate(() => { const f = document.getElementById('feed'); f.scrollTop = f.clientHeight; });
     await page.waitForTimeout(400);
     const second = await page.evaluate(() => { const f = document.getElementById('feed'); return Math.round(f.querySelectorAll('.reel')[1].getBoundingClientRect().top - f.getBoundingClientRect().top); });
@@ -351,7 +355,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
       return { n: cards.length, visible, ratio: m.width / m.height, shortInLongs: document.querySelectorAll('#longs .media.short').length };
     });
     check(longInfo.visible >= 2 && longInfo.shortInLongs === 0 && Math.abs(longInfo.ratio - 16 / 9) < 0.02, `long videos: 16:9 cards, ${longInfo.visible} fully on one 844 px screen (of ${longInfo.n})`);
-    await page.screenshot({ path: path.join(SHOTS, 'student-long.png') });
+    await shot(page, 'student-long.png');
     await page.locator('#longs .lcard').first().locator('button.play').click();
     check(/youtube-nocookie\.com\/embed\//.test(await page.locator('#longs .lcard').first().locator('iframe').getAttribute('src') || ''), 'tapping ▶ on a long card plays it inline');
 
@@ -386,7 +390,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     const meOverflow = await page.evaluate(() => { const m = document.getElementById('s-main'); return m.scrollWidth - m.clientWidth; });
     const tileW = await page.evaluate(() => Array.from(document.querySelectorAll('#tiles .tile')).slice(0, 3).map((t) => t.getBoundingClientRect().right));
     check(meOverflow === 0 && Math.max(...tileW) <= PHONE.width, `profile grid fits 3 per row inside ${PHONE.width} px (overflow ${meOverflow}px)`);
-    await page.screenshot({ path: path.join(SHOTS, 'student-profile.png') });
+    await shot(page, 'student-profile.png');
     check(errs.length === 0, `no console errors during the student flows (${errs.length}) ${errs.slice(0, 2).join(' | ')}`);
 
     console.log('\n[3] handout QR /go/?set=… (no token in the QR)');
@@ -450,7 +454,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
         await pp.locator('details.past > summary').last().click();
         await pp.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
       }
-      await pp.screenshot({ path: path.join(SHOTS, `parent-${cs}.png`) });
+      await shot(pp, `parent-${cs}.png`);
       await pctx.close();
     }
 
@@ -482,7 +486,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     const after = await bp.$eval('#b-fill', (e) => parseFloat(e.style.width));
     check(after > before && (await bp.textContent('#b-three')).includes(pick.display_name), `attitude 3 moved the class bar ${before}% -> ${after}% and lists the student under 오늘 3점`);
     check(await bp.evaluate(() => document.documentElement.scrollWidth) <= 390 && berrs.length === 0, 'board fits 390 px with 0 console errors');
-    await bp.screenshot({ path: path.join(SHOTS, 'board.png'), fullPage: true });
+    await shot(bp, 'board.png', { fullPage: true });
     await bctx.close();
 
     console.log('\n[7] taste build (F1): only 콩, no Worker, nothing stored');
@@ -504,7 +508,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
       await tp.goto(TASTE + '/', { waitUntil: 'networkidle' });
       check(await tp.locator('a.btn', { hasText: '학생 화면 보기' }).count() === 1 && await tp.locator('a.btn', { hasText: '학부모 화면 보기' }).count() === 1, 'landing has the two buttons');
       check((await tp.textContent('.taste-bar')) === '체험판 · 기록되지 않아요', 'banner "체험판 · 기록되지 않아요"');
-      await tp.screenshot({ path: path.join(SHOTS, 'taste-landing.png') });
+      await shot(tp, 'taste-landing.png');
       await tp.click('a.btn.primary');
       await tp.waitForURL(/\/s\/kong\//);
       await tp.waitForLoadState('networkidle');
@@ -515,7 +519,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
       for (const k of '1234') await tp.click(`#keys button[data-k="${k}"]`);
       await tp.waitForSelector('#st-idle:not([hidden])', { timeout: 3000 });
       check(/^\d\d:\d\d$/.test(await tp.textContent('#sp-ck-v')), 'taste: any 4 digits check in locally');
-      await tp.screenshot({ path: path.join(SHOTS, 'taste-ritual.png') });
+      await shot(tp, 'taste-ritual.png');
       await tp.setInputFiles('#photo', png);
       await tp.click('#post');
       await tp.waitForSelector('#st-done:not([hidden])', { timeout: 5000 });
