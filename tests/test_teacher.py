@@ -72,7 +72,8 @@ def test_roster_list_and_edit(tserver, klass, conn):
     s0 = j["students"][0]
     assert s0["student_link"] == f"https://daybook.pages.dev/s/{studs[0]['student_token']}/"
     assert s0["parent_link"].endswith(f"/p/{studs[0]['parent_token']}/")
-    assert "full_name" not in json.dumps(j) and studs[0]["full_name"] not in json.dumps(j, ensure_ascii=False)
+    # F11: full names are shown in this local tab (never on a page; test_members checks dist/)
+    assert s0["full_name"] == studs[0]["full_name"] and s0["class_name"] == "고1A"
     n0 = len(sent)                                                       # the board's own /session at start
     code, j = call(url + "/api/teacher/roster", {"slug": studs[0]["slug"], "display_name": "가람이"})
     assert code == 200 and j["changed"] == ["display_name"] and len(sent) == n0      # a name change sends nothing

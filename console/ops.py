@@ -256,3 +256,72 @@ def set_solved(conn: sqlite3.Connection, student_id: int, day: str, solved) -> N
     if not cur.rowcount:
         raise OpError("no submission on that day")
     log_event(conn, "solved_fix", {"student_id": student_id, "day": day, "solved": n})
+
+
+# ---------------------------------------------------------------- F11: the teacher manages classes and members
+
+PHONE_OK = re.compile(r"^[0-9+\- ]{7,20}$")
+
+
+def save_class(conn: sqlite3.Connection, name: str, *, create: bool, new_name: str | None = None, term: str | None = None,
+               days: str | None = None, reward_label: str | None = None, goal: int | None = None, grade: str | None = None,
+               start_time: str | None = None) -> sqlite3.Row:
+    """반 만들기 / 반 수정 (the Teacher tab; the same rules as `daybook class add/edit`). None = leave as it is."""
+    from . import models as M
+    name = (name or "").strip()
+    if not name or len(name) > 20:
+        raise OpError("class name: 1-20 characters")
+    fields: dict = {}
+    if term is not None:
+        if M.parse_term(term) == (None, None):
+            raise OpError("term must be START..END, e.g. 2026-11-02..2027-02-26")
+        fields["term"] = term
+    if days is not None:
+        try:
+            fields["weekday_mask"] = M.mask_from_days(days)
+        except ValueError as e:
+            raise OpError(str(e)) from e
+    if reward_label is not None:
+        fields["reward_label"] = reward_label.strip()
+    if goal is not None:
+        if goal < 0:
+            raise OpError("goal must be 0 (computed) or more")
+        fields["reward_goal_points"] = goal or None
+    if grade is not None:
+        fields["grade"] = grade.strip() or None
+    if start_time is not None:
+        if start_time and not _HHMM.match(start_time):
+            raise OpError("start time must be HH:MM")
+        fields["start_time"] = start_time or None
+    if create:
+        if conn.execute("SELECT 1 FROM classes WHERE name = ?", (name,)).fetchone():
+            raise OpError(f"class {name!r} exists")
+        if "term" not in fields or "weekday_mask" not in fields:
+            raise OpError("a new class needs a term and weekdays")
+        cols = ["name", *fields]
+        cur = conn.execute(f"INSERT INTO classes ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})", (name, *fields.values()))
+        log_event(conn, "class_add", {"class_id": cur.lastrowid, "name": name})
+        return conn.execute("SELECT * FROM classes WHERE id = ?", (cur.lastrowid,)).fetchone()
+    cls = get_class(conn, name)
+    if new_name and new_name.strip() != name:
+        if conn.execute("SELECT 1 FROM classes WHERE name = ?", (new_name.strip(),)).fetchone():
+            raise OpError(f"class {new_name.strip()!r} exists")
+        fields["name"] = new_name.strip()
+    if not fields:
+        raise OpError("nothing to change")
+    conn.execute(f"UPDATE classes SET {', '.join(k + ' = ?' for k in fields)} WHERE id = ?", (*fields.values(), cls["id"]))
+    log_event(conn, "class_edit", {"class_id": cls["id"], "fields": sorted(fields)})
+    return conn.execute("SELECT * FROM classes WHERE id = ?", (cls["id"],)).fetchone()
+
+
+def set_left(conn: sqlite3.Connection, slug: str, left_on: str | None) -> sqlite3.Row:
+    """퇴원 처리 (a date) or its undo (None). No new page renders while inactive; the history stays."""
+    s = get_student(conn, slug)
+    if left_on is not None:
+        try:
+            date.fromisoformat(left_on)
+        except ValueError as e:
+            raise OpError("date must be YYYY-MM-DD") from e
+    conn.execute("UPDATE students SET active = ?, left_on = ? WHERE id = ?", (0 if left_on else 1, left_on, s["id"]))
+    log_event(conn, "student_leave" if left_on else "student_return", {"student_id": s["id"], "date": left_on})
+    return get_student(conn, slug)

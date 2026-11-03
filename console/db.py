@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS students (
     parent_token  TEXT NOT NULL UNIQUE,
     active        INTEGER NOT NULL DEFAULT 1,
     created_at    TEXT NOT NULL,
-    ext_id        TEXT UNIQUE             -- console only (the teacher's roster ID)
+    ext_id        TEXT UNIQUE,            -- console only (the teacher's roster ID)
+    left_on       TEXT                    -- F11 퇴원 처리: the date (NULL while enrolled)
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -245,6 +246,7 @@ def migrate(conn: sqlite3.Connection) -> None:
         return
     added = {   # table -> {column: declaration} for columns that arrived after v1 (additive only)
         "sessions": {"start_time": "TEXT", "code": "TEXT", "cancelled": "TEXT"},
+        "students": {"left_on": "TEXT"},
         "submissions": {"reflection": "TEXT", "chip": "TEXT", "solved": "INTEGER"},
         "classes": {"grade": "TEXT", "start_time": "TEXT", "end_time": "TEXT", "self_study_until": "TEXT", "late_min": "INTEGER DEFAULT 10",
                     "late_count": "INTEGER DEFAULT 3", "late_avg_min": "INTEGER DEFAULT 15"},

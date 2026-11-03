@@ -22,6 +22,7 @@ class RosterReport:
     unchanged: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)    # human-readable reasons (console only)
     warnings: list[str] = field(default_factory=list)
+    rows: list[dict] = field(default_factory=list)       # F11 preview: one per CSV line (local Teacher tab only)
 
 
 def load_mapping(path: str | Path) -> dict:
@@ -49,8 +50,27 @@ def add_student(conn: sqlite3.Connection, class_id: int | None, full_name: str, 
     return conn.execute("SELECT * FROM students WHERE id = ?", (cur.lastrowid,)).fetchone()
 
 
-def import_roster(conn: sqlite3.Connection, csv_path: str | Path, mapping: dict, class_id: int | None) -> RosterReport:
+def import_roster(conn: sqlite3.Connection, csv_path: str | Path, mapping: dict, class_id: int | None,
+                  dry_run: bool = False) -> RosterReport:
+    """dry_run (F11 가져오기 미리보기): the same matching, then everything is rolled back and nothing is logged."""
     rep = RosterReport()
+    if dry_run:
+        conn.execute("SAVEPOINT roster_preview")
+    try:
+        _import_roster(conn, csv_path, mapping, class_id, rep)
+    finally:
+        if dry_run:
+            conn.execute("ROLLBACK TO roster_preview")
+            conn.execute("RELEASE roster_preview")
+    if not dry_run:
+        log_event(conn, "import_roster", {"file": Path(csv_path).name, "added": len(rep.added),
+                                          "updated": len(rep.updated), "skipped": len(rep.skipped)})
+        conn.commit()
+    return rep
+
+
+def _import_roster(conn: sqlite3.Connection, csv_path: str | Path, mapping: dict, class_id: int | None,
+                   rep: RosterReport) -> None:
     cols = mapping["columns"]                     # source column -> DAYBOOK field
     active_values = {v.strip() for v in mapping.get("active_values", [])}
     enc = mapping.get("encoding", "utf-8-sig")
@@ -64,6 +84,7 @@ def import_roster(conn: sqlite3.Connection, csv_path: str | Path, mapping: dict,
             name = rec.get("full_name", "")
             if not name:
                 rep.skipped.append(f"line {i}: empty name")
+                rep.rows.append({"line": i, "name": "", "ext_id": rec.get("ext_id") or "", "status": "skipped", "why": "empty name"})
                 continue
             active = (rec["active"] in active_values) if "active" in rec and active_values else True
             ext_id = rec.get("ext_id") or None
@@ -77,13 +98,16 @@ def import_roster(conn: sqlite3.Connection, csv_path: str | Path, mapping: dict,
                     existing = same[0]
                 elif len(same) > 1:
                     rep.skipped.append(f"line {i}: several students share this name and no ID matched; fix by hand")
+                    rep.rows.append({"line": i, "name": name, "ext_id": ext_id or "", "status": "skipped", "why": "same name"})
                     continue
             if existing is None:
                 if class_id is None:
                     rep.skipped.append(f"line {i}: new student but no --class given")
+                    rep.rows.append({"line": i, "name": name, "ext_id": ext_id or "", "status": "skipped", "why": "no class"})
                     continue
                 s = add_student(conn, class_id, name, ext_id=ext_id, parent_phone=phone, active=active)
                 rep.added.append(s["slug"])
+                rep.rows.append({"line": i, "name": name, "ext_id": ext_id or "", "status": "new", "why": ""})
                 if s["display_name"] == s["full_name"]:
                     rep.warnings.append(
                         f"{s['slug']}: display name equals the full name; publish will refuse it until you run "
@@ -103,12 +127,11 @@ def import_roster(conn: sqlite3.Connection, csv_path: str | Path, mapping: dict,
                 conn.execute(f"UPDATE students SET {sets} WHERE id = ?", (*changes.values(), existing["id"]))
                 log_event(conn, "student_update", {"student_id": existing["id"], "fields": sorted(changes)})
                 rep.updated.append(existing["slug"])
+                rep.rows.append({"line": i, "name": name, "ext_id": ext_id or "", "status": "updated",
+                                 "why": ", ".join(sorted(changes))})
             else:
                 rep.unchanged.append(existing["slug"])
-    log_event(conn, "import_roster", {"file": Path(csv_path).name, "added": len(rep.added),
-                                      "updated": len(rep.updated), "skipped": len(rep.skipped)})
-    conn.commit()
-    return rep
+                rep.rows.append({"line": i, "name": name, "ext_id": ext_id or "", "status": "unchanged", "why": ""})
 
 
 # ---------------------------------------------------------------- screeners

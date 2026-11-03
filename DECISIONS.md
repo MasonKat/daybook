@@ -257,6 +257,14 @@ One line each. "deferred" = not built in P0, on purpose.
 - Demo: 고1A, 심화C and 케어D are 고1, 기초B is 기초; the November solution set is pinned for 고1A and 심화C; two 기초 items show only to 기초B.
 - `daybook session start` now defaults to the class start time (F11 "start time"), then to now.
 
+## F11: the teacher manages the class members alone (2026-11-04)
+- The Teacher tab's roster now lists **every class** with a search box (display name, full name, student ID) and a class filter. **Full names (and IDs) are shown here** (the tab is local: 127.0.0.1, Host- and Origin-checked); F6 kept them out of the tab, F11 asks for them. Pages still get display names only (`students_public`; tested after adding a student with a full name and a phone).
+- **학생 추가:** full name, display name (prefilled with the given name of a 3-syllable name, as `roster add` does), class, track, student ID (must be unused), parent phone (digits, `+`, `-`, spaces). A display name equal to the full name is refused (the no-PII lint would stop the publish). The new student and parent links and both 안내 문구 come back with copy buttons.
+- **반 이동, 퇴원 처리 (with a date, `students.left_on`, schema v8) and its undo, 링크 재발급 (behind a confirm):** all through the same ops as the CLI. Unlike the prompt's "on the next 발행", the token map is **sent right away** when a Worker is configured (best effort, never blocking; the next publish sends it again anyway), so a new or moved student can upload at once. The old token keeps mapping to the student for pulls (as `rotate-tokens` does).
+- **반 만들기 / 반 수정:** name (rename), grade (F10), weekdays, term, reward label, goal (0 = computed), start time (the default for `session start`).
+- **안내 문구:** the parent text is `parent_msg.link_intro` (formal; the greeting from the parent profile; checked by the tone test), the student text `link_intro_student`. Copy buttons only; nothing is sent.
+- **Roster CSV:** the existing import with `mappings/roster.json`, now with **가져오기 미리보기** first: the same matching inside a SQLite savepoint that is rolled back (nothing written, nothing logged), a table of new / updated (with the changed fields) / unchanged / skipped rows, then "이대로 가져오기".
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

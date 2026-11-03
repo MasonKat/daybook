@@ -20,28 +20,139 @@
     function fallback() { var ta = el('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { /* ignore */ } document.body.removeChild(ta); }
   }
 
-  /* roster */
-  function loadRoster() {
-    api('/api/teacher/roster').then(function (j) {
-      var tb = $('roster-rows'); tb.innerHTML = '';
-      j.students.forEach(function (s) {
-        var tr = el('tr', { 'data-slug': s.slug });
-        var name = el('input', { type: 'text', value: s.display_name, maxlength: '20', 'aria-label': s.slug });
-        var save = el('button', { type: 'button', 'class': 'btn ghost sm' }, S.save);
-        save.onclick = function () { api('/api/teacher/roster', { slug: s.slug, display_name: name.value }).then(msg); };
-        var act = el('input', { type: 'checkbox' }); act.checked = s.active;
-        act.onchange = function () { api('/api/teacher/roster', { slug: s.slug, active: act.checked }).then(msg); };
-        var cs = el('button', { type: 'button', 'class': 'btn ghost sm' }, S.student);
-        cs.onclick = function () { copy(s.student_link, cs); };
-        var cp = el('button', { type: 'button', 'class': 'btn ghost sm' }, S.parent);
-        cp.onclick = function () { copy(s.parent_link, cp); };
-        var td1 = el('td'); td1.appendChild(name); td1.appendChild(save);
-        var td2 = el('td'); td2.appendChild(act);
-        var td3 = el('td'); td3.appendChild(cs); td3.appendChild(cp);
-        tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tb.appendChild(tr);
-      });
+  /* roster (F11: every class, search + class filter, add / move / 퇴원 / 링크 재발급 / 안내 문구; full names stay local) */
+  var MM = S.m, rosterAll = [], classesAll = [];
+  function fillClassSelect(sel, withAll, keep) {
+    var v = keep !== undefined ? keep : sel.value;
+    sel.innerHTML = '';
+    if (withAll) sel.appendChild(el('option', { value: '' }, withAll));
+    classesAll.forEach(function (c) { sel.appendChild(el('option', { value: c.name }, c.name)); });
+    sel.value = v;
+  }
+  function showLinks(j, box) {
+    box.innerHTML = '';
+    var w = el('div', { 'class': 'wrow links' });
+    [[S.student, j.student_link], [S.parent, j.parent_link], [MM.intro_p, j.parent], [MM.intro_s, j.student]].forEach(function (p) {
+      var b = btn(p[0]); b.onclick = function () { copy(p[1], b); }; w.appendChild(b);
+    });
+    box.appendChild(el('p', {}, MM.new_links + ' · ' + j.display_name));
+    box.appendChild(el('pre', { 'class': 'tout' }, j.student_link + '\n' + j.parent_link));
+    box.appendChild(w);
+  }
+  function renderRoster() {
+    var q = ($('rs-q').value || '').trim(), cf = $('rs-class').value, tb = $('roster-rows');
+    tb.innerHTML = '';
+    rosterAll.filter(function (s) {
+      return (!cf || s.class_name === cf) && (!q || (s.display_name + ' ' + s.full_name + ' ' + s.ext_id).indexOf(q) >= 0);
+    }).forEach(function (s) {
+      var tr = el('tr', { 'data-slug': s.slug, 'class': s.active ? '' : 'off' });
+      var name = el('input', { type: 'text', value: s.display_name, maxlength: '20', 'aria-label': s.slug });
+      var save = btn(S.save);
+      save.onclick = function () { api('/api/teacher/roster', { slug: s.slug, display_name: name.value }).then(msg); };
+      var td1 = el('td'); td1.appendChild(name); td1.appendChild(save);
+      var td2 = el('td', { 'class': 'full' }, s.full_name + (s.ext_id ? ' · ' + s.ext_id : ''));
+      var mv = el('select', { 'aria-label': MM.move }); classesAll.forEach(function (c) { mv.appendChild(el('option', { value: c.name }, c.name)); });
+      mv.value = s.class_name;
+      mv.onchange = function () { api('/api/teacher/student-move', { slug: s.slug, 'class': mv.value }).then(function (j) { msg(j); loadRoster(); }); };
+      var td3 = el('td'); td3.appendChild(mv);
+      var td4 = el('td');
+      if (s.active) {
+        var lv = btn(MM.leave);
+        lv.onclick = function () { api('/api/teacher/student-leave', { slug: s.slug }).then(function (j) { msg(j); loadRoster(); }); };
+        td4.appendChild(lv);
+      } else {
+        td4.appendChild(el('span', { 'class': 'muted' }, s.left_on ? fmt(MM.left, { d: s.left_on }) + ' ' : ''));
+        var rt = btn(MM.ret);
+        rt.onclick = function () { api('/api/teacher/student-leave', { slug: s.slug, undo: true }).then(function (j) { msg(j); loadRoster(); }); };
+        td4.appendChild(rt);
+      }
+      var td5 = el('td');
+      var cs = btn(S.student); cs.onclick = function () { copy(s.student_link, cs); };
+      var cp = btn(S.parent); cp.onclick = function () { copy(s.parent_link, cp); };
+      var ip = btn(MM.intro_p), is = btn(MM.intro_s);
+      ip.onclick = function () { api('/api/teacher/intro?slug=' + encodeURIComponent(s.slug)).then(function (j) { copy(j.parent, ip); }); };
+      is.onclick = function () { api('/api/teacher/intro?slug=' + encodeURIComponent(s.slug)).then(function (j) { copy(j.student, is); }); };
+      var ro = btn(MM.rotate);
+      ro.onclick = function () {
+        if (!window.confirm(MM.rotate_confirm)) return;
+        api('/api/teacher/student-rotate', { slug: s.slug, which: 'both' }).then(function (j) {
+          if (!j.ok) { msg(j); return; }
+          showLinks(j, $('sa-links')); loadRoster(); msg(j);
+        });
+      };
+      [cs, cp, ip, is, ro].forEach(function (b) { td5.appendChild(b); });
+      [td1, td2, td3, td4, td5].forEach(function (td) { tr.appendChild(td); });
+      tb.appendChild(tr);
     });
   }
+  function loadRoster() {
+    api('/api/teacher/roster').then(function (j) {
+      rosterAll = j.students; classesAll = j.classes;
+      fillClassSelect($('rs-class'), S.all || '모든 반');
+      fillClassSelect($('sa-class'), null, $('sa-class').value || j.board_class);
+      fillClassSelect($('rc-class'), null, $('rc-class').value || j.board_class);
+      var pick = $('cf-pick'), pv = pick.value;
+      pick.innerHTML = ''; pick.appendChild(el('option', { value: '' }, pick.getAttribute('data-new') || '새 반'));
+      classesAll.forEach(function (c) { pick.appendChild(el('option', { value: c.name }, c.name)); });
+      pick.value = pv;
+      renderRoster();
+    });
+  }
+  $('rs-q').addEventListener('input', renderRoster);
+  $('rs-class').addEventListener('change', renderRoster);
+  $('sa-full').addEventListener('input', function () {        /* the display name is prefilled with the given name */
+    var f = $('sa-full').value.trim();
+    if (!$('sa-display').getAttribute('data-touched')) $('sa-display').value = f.length === 3 ? f.slice(1) : '';
+  });
+  $('sa-display').addEventListener('input', function () { $('sa-display').setAttribute('data-touched', '1'); });
+  $('sa-save').onclick = function () {
+    api('/api/teacher/student-add', { full_name: $('sa-full').value, display_name: $('sa-display').value, 'class': $('sa-class').value,
+      track: $('sa-track').value, ext_id: $('sa-ext').value, parent_phone: $('sa-phone').value }).then(function (j) {
+      $('sa-msg').textContent = j.ok ? (S.saved + (j.message ? ' · ' + j.message : '')) : (j.error || '');
+      if (!j.ok) return;
+      showLinks(j, $('sa-links'));
+      ['sa-full', 'sa-display', 'sa-track', 'sa-ext', 'sa-phone'].forEach(function (k) { $(k).value = ''; });
+      $('sa-display').removeAttribute('data-touched');
+      loadRoster();
+    });
+  };
+  $('cf-pick').onchange = function () {
+    var c = classesAll.filter(function (x) { return x.name === $('cf-pick').value; })[0] || {};
+    $('cf-name').value = c.name || ''; $('cf-grade').value = c.grade || ''; $('cf-days').value = c.days || '';
+    $('cf-term').value = c.term || ''; $('cf-reward').value = c.reward_label || ''; $('cf-goal').value = c.goal || 0; $('cf-start').value = c.start_time || '';
+  };
+  $('cf-save').onclick = function () {
+    var pick = $('cf-pick').value;
+    api('/api/teacher/class', { create: !pick, name: pick || $('cf-name').value, new_name: pick ? $('cf-name').value : null,
+      grade: $('cf-grade').value, days: $('cf-days').value, term: $('cf-term').value, reward_label: $('cf-reward').value,
+      goal: $('cf-goal').value, start_time: $('cf-start').value }).then(function (j) {
+      $('cf-msg').textContent = j.ok ? S.saved + ' · ' + j.name : (j.error || '');
+      if (j.ok) { $('cf-pick').value = j.name; loadRoster(); loadRounds && loadRounds(); }
+    });
+  };
+  function rosterCsv(write) {
+    var f = $('rc-file').files && $('rc-file').files[0];
+    if (!f) return;
+    var r = new FileReader();
+    r.onload = function () {
+      api('/api/teacher/roster-import', { files: [{ name: f.name, data: r.result }], 'class': $('rc-class').value, write: write }).then(function (j) {
+        if (!j.ok) { $('rc-counts').textContent = j.error || ''; return; }
+        $('rc-counts').textContent = fmt(MM.counts, j.counts) + (j.written ? ' · ' + S.saved : '') + (j.message ? ' · ' + j.message : '');
+        var tb = $('rc-rows'); tb.innerHTML = '';
+        j.rows.forEach(function (x) {
+          var tr = el('tr', { 'class': 'rc ' + x.status });
+          tr.appendChild(el('td', {}, String(x.line))); tr.appendChild(el('td', {}, MM.status[x.status]));
+          tr.appendChild(el('td', {}, x.name + (x.ext_id ? ' · ' + x.ext_id : ''))); tr.appendChild(el('td', { 'class': 'muted' }, x.why));
+          tb.appendChild(tr);
+        });
+        $('rc-write').disabled = j.written;
+        if (j.written) loadRoster();
+      });
+    };
+    r.readAsDataURL(f);
+  }
+  $('rc-preview').onclick = function () { rosterCsv(false); };
+  $('rc-write').onclick = function () { rosterCsv(true); };
   function msg(j) { $('roster-msg').textContent = j.ok ? (S.saved + (j.message ? ' · ' + j.message : '')) : (j.error || ''); }
 
   /* notes: the existing note, else the data-based suggestion, prefilled */

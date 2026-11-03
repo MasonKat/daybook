@@ -6,7 +6,7 @@ in `daybook.sqlite` (gitignored), and on the deployed pages behind unguessable l
 
 ## 0. State at handoff (2026-11-04, after F6–F9, F13 and F14)
 
-- `main` is green from a clean clone: 153 pytest, 39 Worker node tests (incl. the class-day budget with an AMP Live
+- `main` is green from a clean clone: 160 pytest, 39 Worker node tests (incl. the class-day budget with an AMP Live
   round), the full Playwright check. A normal check run leaves `git status` clean (F0); `make screenshots` /
   `scripts\check.ps1 -Screenshots` refresh the committed screenshots on purpose.
 - Built: P0, design v2, F1–F9, hotfix H1–H6, F13 (the parent-contact desk), F14 (the weekly-test report). F10–F12 arrived
@@ -247,6 +247,12 @@ Students tap "AMP Live" on the 오늘 tab and type the code. Re-check Cloudflare
 
 Offline (F9): the student page keeps working on bad Wi-Fi; a photo taken offline waits on the phone and is sent the
 next time the page opens with a connection. Answer cards (F8) are a spike only: `daybook omr --spike --eval 200`.
+
+Members (F11, Teacher tab → 명단 · 반 관리, laptop only): add a student (full name, display name, class, track, ID,
+parent phone) and copy the new links and the ready 안내 문구; move a student to another class; 퇴원 (with a date, undo
+possible); 링크 재발급 (the old link stops working); create or edit a class (name, grade, weekdays, term, reward, goal,
+start time); and for a roster CSV, 가져오기 미리보기 before 이대로 가져오기. The Worker learns every change at once when
+it is configured (and again at the next 발행). Full names and phones are shown only in this local tab.
 
 Videos per class (F10): in `videos.json` (or a folder of `*.json` files: set `"videos_path": "videos/"`), tag an item
 with `"classes": ["고1A"]` and/or `"grades": ["고1"]` and give each class its grade once

@@ -77,11 +77,51 @@
 </section>
 
 <section class="card" id="t-roster">
-  <h2>{{ S.t_roster }}</h2>
+  <h2>{{ S.m_title }}</h2>
   {% if not pages %}<p class="muted">{{ S.t_no_pages }}</p>{% endif %}
-  <table class="ttable"><thead><tr><th>{{ S.t_name }}</th><th>{{ S.t_active }}</th><th>{{ S.t_links }}</th></tr></thead>
-    <tbody id="roster-rows"></tbody></table>
+  <p class="muted">{{ S.m_local }}</p>
+  <div class="trow"><input type="search" id="rs-q" placeholder="{{ S.m_search }}" aria-label="{{ S.m_search }}">
+    <select id="rs-class" aria-label="{{ S.m_class }}"><option value="">{{ S.m_all }}</option></select></div>
+  <div class="tscroll"><table class="ttable roster"><thead><tr><th>{{ S.t_name }}</th><th>{{ S.m_full }}</th><th>{{ S.m_class }}</th>
+    <th>{{ S.t_active }}</th><th>{{ S.t_links }}</th></tr></thead>
+    <tbody id="roster-rows"></tbody></table></div>
   <p class="tmsg" id="roster-msg" aria-live="polite"></p>
+  <pre class="tout" id="roster-out"></pre>
+
+  <h3>{{ S.m_add }}</h3>
+  <div class="trow pol" id="sa-form">
+    <label>{{ S.m_full }} <input type="text" id="sa-full" maxlength="40"></label>
+    <label>{{ S.m_display }} <input type="text" id="sa-display" maxlength="20"></label>
+    <label>{{ S.m_class }} <select id="sa-class"></select></label>
+    <label>{{ S.m_track }} <input type="text" id="sa-track" maxlength="20"></label>
+    <label>{{ S.m_ext }} <input type="text" id="sa-ext" maxlength="20"></label>
+    <label>{{ S.m_phone }} <input type="tel" id="sa-phone" maxlength="20"></label>
+    <button type="button" class="btn primary sm" id="sa-save">{{ S.m_add }}</button>
+  </div>
+  <p class="tmsg" id="sa-msg" aria-live="polite"></p>
+  <div id="sa-links"></div>
+
+  <h3>{{ S.m_class_title }}</h3>
+  <div class="trow pol">
+    <label>{{ S.m_class }} <select id="cf-pick" data-new="{{ S.m_class_new }}"><option value="">{{ S.m_class_new }}</option></select></label>
+    <label>{{ S.m_class_name }} <input type="text" id="cf-name" maxlength="20"></label>
+    <label>{{ S.m_grade }} <input type="text" id="cf-grade" maxlength="10" placeholder="고1"></label>
+    <label>{{ S.m_days }} <input type="text" id="cf-days" maxlength="20"></label>
+    <label>{{ S.m_term }} <input type="text" id="cf-term" maxlength="30" placeholder="2026-11-02..2027-02-26"></label>
+    <label>{{ S.m_reward }} <input type="text" id="cf-reward" maxlength="30"></label>
+    <label>{{ S.m_goal }} <input type="number" id="cf-goal" min="0"></label>
+    <label>{{ S.m_start }} <input type="time" id="cf-start"></label>
+    <button type="button" class="btn primary sm" id="cf-save">{{ S.t_save }}</button>
+  </div>
+  <p class="tmsg" id="cf-msg" aria-live="polite"></p>
+
+  <h3>{{ S.m_preview }}</h3>
+  <div class="trow"><label>{{ S.m_roster_csv }} <input type="file" id="rc-file" accept=".csv"></label>
+    <select id="rc-class" aria-label="{{ S.m_class }}"></select>
+    <button type="button" class="btn ghost sm" id="rc-preview">{{ S.m_preview }}</button>
+    <button type="button" class="btn primary sm" id="rc-write" disabled>{{ S.m_import }}</button></div>
+  <p class="muted" id="rc-counts"></p>
+  <table class="ttable"><tbody id="rc-rows"></tbody></table>
 </section>
 
 <section class="card" id="t-notes">
@@ -128,7 +168,9 @@
   <div id="weekly-rows"></div>
 </section>
 </main>
-<script type="application/json" id="data">{{ {"S": {"saved": S.t_saved, "copy": S.t_copy, "copied": S.t_copied, "student": S.t_student_link, "parent": S.t_parent_link, "save": S.t_save, "need": S.board_moment_need, "running": S.t_running, "confirm_deploy": S.t_confirm_deploy, "r": {"open": S.r_open_now, "closed": S.r_closed, "upcoming": S.r_upcoming, "edit": S.r_edit,
+<script type="application/json" id="data">{{ {"S": {"saved": S.t_saved, "copy": S.t_copy, "copied": S.t_copied, "student": S.t_student_link, "parent": S.t_parent_link, "save": S.t_save, "need": S.board_moment_need, "running": S.t_running, "confirm_deploy": S.t_confirm_deploy, "all": S.m_all, "m": {"move": S.m_move, "leave": S.m_leave, "ret": S.m_return, "rotate": S.m_rotate,
+  "rotate_confirm": S.m_rotate_confirm, "intro_p": S.m_intro_p, "intro_s": S.m_intro_s, "left": S.m_left, "new_links": S.m_new_links,
+  "counts": S.m_counts, "status": {"new": S.m_status_new, "updated": S.m_status_updated, "unchanged": S.m_status_unchanged, "skipped": S.m_status_skipped}}, "r": {"open": S.r_open_now, "closed": S.r_closed, "upcoming": S.r_upcoming, "edit": S.r_edit,
   "close": S.r_close_now, "export": S.r_export, "confirm_close": S.r_confirm_close, "add": S.r_add, "progress": S.r_progress}, "c": {
   "called": S.c_called, "messaged": S.c_messaged, "hold": S.c_hold, "script": S.c_script, "kakao": S.c_kakao,
   "summary_ph": S.c_summary_ph, "follow": S.c_follow, "none": S.c_none, "notice": S.c_notice, "need": S.c_need,

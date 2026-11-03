@@ -670,7 +670,22 @@ print(c.execute("SELECT COUNT(*), SUM(correct) FROM effort WHERE source = 'live'
     const terr = [];
     tpage.on('console', (m) => { if (m.type() === 'error') terr.push(m.text()); });
     await tpage.goto(BOARD + '/teacher', { waitUntil: 'networkidle' });
-    check((await tpage.locator('#roster-rows tr').count()) >= 5, `roster lists the class (${await tpage.locator('#roster-rows tr').count()} students)`);
+    check((await tpage.locator('#roster-rows tr').count()) === 22, `roster lists every class (${await tpage.locator('#roster-rows tr').count()} students)`);
+    // F11: add a student from the tab, links + messages to copy; search and the class filter
+    await tpage.fill('#sa-full', '도하윤');
+    check((await tpage.inputValue('#sa-display')) === '하윤', 'the display name is prefilled with the given name');
+    await tpage.fill('#sa-ext', 'S950');
+    await tpage.click('#sa-save');
+    await tpage.waitForSelector('#sa-links pre', { timeout: 5000 }).catch(() => {});
+    check(/\/s\/[a-z2-7]{26}\/\n.*\/p\/[a-z2-7]{26}\//.test(await tpage.textContent('#sa-links pre')) && (await tpage.locator('#sa-links .links button').count()) === 4,
+      '학생 추가 shows the new student and parent links with copy buttons (links + 안내 문구)');
+    await tpage.waitForFunction(() => document.querySelectorAll('#roster-rows tr').length === 23, null, { timeout: 5000 }).catch(() => {});
+    await tpage.fill('#rs-q', '하윤');
+    check((await tpage.locator('#roster-rows tr').count()) === 1, 'the search box finds the new student');
+    await tpage.fill('#rs-q', '');
+    await tpage.selectOption('#rs-class', '케어D');
+    check((await tpage.locator('#roster-rows tr').count()) === 5, 'the class filter shows one class (케어D: 5)');
+    await tpage.selectOption('#rs-class', '');
     check((await tpage.locator('#notes-rows .nrow input').first().inputValue()).length > 0, 'notes are prefilled (note or data draft)');
     check((await tpage.locator('#weekly-rows pre').count()) >= 5, 'weekly paste messages with copy buttons');
     // F13: the parent-contact desk

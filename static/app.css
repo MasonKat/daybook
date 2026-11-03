@@ -498,3 +498,15 @@ body[data-page="student"][data-taste] .app { height: calc(100dvh - 24px); }
 .wt input[type=text] { width: 100%; box-sizing: border-box; min-height: 44px; border-radius: 10px; border: 1px solid var(--line);
   background: var(--bg); color: var(--fg); font: 15px var(--font); padding: 0 10px; }
 .wt .wide { margin-top: 12px; }
+
+/* F11: the roster table (Teacher tab, local only) */
+.tscroll { overflow-x: auto; }
+.ttable.roster td { white-space: nowrap; }
+.ttable.roster tr.off td { color: var(--muted); }
+.ttable.roster td.full { font-size: 13px; }
+.ttable select, #rs-class, #rc-class, .pol select { min-height: 32px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: 13px var(--font); }
+#rs-q { min-height: 36px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: 14px var(--font); padding: 0 8px; flex: 1; }
+.pol input[type=text], .pol input[type=tel] { min-height: 32px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: 13px var(--font); padding: 0 6px; width: 9em; }
+tr.rc.new td:nth-child(2) { color: var(--ok); font-weight: 600; } tr.rc.updated td:nth-child(2) { color: var(--adjust); font-weight: 600; }
+tr.rc.skipped td:nth-child(2) { color: var(--err); }
+.links .btn { margin: 2px; }

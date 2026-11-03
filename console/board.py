@@ -263,8 +263,14 @@ def make_handler(board: Board):
             with board.conn() as conn:
                 cls = conn.execute("SELECT * FROM classes WHERE id = ?", (board.class_id,)).fetchone()
                 day = date.fromisoformat(q["date"][0]) if q.get("date") else board.day
-                if path == "/api/teacher/roster":
-                    return self._json({"students": T.roster(conn, board.cfg, board.class_id)})
+                if path == "/api/teacher/roster":              # F11: every class (the tab filters)
+                    return self._json({"students": T.roster(conn, board.cfg), "classes": T.classes_view(conn),
+                                       "board_class": cls["name"]})
+                if path == "/api/teacher/intro":
+                    try:
+                        return self._json(T.intro_messages(conn, board.cfg, (q.get("slug") or [""])[0]))
+                    except ops.OpError as e:
+                        return self._json({"ok": False, "error": str(e)}, 404)
                 if path == "/api/teacher/notes":
                     return self._json(T.notes(conn, board.cfg, cls, day))
                 if path == "/api/teacher/moments":
@@ -296,9 +302,21 @@ def make_handler(board: Board):
                 try:
                     if self.path == "/api/teacher/roster":
                         st = conn.execute("SELECT class_id FROM students WHERE slug = ?", (str(body.get("slug", "")),)).fetchone()
-                        if not st or st["class_id"] != board.class_id:
+                        if not st:
                             return self._json({"ok": False, "error": "unknown_student"}, 404)
                         return self._json(T.roster_edit(conn, board.cfg, body))
+                    if self.path == "/api/teacher/student-add":            # F11
+                        return self._json(T.student_add(conn, board.cfg, body))
+                    if self.path == "/api/teacher/student-move":
+                        return self._json(T.student_move(conn, board.cfg, body))
+                    if self.path == "/api/teacher/student-leave":
+                        return self._json(T.student_leave(conn, board.cfg, body))
+                    if self.path == "/api/teacher/student-rotate":
+                        return self._json(T.student_rotate(conn, board.cfg, body))
+                    if self.path == "/api/teacher/class":
+                        return self._json(T.class_save(conn, body))
+                    if self.path == "/api/teacher/roster-import":
+                        return self._json(T.roster_preview(conn, board.cfg, body))
                     if self.path == "/api/teacher/note":
                         return self._json(T.note_save(conn, body))
                     if self.path == "/api/teacher/import":

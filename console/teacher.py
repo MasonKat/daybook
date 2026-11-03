@@ -29,10 +29,15 @@ def _link(cfg: Config, kind: str, token: str) -> str:
     return f"{cfg.pages}/{kind}/{token}/" if cfg.pages else f"/{kind}/{token}/"
 
 
-def roster(conn: sqlite3.Connection, cfg: Config, class_id: int) -> list[dict]:
-    return [{"slug": r["slug"], "display_name": r["display_name"], "active": bool(r["active"]),
+def roster(conn: sqlite3.Connection, cfg: Config, class_id: int | None = None) -> list[dict]:
+    """F11: every student of every class (the tab filters). Full names are shown here, on the laptop only."""
+    q = """SELECT s.*, c.name AS class_name FROM students s LEFT JOIN classes c ON c.id = s.class_id"""
+    q += " WHERE s.class_id = ?" if class_id else ""
+    return [{"slug": r["slug"], "display_name": r["display_name"], "full_name": r["full_name"], "active": bool(r["active"]),
+             "class_name": r["class_name"] or "", "track": r["track"] or "", "ext_id": r["ext_id"] or "",
+             "left_on": r["left_on"] or "",
              "student_link": _link(cfg, "s", r["student_token"]), "parent_link": _link(cfg, "p", r["parent_token"])}
-            for r in conn.execute("SELECT * FROM students_public WHERE class_id = ? ORDER BY active DESC, id", (class_id,))]
+            for r in conn.execute(q + " ORDER BY s.active DESC, s.class_id, s.id", (class_id,) if class_id else ())]
 
 
 def roster_edit(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
@@ -280,3 +285,118 @@ def round_action(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
         raise TeacherError(str(e)) from e
     conn.commit()
     return {"ok": True, "message": R.push(conn, cfg)}
+
+
+# ---------------------------------------------------------------- F11: the teacher manages the members alone
+
+def classes_view(conn: sqlite3.Connection) -> list[dict]:
+    out = []
+    for c in conn.execute("SELECT * FROM classes ORDER BY id"):
+        out.append({"name": c["name"], "grade": c["grade"] or "", "term": c["term"] or "",
+                    "days": ",".join(M.WEEKDAYS_KO[i] for i in M.mask_days(c["weekday_mask"])),
+                    "reward_label": c["reward_label"] or "", "goal": c["reward_goal_points"] or 0,
+                    "start_time": c["start_time"] or "", "students": M.active_count(conn, c["id"])})
+    return out
+
+
+def intro_messages(conn: sqlite3.Connection, cfg: Config, slug: str) -> dict:
+    """안내 문구: one formal message for the parent and one for the student, each with their own link. Copy only."""
+    from . import contact as C
+    from .config import strings
+    S = strings()
+    s = ops.get_student(conn, slug)
+    g = C.profile(conn, s["id"])["greeting"]
+    parent = S["parent_msg"]["link_intro"].format(g=g, name=s["display_name"], link=_link(cfg, "p", s["parent_token"]))
+    student = S["link_intro_student"].format(name=s["display_name"], link=_link(cfg, "s", s["student_token"]))
+    return {"parent": parent, "student": student}
+
+
+def _links(conn, cfg, slug) -> dict:
+    s = ops.get_student(conn, slug)
+    return {"slug": s["slug"], "display_name": s["display_name"], "student_link": _link(cfg, "s", s["student_token"]),
+            "parent_link": _link(cfg, "p", s["parent_token"]), **intro_messages(conn, cfg, slug)}
+
+
+def student_add(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
+    """학생 추가: the same add_student as `daybook roster add`; full name and phone stay on the laptop."""
+    full = " ".join(str(body.get("full_name", "")).split())
+    if not full:
+        raise TeacherError("full name is required")
+    cls = ops.get_class(conn, str(body.get("class", "")))
+    ext = str(body.get("ext_id", "") or "").strip() or None
+    if ext and conn.execute("SELECT 1 FROM students WHERE ext_id = ?", (ext,)).fetchone():
+        raise TeacherError(f"student ID {ext} is already used")
+    phone = str(body.get("parent_phone", "") or "").strip() or None
+    if phone and not ops.PHONE_OK.match(phone):
+        raise TeacherError("phone: digits and - only")
+    display = str(body.get("display_name", "") or "").strip() or None
+    s = importers.add_student(conn, cls["id"], full, display_name=display, ext_id=ext, parent_phone=phone,
+                              track=str(body.get("track", "") or "").strip() or None)
+    if s["display_name"] == s["full_name"]:
+        conn.rollback()
+        raise TeacherError("the display name must not be the full name (e.g. the given name only)")
+    conn.commit()
+    return {"ok": True, **_links(conn, cfg, s["slug"]), "message": push_tokmap(conn, cfg)}
+
+
+def student_move(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
+    """반 이동: the student's history stays theirs; the Worker learns the new class key."""
+    slug = str(body.get("slug", ""))
+    ops.edit_student(conn, slug, class_name=str(body.get("class", "")))
+    conn.commit()
+    return {"ok": True, "message": push_tokmap(conn, cfg)}
+
+
+def student_leave(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
+    """퇴원 처리 with a date, or its undo (`undo: true`)."""
+    d = None if body.get("undo") else str(body.get("date") or M.kst_today().isoformat())
+    s = ops.set_left(conn, str(body.get("slug", "")), d)
+    conn.commit()
+    return {"ok": True, "active": bool(s["active"]), "left_on": s["left_on"] or "", "message": push_tokmap(conn, cfg)}
+
+
+def student_rotate(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
+    """링크 재발급: the old link stops working; the new links (and messages) come back for copying."""
+    which = str(body.get("which", "both"))
+    if which not in ("both", "student", "parent"):
+        raise TeacherError("which: both | student | parent")
+    slug = str(body.get("slug", ""))
+    ops.rotate_tokens(conn, ops.get_student(conn, slug), which)
+    conn.commit()
+    return {"ok": True, **_links(conn, cfg, slug), "message": push_tokmap(conn, cfg)}
+
+
+def class_save(conn: sqlite3.Connection, body: dict) -> dict:
+    """반 만들기 / 반 수정."""
+    def opt(k):
+        v = body.get(k)
+        return None if v is None else str(v)
+    goal = body.get("goal")
+    cls = ops.save_class(conn, str(body.get("name", "")), create=bool(body.get("create")), new_name=opt("new_name"),
+                         term=opt("term") or None, days=opt("days") or None, reward_label=opt("reward_label"),
+                         goal=int(goal) if goal not in (None, "") else None, grade=opt("grade"), start_time=opt("start_time"))
+    conn.commit()
+    return {"ok": True, "name": cls["name"]}
+
+
+def roster_preview(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
+    """가져오기 미리보기 (and, with `write: true`, the import itself) for a roster CSV with mappings/roster.json."""
+    files = _decode_files(body.get("files"))
+    if len(files) != 1 or not files[0][0].lower().endswith(".csv"):
+        raise TeacherError("choose one .csv file")
+    cls = ops.get_class(conn, str(body["class"])) if body.get("class") else None
+    mapping = importers.load_mapping(ROOT / "mappings" / "roster.json")
+    tmp = Path(tempfile.mkdtemp(prefix="daybook-roster-"))
+    try:
+        (tmp / files[0][0]).write_bytes(files[0][1])
+        rep = importers.import_roster(conn, tmp / files[0][0], mapping, cls["id"] if cls else None,
+                                      dry_run=not body.get("write"))
+    except (ValueError, UnicodeDecodeError) as e:
+        raise TeacherError(f"cannot read the CSV: {e}") from e
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    out = {"ok": True, "written": bool(body.get("write")), "rows": rep.rows, "warnings": rep.warnings,
+           "counts": {k: sum(1 for r in rep.rows if r["status"] == k) for k in ("new", "updated", "unchanged", "skipped")}}
+    if body.get("write") and (rep.added or rep.updated):
+        out["message"] = push_tokmap(conn, cfg)
+    return out
