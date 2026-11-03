@@ -15,7 +15,7 @@ from .importers import add_student
 
 CLASSES = [
     # F13 demo shape (four classes, 22 students): name, weekdays, reward, start, end, self-study, late_min, kind
-    ("고1A", "화,목,토", "피자 파티", "18:00", "20:00", None, 10, "strong"),
+    ("고1A", "화,목,토", "피자 파티", "18:00", "20:00", "21:00", 10, "strong"),   # G5: a self-study block (taste shows it)
     ("기초B", "월,수,금", "간식 데이", "20:00", "22:00", None, 30, "basic"),
     ("심화C", "월,수,금", "보드게임 데이", "18:00", "20:00", None, 10, "strong"),
     ("케어D", "화,목,토", "간식 데이", "17:30", "20:00", "21:00", 10, "care"),
@@ -218,9 +218,10 @@ def _seed_kong(conn: sqlite3.Connection, class_id: int, sess: dict, today: date,
             mins = rng.randint(19 * 60 + 50, 21 * 60)
             at = datetime.combine(d, time(mins // 60, mins % 60), KST)
             conn.execute(
-                """INSERT INTO submissions (student_id, session_id, day, ts, photo_key, source, status)
-                   VALUES (?, ?, ?, ?, NULL, 'phone', 'received')""",
-                (s["id"], sess.get(d), d.isoformat(), at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")))
+                """INSERT INTO submissions (student_id, session_id, day, ts, photo_key, source, status, solved)
+                   VALUES (?, ?, ?, ?, NULL, 'phone', 'received', ?)""",
+                (s["id"], sess.get(d), d.isoformat(), at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+                 rng.randint(8, 22)))                     # G5: 콩 reports 오늘 푼 문제 수 (taste: the weekly sum shows)
         d += timedelta(days=1)
     past = sorted(x for x in sess if x < today)
     hearts = set(past[-5:]) if len(past) >= 5 else set(past)

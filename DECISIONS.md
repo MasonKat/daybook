@@ -296,6 +296,11 @@ One line each. "deferred" = not built in P0, on purpose.
 - `daybook cards parents <class>`: one warm-formal A4 letter per student (display name only): what the page shows, what it never shows (no ranks or comparisons, no other students, no face or homework photos), the Saturday rhythm, that the link comes by KakaoTalk from the teacher, and the placeholders `{원장·학원 문구}` and `{개인정보 안내 문구}` for the teacher to fill. The wording lives in `strings.ko.json` → `parent_msg.letter_*`, so the tone test covers it (it now also checks list items and headings; the playful-ending rule no longer flags words like 전용).
 - Output goes to `cards/` (gitignored); print from the browser (A4).
 
+## G5: taste build refresh (2026-11-04)
+- The 콩 taste build now shows every new feature: the 주간 테스트 card with a practice round (20 quizzes, kept on the phone), the 이번 주 복습 ring (the demo insights include 콩), 오늘 푼 문제 수 on 과제 끝 and 콩's weekly sum on the profile, and on the parent side the header with class hours and the self-study block, 출석/과제 times, the 푼 문제 row, the insight line and the moments strip. The banner and "nothing is sent" stay (the e2e still counts 0 requests outside the taste site).
+- Demo data for it: 고1A gets a self-study block to 21:00 and 콩's submissions carry a 푼 문제 count.
+- New screenshots: `taste-review.png`, `taste-weekly-test.png`, `taste-parent.png` (plus `weekly-test.png`); all screenshots were re-taken. The local agent redeploys amp-taste.pages.dev (`make deploy-taste`).
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

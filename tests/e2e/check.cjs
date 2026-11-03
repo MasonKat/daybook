@@ -760,7 +760,18 @@ print(c.execute("SELECT COUNT(*), SUM(correct) FROM effort WHERE source = 'live'
       await tp.waitForSelector('#st-idle:not([hidden])', { timeout: 3000 });
       check(/^\d\d:\d\d$/.test(await tp.textContent('#sp-ck-v')), 'taste: any 4 digits check in locally');
       await shot(tp, 'taste-ritual.png');
+      // G5: every new feature in the taste build: the 이번 주 복습 ring, 푼 문제 수, the weekly test, the self-study line
+      const rv = tp.locator('.story[data-story="review"]');
+      check(await rv.count() === 1, 'taste: the 이번 주 복습 ring is there for 콩');
+      await rv.click();
+      await tp.waitForSelector('#sv:not([hidden])', { timeout: 3000 }).catch(() => {});
+      check((await tp.locator('.sv-group[data-story="review"] .rchips .chip').count()) >= 2, 'taste: 이번 주 복습 shows the focus chips and the line');
+      await shot(tp, 'taste-review.png');
+      await tp.click('#sv-x');
       await tp.setInputFiles('#photo', png);
+      await tp.waitForSelector('#st-preview:not([hidden])', { timeout: 3000 });
+      await tp.click('.sv-b[data-d="1"]'); await tp.click('.sv-b[data-d="1"]');
+      check((await tp.inputValue('#solved')) === '2', 'taste: 오늘 푼 문제 수 with the + key');
       await tp.click('#post');
       await tp.waitForSelector('#st-done:not([hidden])', { timeout: 5000 });
       check(/연속 2[12]일/.test(await tp.textContent('#d-streak')), `upload simulated locally: 오늘 완료, ${await tp.textContent('#d-streak')}`);
@@ -774,12 +785,23 @@ print(c.execute("SELECT COUNT(*), SUM(correct) FROM effort WHERE source = 'live'
       check(await tp.isVisible('#wt-card'), 'taste: a practice 주간 테스트 round is open for 콩');
       await tp.click('#wt-open');
       check((await tp.locator('#wt-grid .wq').count()) === 20, 'taste: 20 quiz tiles');
+      await tp.click('#wt-grid .wq[data-k="4"]'); await tp.click('#wt-grid .wq[data-k="9"]'); await tp.click('#wt-grid .wq[data-k="9"]');
+      await tp.click('#wt-hard .wh[data-k="9"]'); await tp.click('#wt-reasons .cbtn[data-r="시간부족"]');
+      await shot(tp, 'taste-weekly-test.png');
       await tp.click('#wt-send');
       await tp.waitForSelector('#wt', { state: 'hidden', timeout: 3000 }).catch(() => {});
       await tp.waitForFunction(() => /제출 완료/.test(document.getElementById('wt-state').textContent), null, { timeout: 3000 }).catch(() => {});
       check(/제출 완료/.test(await tp.textContent('#wt-state')), 'taste: 제출 is simulated on the phone (nothing sent)');
+      check(/이번 주 푼 문제 \d+개/.test(await tp.textContent('#solved-me')), `taste: the profile shows 콩's own weekly sum (${await tp.textContent('#solved-me')})`);
       await tp.goto(TASTE + '/p/kong/', { waitUntil: 'networkidle' });
       check(await tp.isVisible('.taste-bar') && /AMP 수학 · 콩/.test(await tp.textContent('.room-title')), 'parent page /p/kong/ with the banner');
+      check(/^수업 18:00–20:00 · 자습 ~21:00$/.test((await tp.textContent('#hours')).trim()), `taste parent: class hours and self-study ("${(await tp.textContent('#hours')).trim()}")`);
+      const newest = tp.locator('.msg.newest');
+      check((await newest.locator('.ritual li').count()) > 0 && (await newest.locator('.mstrip li').count()) > 0
+        && /이번 주 \d+문제/.test(await newest.locator('#solved').innerText().catch(() => ''))
+        && (await newest.locator('.rline.insight').count()) === 1,
+        'taste parent: 출석/과제 times, the moments strip, the 푼 문제 sum and the insight line');
+      await shot(tp, 'taste-parent.png', { fullPage: false });
       check(treqs.length === 0, `0 requests outside the taste site during the whole visit (${treqs.slice(0, 2).join(', ')})`);
       check(terrs.length === 0, `0 console errors in the taste build (${terrs.length})`);
       await tctx.close();

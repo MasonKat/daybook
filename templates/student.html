@@ -98,7 +98,7 @@
 <section id="tab-today" class="panel" role="tabpanel">
   <div class="rhead"><h1 class="rtitle" id="r-title">{{ S.ritual_study }}</h1><p class="chip set-chip" id="today-set" hidden></p><button type="button" class="chip livebtn" id="live-open">{{ S.live_btn }}</button></div>
   <div class="card wtcard" id="wt-card" hidden>
-    <div class="wt-row"><b id="wt-label">{{ S.wt_title }}</b><span class="muted small" id="wt-state"></span></div>
+    <div class="wt-row"><b id="wt-label">{{ S.wt_title }}</b><span class="muted wt-leg" id="wt-state"></span></div>
     <button type="button" class="btn primary" id="wt-open">{{ S.wt_open }}</button>
   </div>
   <ol class="steps" id="steps" hidden>
@@ -230,11 +230,11 @@
   <div class="wt-top"><b id="wt-h">{{ S.wt_title }}</b><button type="button" class="live-x" id="wt-x" aria-label="{{ S.close }}">×</button></div>
   <div class="wt-body">
     <p class="wt-q">{{ S.wt_grid }}</p>
-    <p class="muted small">{{ S.wt_legend }}</p>
+    <p class="muted wt-leg">{{ S.wt_legend }}</p>
     <div class="wt-grid" id="wt-grid"></div>
     <p class="wt-q">{{ S.wt_hard }}</p>
     <div class="wt-hard" id="wt-hard"></div>
-    <p class="wt-q">{{ S.wt_reason }} <span class="muted small" id="wt-reason-need" hidden>{{ S.wt_reason_need }}</span></p>
+    <p class="wt-q">{{ S.wt_reason }} <span class="muted wt-leg" id="wt-reason-need" hidden>{{ S.wt_reason_need }}</span></p>
     <div class="chips" id="wt-reasons">{% for r in ("개념탈락", "계산실수", "정보이해부족", "시간부족") %}<button type="button" class="cbtn" data-r="{{ r }}" aria-pressed="false">{{ r }}</button>{% endfor %}</div>
     <label class="wt-q" for="wt-wish">{{ S.wt_wish }}</label>
     <input id="wt-wish" type="text" maxlength="100" autocomplete="off" placeholder="{{ S.wt_optional }}">
