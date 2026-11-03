@@ -23,7 +23,7 @@ def test_videos_json_optional_fields_and_thumbs(conn, klass, tmp_path):
     make_demo_thumbs(tmp_path / "thumbs", n=2)
     cfg = videos_cfg(tmp_path, [
         {"title": "A", "url": "https://example.com/1", "group": "고1 · 개념", "added": "2026-11-05",
-         "yt_id": "AMPdemo0001", "thumb": "thumbs/v1.jpg"},
+         "yt_id": "AMPdemo0001", "thumb": "thumbs/l1.jpg"},
         {"title": "B", "url": "https://example.com/2", "group": "고1 · 풀이", "added": "2026-10-01", "yt_id": "bad id"},
         {"title": "C", "url": "javascript:alert(1)", "added": "2026-11-01"},
     ])
