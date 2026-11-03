@@ -18,6 +18,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from . import lint as lintmod
 from . import watch as W
+from . import brand
 from . import models as M
 from .config import ROOT, Config, strings
 from .db import log_event, now_utc_iso
@@ -645,6 +646,8 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         "worker": cfg.worker,
         # F15.3: the VAPID public key (not secret) turns on the opt-in box; never in the taste build
         "vapid": "" if taste or not cfg.worker else str(cfg.extra.get("vapid_public") or ""),
+        # F15.4: the academy's mascot next to the wordmark (taste build: only with brand.mascot_public)
+        "mascot": "/b/mascot.png" if brand.source(cfg) and (not taste or brand.public(cfg)) else "",
     }
 
 
@@ -672,7 +675,8 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
     if taste:
         cfg = Config(worker_url="", pages_url="", teacher_token="", videos_path=cfg.videos_path,
                      assignments_path=cfg.assignments_path, moments_dir=cfg.moments_dir,
-                     board_poll_seconds=cfg.board_poll_seconds)
+                     board_poll_seconds=cfg.board_poll_seconds,
+                     extra={"brand": cfg.extra.get("brand")} if cfg.extra.get("brand") else {})
     ctx = build_context(conn, cfg, today, now, taste=taste, scrub=lintmod.text_scrubber(conn))
     e = env()
     if out.exists():
@@ -693,6 +697,9 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
         for v in ctx["videos"]:
             if v["thumb_src"]:
                 make_thumb(v["thumb_src"], out / "t" / f"{v['id']}.jpg", max_w=360 if v["kind"] == "short" else 480)
+    if ctx["mascot"]:                                              # F15.4
+        (out / "b").mkdir()
+        (out / "b" / "mascot.png").write_bytes(brand.png_bytes(brand.source(cfg)))
     from .moments import page_copy
     wanted = {m["src"]: m["image_key"] for s_ in ctx["students"] for st_ in s_["stories"] if st_["key"] == "moments"
               for m in st_["items"]}

@@ -330,6 +330,10 @@ One line each. "deferred" = not built in P0, on purpose.
 - **Service worker fix found on the way:** `/static/` is cache-first, and the cache name was fixed (`daybook-shell-v1`), so a phone kept an old app.js after a redeploy. The published sw.js now names its cache after a hash of app.js / app.css / sw.js, so every publish that changes them replaces the cache.
 - Tests: the RFC 8291 vector (byte for byte), the VAPID JWT verified with the public key, subscribe validation, a fake push service decrypting each message, quiet hours at 23:30 / 07:59 / 08:00 KST, the daily cap, 410, unsubscribe, retired links; pushes are in the budget test (20 subscriptions, one batched send, the cap).
 
+## F15.4: the mascot slot (2026-11-04)
+- `"brand": {"mascot": "brand/mascot.png", "mascot_public": false}` in daybook.json. `brand/` is gitignored: the academy's own image never enters the repo. At publish it is reduced to a ≤ 96 px PNG (transparency kept, ≤ 30 KB) at `/b/mascot.png` and shown small next to the wordmark on student and parent pages; the local board shows it inline. No file, nothing shown. The taste build shows it only with `mascot_public: true`.
+- The demo draws a neutral placeholder (a rounded square with a circle) into `brand/demo-mascot.png`; it is not a character and the demo config keeps it out of the taste build.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

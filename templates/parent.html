@@ -88,7 +88,7 @@
 <header class="room-top">
   <span class="av ring sm"><span>{{ me.initial }}</span></span>
   <div class="room-head">
-    <div class="room-title">{{ S.room_title | fmt(name=me.display_name) }}</div>
+    <div class="room-title">{% if mascot %}<img class="mascot" src="{{ mascot }}" alt="" width="22" height="22">{% endif %}{{ S.room_title | fmt(name=me.display_name) }}</div>
     <div class="room-sub">{{ S.room_sub }} · {{ me.class_name }}</div>
     {% if me.hours %}<div class="room-sub tnum" id="hours">{{ me.hours }}</div>{% endif %}
   </div>

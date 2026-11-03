@@ -106,6 +106,8 @@ def demo(obj: Ctx, out, force, no_publish):
     except demomod.DemoError as e:
         fail(str(e))
     demomod.write_demo_videos()
+    from . import brand
+    brand.write_placeholder(configmod.ROOT / "brand" / "demo-mascot.png")     # F15.4: a neutral shape, not a character
     click.echo(f"moments: {demomod.seed_moments(conn, obj.cfg)} synthetic class scenes")
     rep = importers.import_screeners(conn, configmod.ROOT / "demo" / "screeners")
     click.echo(f"screeners: {rep.imported} rows imported from {rep.files} rounds; unmatched: {len(rep.unmatched)}")

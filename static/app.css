@@ -530,3 +530,7 @@ tr.rc.skipped td:nth-child(2) { color: var(--err); }
 /* F15.3: 알림 받기 */
 .pushbox { margin: 10px 0; text-align: center; } .pushbox .push-note { font-size: 13px; margin: 4px 0 0; }
 .pushbox .push-btn[aria-pressed=true] { border-color: var(--ok); color: var(--ok); }
+
+/* F15.4: the mascot slot (the academy's own image; nothing without it) */
+.mascot { width: 24px; height: 24px; object-fit: contain; vertical-align: -6px; margin-right: 6px; border-radius: 6px; }
+.room-title .mascot { width: 22px; height: 22px; vertical-align: -5px; }

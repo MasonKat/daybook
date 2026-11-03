@@ -10,7 +10,7 @@
 {% block body %}
 <div class="app">
 <header class="sbar">
-  <span class="wordmark">{{ S.app_name }}</span>
+  <span class="wordmark">{% if mascot %}<img class="mascot" src="{{ mascot }}" alt="" width="24" height="24">{% endif %}{{ S.app_name }}</span>
   <span class="sdate" id="today-date">&nbsp;</span>
   <span class="av ring sm" title="{{ me.display_name }}"><span>{{ me.initial }}</span></span>
 </header>
