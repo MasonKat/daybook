@@ -45,15 +45,18 @@ def term_report(conn: sqlite3.Connection, cfg: Config, student_id: int, today: d
                       term=f"{start.isoformat()} ~ {(t_end or today).isoformat()}")
 
 
-def suggest_notes(conn: sqlite3.Connection, cfg: Config, cls: sqlite3.Row, day: date) -> list[tuple[str, str, str]]:
-    """[(slug, week, draft)] for active students of the class without a note for that week yet."""
+def suggest_notes(conn: sqlite3.Connection, cfg: Config, cls: sqlite3.Row, day: date,
+                  include_existing: bool = False) -> list[tuple[str, str, str]]:
+    """[(slug, week, draft)] for active students of the class without a note for that week yet
+    (with include_existing, for every active student: the Teacher tab prefills its fields with them)."""
     week = M.iso_week(day)
     ctx = generate.build_context(conn, cfg, day, M.kst_now())
     conn.rollback()
     by_id = {s["id"]: s for s in ctx["students"]}
     out = []
     for r in conn.execute("SELECT id, slug FROM students_public WHERE class_id = ? AND active = 1 ORDER BY id", (cls["id"],)):
-        if conn.execute("SELECT 1 FROM notes WHERE student_id = ? AND week = ?", (r["id"], week)).fetchone():
+        if not include_existing and conn.execute("SELECT 1 FROM notes WHERE student_id = ? AND week = ?",
+                                                 (r["id"], week)).fetchone():
             continue                      # the teacher already wrote one: skip
         s = by_id.get(r["id"])
         if not s:

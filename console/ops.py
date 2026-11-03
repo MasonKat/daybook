@@ -178,3 +178,28 @@ def cancel_class(conn: sqlite3.Connection, cls: sqlite3.Row, day: date, reason: 
     conn.execute("UPDATE sessions SET cancelled = ? WHERE id = ?", ((reason or "").strip() or None if reason is not None else None, sid))
     log_event(conn, "class_cancel" if reason is not None else "class_uncancel",
               {"class_id": cls["id"], "date": day.isoformat(), "reason": reason})
+
+
+def edit_student(conn: sqlite3.Connection, slug: str, display: str | None = None, new_slug: str | None = None,
+                 track: str | None = None, class_name: str | None = None, active: bool | None = None) -> set[str]:
+    """Shared by `daybook roster edit` and the Teacher tab. Returns the changed field names."""
+    from . import models as M
+    s = get_student(conn, slug)
+    fields: dict = {}
+    if display is not None:
+        if not display.strip():
+            raise OpError("display name cannot be empty")
+        fields["display_name"] = display.strip()
+    if new_slug is not None:
+        fields["slug"] = M.unique_slug(conn, new_slug)
+    if track is not None:
+        fields["track"] = track
+    if class_name is not None:
+        fields["class_id"] = get_class(conn, class_name)["id"]
+    if active is not None:
+        fields["active"] = 1 if active else 0
+    if not fields:
+        raise OpError("nothing to change")
+    conn.execute(f"UPDATE students SET {', '.join(k + ' = ?' for k in fields)} WHERE id = ?", (*fields.values(), s["id"]))
+    log_event(conn, "student_update", {"student_id": s["id"], "fields": sorted(fields)})
+    return set(fields)

@@ -487,6 +487,21 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     check(after > before && (await bp.textContent('#b-three')).includes(pick.display_name), `attitude 3 moved the class bar ${before}% -> ${after}% and lists the student under 오늘 3점`);
     check(await bp.evaluate(() => document.documentElement.scrollWidth) <= 390 && berrs.length === 0, 'board fits 390 px with 0 console errors');
     await shot(bp, 'board.png', { fullPage: true });
+
+    console.log('\n[6b] Teacher tab (F6): roster, notes, publish from the browser');
+    const tpage = await bctx.newPage();
+    const terr = [];
+    tpage.on('console', (m) => { if (m.type() === 'error') terr.push(m.text()); });
+    await tpage.goto(BOARD + '/teacher', { waitUntil: 'networkidle' });
+    check((await tpage.locator('#roster-rows tr').count()) >= 6, `roster lists the class (${await tpage.locator('#roster-rows tr').count()} students)`);
+    check((await tpage.locator('#notes-rows .nrow input').first().inputValue()).length > 0, 'notes are prefilled (note or data draft)');
+    check((await tpage.locator('#weekly-rows pre').count()) >= 6, 'weekly paste messages with copy buttons');
+    await tpage.click('#pub-do');
+    await tpage.waitForFunction(() => /lint passed|STOPPED/.test(document.getElementById('pub-out').textContent), null, { timeout: 30000 }).catch(() => {});
+    check(/lint passed/.test(await tpage.textContent('#pub-out')), `Publish button: ${(await tpage.textContent('#pub-out')).split('\n').filter(Boolean).join(' | ')}`);
+    check(terr.length === 0, `Teacher tab: 0 console errors (${terr.length})`);
+    await tpage.setViewportSize({ width: 1100, height: 900 });
+    await shot(tpage, 'teacher.png', { fullPage: false });
     await bctx.close();
 
     console.log('\n[7] taste build (F1): only 콩, no Worker, nothing stored');

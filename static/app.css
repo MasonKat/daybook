@@ -383,3 +383,23 @@ body[data-page="student"][data-taste] .app { height: calc(100dvh - 24px); }
 .mbox input[type=text] { width: 100%; min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: 15px var(--font); padding: 0 10px; }
 .mbox .row2 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .rxsum { font-size: 14px; }
+
+/* ---------- Teacher tab (F6, local only) */
+.teacher { max-width: 980px; }
+.tlink { color: #fff; text-decoration: underline; }
+.tnav { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 4px 0 8px; font-size: 14px; }
+.tnav a { color: var(--accent); }
+.ttable { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ttable th, .ttable td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.ttable input[type=text], .nrow input[type=text], .trow input[type=text], .trow input[type=date] { min-height: 36px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: 14px var(--font); padding: 0 8px; }
+.ttable input[type=text] { width: 9em; margin-right: 4px; }
+.btn.sm { min-height: 36px; padding: 0 10px; font-size: 13px; margin: 2px; }
+.nrow { display: grid; grid-template-columns: 6em 1fr auto auto; gap: 6px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.nrow input.draft { font-style: italic; color: var(--muted); }
+.trow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; font-size: 14px; }
+.tout { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-size: 12px; max-height: 320px; overflow: auto; margin: 6px 0; }
+.tout:empty { display: none; }
+.tout.ok { border-color: var(--ok); } .tout.bad { border-color: var(--err); }
+.tlist { margin: 4px 0; padding-left: 18px; font-size: 13px; }
+.wrow { display: flex; gap: 6px; align-items: flex-start; } .wrow .tout { flex: 1; }
+.tmsg { font-size: 13px; color: var(--muted); }

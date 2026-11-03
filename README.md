@@ -66,6 +66,7 @@ Then follow `HANDOFF.md` (classes, roster import, links).
 | in class (P2) | `daybook board 고1A` → open http://127.0.0.1:8787 | live ✓, attitude 1·2·3, class bar, "대신 제출" |
 | in class | `daybook moment add 고1A --photo board.jpg --text "…"` (or the board) | 오늘의 장면: EXIF stripped, ≤ 1080 px, ≤ 200 KB, asks the faces/names check |
 | in class | `daybook session start 고1A --at 18:00 [--set <set_id>]` | draws 오늘의 코드 for 출석 and sends it to the Worker; prints the handout QR URL `…/go/?set=<set_id>` (no token) |
+| Saturday, no terminal | `daybook board 고1A` → "선생님" (http://127.0.0.1:8787/teacher) | roster, notes (drafts prefilled), imports, 장면/휴강, 발행, 배포, weekly messages |
 | Saturday | `daybook pull` | new submissions from the Worker |
 | Saturday | `daybook import screeners <dir>` | the screener round snapshots → `tests` (unmatched rows are listed) |
 | Saturday | `daybook note <slug> 2026-W45 "한 줄"` | the parent page shows the latest note |

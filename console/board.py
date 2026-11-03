@@ -3,7 +3,10 @@
 GET  /              board page      GET  /api/state   live state (JSON)
 POST /api/attitude  {student_id, points}  -> attitude + events at once
 POST /api/submit-for {student_id}         -> teacher submission for today
+GET  /teacher       the Teacher tab (F6): roster, notes, imports, moments, 휴강, publish, deploy, weekly messages
+GET|POST /api/teacher/...  (see console/teacher.py; the same functions as the CLI)
 A background thread pulls the Worker every `board_poll_seconds` when it is configured.
+Only requests whose Host is 127.0.0.1/localhost on this port are served (no DNS-rebinding reads of the console).
 """
 from __future__ import annotations
 
@@ -121,6 +124,15 @@ class Board:
             "moments": conn.execute("SELECT COUNT(*) FROM moments WHERE session_id = ?", (self.session_id,)).fetchone()[0],
         }
 
+    deploy_runner = None   # tests replace the wrangler call
+
+    def teacher_page(self) -> str:
+        with self.conn() as conn:
+            cls = conn.execute("SELECT * FROM classes WHERE id = ?", (self.class_id,)).fetchone()
+        tpl = generate.env().get_template("teacher.html")
+        return tpl.render(S=self.S, page="teacher", cls=cls, day=self.day.isoformat(), week=M.iso_week(self.day),
+                          pages=bool(self.cfg.pages), worker=bool(self.cfg.worker))
+
     def page(self) -> str:
         with self.conn() as conn:
             st = self.state(conn)
@@ -170,8 +182,63 @@ def make_handler(board: Board):
         def _json(self, obj, code=200):
             self._send(code, json.dumps(obj, ensure_ascii=False).encode(), "application/json; charset=utf-8")
 
+        def _host_ok(self) -> bool:
+            port = self.server.server_address[1]
+            return self.headers.get("Host") in (f"127.0.0.1:{port}", f"localhost:{port}")
+
+        def _teacher_get(self, path: str, query: str):
+            from urllib.parse import parse_qs
+            from . import teacher as T
+            q = parse_qs(query)
+            with board.conn() as conn:
+                cls = conn.execute("SELECT * FROM classes WHERE id = ?", (board.class_id,)).fetchone()
+                day = date.fromisoformat(q["date"][0]) if q.get("date") else board.day
+                if path == "/api/teacher/roster":
+                    return self._json({"students": T.roster(conn, board.cfg, board.class_id)})
+                if path == "/api/teacher/notes":
+                    return self._json(T.notes(conn, board.cfg, cls, day))
+                if path == "/api/teacher/moments":
+                    return self._json({"moments": T.moments(conn, board.class_id),
+                                       "cancelled": [{"date": d.isoformat(), "reason": r}
+                                                     for d, r in sorted(M.cancelled_days(conn, board.class_id).items())]})
+                if path == "/api/teacher/weekly":
+                    return self._json({"messages": T.weekly(conn, board.cfg, cls, day)})
+            return self._send(404, b"not found", "text/plain")
+
+        def _teacher_post(self, body: dict):
+            from . import teacher as T
+            from .moments import MomentError
+            with board.lock, board.conn() as conn:
+                cls = conn.execute("SELECT * FROM classes WHERE id = ?", (board.class_id,)).fetchone()
+                try:
+                    if self.path == "/api/teacher/roster":
+                        st = conn.execute("SELECT class_id FROM students WHERE slug = ?", (str(body.get("slug", "")),)).fetchone()
+                        if not st or st["class_id"] != board.class_id:
+                            return self._json({"ok": False, "error": "unknown_student"}, 404)
+                        return self._json(T.roster_edit(conn, board.cfg, body))
+                    if self.path == "/api/teacher/note":
+                        return self._json(T.note_save(conn, body))
+                    if self.path == "/api/teacher/import":
+                        return self._json(T.import_files(conn, body))
+                    if self.path == "/api/teacher/cancel":
+                        return self._json(T.cancel(conn, cls, body))
+                    if self.path == "/api/teacher/publish":
+                        return self._json(T.publish(conn, board.cfg))
+                    if self.path == "/api/teacher/deploy":
+                        return self._json(T.deploy(board.cfg, runner=board.deploy_runner))
+                except (ops.OpError, T.TeacherError, MomentError, ValueError) as e:
+                    conn.rollback()
+                    return self._json({"ok": False, "error": str(e)}, 400)
+            return self._json({"ok": False, "error": "not_found"}, 404)
+
         def do_GET(self):
-            path = self.path.split("?")[0]
+            if not self._host_ok():
+                return self._send(403, b"forbidden", "text/plain")
+            path, _, query = self.path.partition("?")
+            if path.startswith("/api/teacher/"):
+                return self._teacher_get(path, query)
+            if path == "/teacher":
+                return self._send(200, board.teacher_page().encode(), "text/html; charset=utf-8")
             if path == "/":
                 self._send(200, board.page().encode(), "text/html; charset=utf-8")
             elif path == "/api/state":
@@ -188,6 +255,8 @@ def make_handler(board: Board):
                 self._send(404, b"not found", "text/plain")
 
         def do_POST(self):
+            if not self._host_ok():
+                return self._json({"ok": False, "error": "host"}, 403)
             # only same-origin requests from the board page (a page elsewhere must not write scores)
             origin = self.headers.get("Origin")
             if origin and origin != f"http://{self.headers.get('Host')}":
@@ -197,6 +266,8 @@ def make_handler(board: Board):
                 if n > 25 * 1024 * 1024:
                     return self._json({"ok": False, "error": "too_big"}, 413)
                 body = json.loads(self.rfile.read(n) or b"{}")
+                if self.path.startswith("/api/teacher/"):
+                    return self._teacher_post(body)
                 if self.path == "/api/moment":
                     from .moments import MomentError
                     with board.lock, board.conn() as conn:

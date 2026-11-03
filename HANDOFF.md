@@ -193,6 +193,11 @@ else "{M/D} 과제". The lint stops publish if a raw id (`Adaptive_…`, `round_
 
 ## 6. The teacher's Saturday (after the pilot starts Friday 11-06)
 
+Without a terminal (F6): start the board once (`.venv\Scripts\daybook.exe board 고1A`, or a desktop shortcut to it),
+open http://127.0.0.1:8787/teacher and use 가져오기 → 이번 주 한 줄 → 발행 → 배포 → 주간 메시지 복사. Set
+`"pages_project"` in daybook.json if the Pages project is not called `daybook`. The same steps in a terminal:
+
+
 ```bash
 .venv/bin/daybook pull
 ```

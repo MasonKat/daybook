@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block body %}
+<header class="top">
+  <span class="brand">{{ S.t_title }} · {{ cls.name }}</span>
+  <a class="who tlink" href="/">{{ S.t_back }}</a>
+</header>
+<main class="teacher">
+<nav class="tnav">
+  <a href="#t-roster">{{ S.t_roster }}</a><a href="#t-notes">{{ S.t_notes }}</a><a href="#t-import">{{ S.t_import }}</a>
+  <a href="#t-moments">{{ S.t_moments }}</a><a href="#t-publish">{{ S.t_publish }}</a><a href="#t-weekly">{{ S.t_weekly }}</a>
+</nav>
+
+<section class="card" id="t-roster">
+  <h2>{{ S.t_roster }}</h2>
+  {% if not pages %}<p class="muted">{{ S.t_no_pages }}</p>{% endif %}
+  <table class="ttable"><thead><tr><th>{{ S.t_name }}</th><th>{{ S.t_active }}</th><th>{{ S.t_links }}</th></tr></thead>
+    <tbody id="roster-rows"></tbody></table>
+  <p class="tmsg" id="roster-msg" aria-live="polite"></p>
+</section>
+
+<section class="card" id="t-notes">
+  <h2>{{ S.t_notes }} <span class="muted" id="notes-week">{{ week }}</span></h2>
+  <p class="muted">{{ S.t_notes_hint }}</p>
+  <div id="notes-rows"></div>
+</section>
+
+<section class="card" id="t-import">
+  <h2>{{ S.t_import }}</h2>
+  <div class="trow"><label>{{ S.t_import_screeners }} <input type="file" id="imp-screeners" accept=".json" multiple></label>
+    <button type="button" class="btn ghost" data-import="screeners">{{ S.t_do_import }}</button></div>
+  <div class="trow"><label>{{ S.t_import_tests }} <input type="file" id="imp-tests" accept=".csv"></label>
+    <button type="button" class="btn ghost" data-import="tests">{{ S.t_do_import }}</button></div>
+  <pre class="tout" id="import-out"></pre>
+</section>
+
+<section class="card" id="t-moments">
+  <h2>{{ S.t_moments }}</h2>
+  <div class="mbox">
+    <input id="tm-file" type="file" accept="image/*">
+    <input id="tm-text" type="text" maxlength="60" placeholder="{{ S.board_moment_text }}">
+    <label class="gate"><input id="tm-gate" type="checkbox"> <span>{{ S.board_moment_gate }}</span></label>
+    <button type="button" class="btn primary" id="tm-post">{{ S.board_moment }}</button> <span class="muted" id="tm-msg"></span>
+  </div>
+  <ul class="tlist" id="moment-list"></ul>
+  <h3>{{ S.t_cancel }}</h3>
+  <div class="trow"><input type="date" id="cx-date" value="{{ day }}"><input type="text" id="cx-reason" value="휴강" maxlength="20">
+    <button type="button" class="btn ghost" id="cx-do">{{ S.t_cancel_do }}</button>
+    <button type="button" class="btn ghost" id="cx-undo">{{ S.t_cancel_undo }}</button></div>
+  <ul class="tlist" id="cancel-list"></ul>
+</section>
+
+<section class="card" id="t-publish">
+  <h2>{{ S.t_publish }}</h2>
+  <p class="muted">{{ S.t_publish_hint }}</p>
+  <div class="trow"><button type="button" class="btn primary" id="pub-do">{{ S.t_publish_do }}</button>
+    <button type="button" class="btn ghost" id="dep-do">{{ S.t_deploy_do }}</button></div>
+  <pre class="tout" id="pub-out"></pre>
+</section>
+
+<section class="card" id="t-weekly">
+  <h2>{{ S.t_weekly }}</h2>
+  <div id="weekly-rows"></div>
+</section>
+</main>
+<script type="application/json" id="data">{{ {"S": {"saved": S.t_saved, "copy": S.t_copy, "copied": S.t_copied, "student": S.t_student_link, "parent": S.t_parent_link, "save": S.t_save, "need": S.board_moment_need, "running": S.t_running, "confirm_deploy": S.t_confirm_deploy}} | tojson }}</script>
+<script src="/static/teacher.js" defer></script>
+{% endblock %}

@@ -291,25 +291,10 @@ def roster_import(obj: Ctx, csv_path, map_path, class_name):
 @click.pass_obj
 def roster_edit(obj: Ctx, slug, display, new_slug, track, class_name, active):
     conn = obj.conn
-    s = ops.get_student(conn, slug)
-    fields = {}
-    if display is not None:
-        fields["display_name"] = display.strip()
-    if new_slug is not None:
-        fields["slug"] = M.unique_slug(conn, new_slug)
-    if track is not None:
-        fields["track"] = track
-    if class_name is not None:
-        fields["class_id"] = ops.get_class(conn, class_name)["id"]
-    if active is not None:
-        fields["active"] = 1 if active else 0
-    if not fields:
-        fail("nothing to change")
-    conn.execute(f"UPDATE students SET {', '.join(k + ' = ?' for k in fields)} WHERE id = ?", (*fields.values(), s["id"]))
-    dbmod.log_event(conn, "student_update", {"student_id": s["id"], "fields": sorted(fields)})
+    changed = ops.edit_student(conn, slug, display, new_slug, track, class_name, active)
     conn.commit()
     click.echo("ok")
-    if {"active", "class_id"} & set(fields):
+    if {"active", "class_id"} & changed:
         _send_links(obj, conn)
 
 

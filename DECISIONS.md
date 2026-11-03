@@ -170,6 +170,12 @@ One line each. "deferred" = not built in P0, on purpose.
 ## F0 (2026-11-03)
 - Checks never write tracked files: the e2e takes screenshots only with `--screenshots` (`make screenshots`, `scripts\check.ps1 -Screenshots`), which reseeds the demo first. A normal `make demo` / `demo.ps1` leaves `git status` clean, so the teacher's `git pull` always merges.
 
+## F6: Teacher tab (2026-11-03)
+- The local board app gains `/teacher` (link "선생님" on the board): roster (display name, 재원 toggle, copy student/parent link), this week's one-line notes prefilled with the note or the F5.5 draft, screener-round / tests-CSV import (file picker → the same importers), moments (with the faces/names gate) and 휴강, **발행** (pull when a Worker is configured → publish → lint → send the student links) and **배포** (runs the teacher's own `npx wrangler pages deploy ../dist --project-name <pages_project, default daybook> --branch main` and shows the output), and the weekly paste messages with copy buttons.
+- Everything calls the CLI's functions (`ops.edit_student` is now shared with `roster edit`; `suggest_notes(include_existing=True)` prefills every row). One pytest per action through the HTTP layer.
+- The board server now answers only when the Host header is 127.0.0.1/localhost on its port (blocks DNS-rebinding reads of the console) and still refuses cross-origin writes. `teacher.js` is never copied into `dist/`.
+- The board is per class (`daybook board 고1A`); the Teacher tab works on that class, and 발행 publishes everything.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).
