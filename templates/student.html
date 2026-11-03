@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block head %}
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icon-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="{{ S.app_name }}">
+{% endblock %}
+{% block body %}
+<header class="top">
+  <span class="brand">{{ S.app_name }}</span>
+  <span class="who">{{ me.display_name }} · {{ me.class_name }}</span>
+</header>
+<nav class="tabs" role="tablist">
+  <button type="button" role="tab" id="t-videos" data-tab="videos" aria-selected="false">{{ S.tab_videos }}</button>
+  <button type="button" role="tab" id="t-today" data-tab="today" aria-selected="true">{{ S.tab_today }}</button>
+  <button type="button" role="tab" id="t-me" data-tab="me" aria-selected="false">{{ S.tab_me }}</button>
+</nav>
+<main>
+<section id="tab-videos" class="panel" role="tabpanel" hidden>
+  {% for g in videos %}
+  {% if g.group %}<h2 class="sub">{{ g.group }}</h2>{% endif %}
+  <ul class="videos">
+    {% for v in g["items"] %}
+    <li><a href="{{ v.url }}" target="_blank" rel="noopener noreferrer">{{ v.title }}</a>{% if v.added %}<span class="muted">{{ v.added }}</span>{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">{{ S.videos_empty }}</p>
+  {% endfor %}
+</section>
+
+<section id="tab-today" class="panel" role="tabpanel">
+  <p class="date" id="today-date">&nbsp;</p>
+  <p class="chip" id="today-set" hidden></p>
+  <input id="photo" class="vh" type="file" accept="image/*" capture="environment">
+  <div id="st-idle" class="state">
+    <label class="big" for="photo"><span class="cam" aria-hidden="true">📷</span>{{ S.submit_cta }}</label>
+    <p class="muted center">{{ S.today_hint }}</p>
+  </div>
+  <div id="st-busy" class="state" hidden>
+    <img id="preview" alt="" width="160" height="160">
+    <p class="center">{{ S.uploading }}</p>
+  </div>
+  <div id="st-done" class="state done" hidden>
+    <div class="check" aria-hidden="true">✓</div>
+    <h1 class="done-title">{{ S.done_title }}</h1>
+    <p class="note-ok" id="d-replaced" hidden>{{ S.replaced }}</p>
+    <ul class="stats">
+      <li id="d-streak"></li>
+      <li id="d-class"></li>
+      <li id="d-reward"></li>
+    </ul>
+    <label class="small" for="photo">{{ S.retake }}</label>
+  </div>
+  <div id="st-err" class="state" hidden>
+    <p class="err" id="err-msg">{{ S.upload_error }}</p>
+    <label class="big" for="photo">{{ S.retry }}</label>
+  </div>
+</section>
+
+<section id="tab-me" class="panel" role="tabpanel" hidden>
+  <h2 class="sub">{{ S.me_week }}</h2>
+  <ol class="dots" id="me-dots">
+    {% for d in me.week %}
+    <li data-date="{{ d.date }}" class="{{ 'on' if d.done }}{{ ' cls' if d.class_day }}{{ ' fut' if d.future }}"><span class="wd">{{ d.wd }}</span><span class="dot">{{ '✓' if d.done else '·' }}</span></li>
+    {% endfor %}
+  </ol>
+  <p class="muted" id="me-streak">{{ S.streak_label | fmt(n=me.streak) }}</p>
+  <h2 class="sub">{{ S.me_points }}</h2>
+  <p class="big-num">{{ S.points | fmt(n=me.cumulative) }}</p>
+</section>
+</main>
+<script type="application/json" id="data">{{ me.js | safe }}</script>
+<script src="/static/app.js" defer></script>
+{% endblock %}

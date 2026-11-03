@@ -1,0 +1,13 @@
+[{{ S.app_name }} 주간 기록] {{ name }} · {{ week_label }}
+- 과제 제출: {{ n_sub }}일{% if n_class %} (수업 {{ n_class }}회){% endif %}{% if streak %}, 연속 {{ streak }}일{% endif %}
+
+- 태도 점수: 이번 주 {{ week_sum }}점, 누적 {{ cumulative }}점
+{% if trend %}
+- 주간 테스트: {{ S.parent_eff }} {{ trend_eff }}, {{ S.parent_reach }} {{ trend_reach }}
+{% endif %}
+{% if note %}
+- 선생님 한 줄: {{ note }}
+{% endif %}
+{% if link %}
+자세히 보기: {{ link }}
+{% endif %}

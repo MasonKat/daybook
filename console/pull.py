@@ -1,0 +1,121 @@
+"""`daybook pull`: GET /submissions since the last pull -> submissions (+ events). Photos stay in the Worker."""
+from __future__ import annotations
+
+import json
+import sqlite3
+import urllib.error
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Callable
+
+from .config import Config
+from .db import last_event, log_event
+
+Fetch = Callable[[str], bytes]   # url path+query -> response body
+MARGIN = timedelta(minutes=5)    # KV listing is eventually consistent; re-read a small overlap (upserts are idempotent)
+
+
+class PullError(RuntimeError):
+    pass
+
+
+def http_fetch(cfg: Config) -> Fetch:
+    if not cfg.worker or not cfg.teacher_token:
+        raise PullError("worker_url and teacher_token must be set (daybook.json or DAYBOOK_WORKER_URL / "
+                        "DAYBOOK_TEACHER_TOKEN)")
+
+    def fetch(path: str) -> bytes:
+        req = urllib.request.Request(cfg.worker + path, headers={"X-Teacher-Token": cfg.teacher_token,
+                                                                 "User-Agent": "daybook-console"})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return r.read()
+        except urllib.error.HTTPError as e:
+            raise PullError(f"Worker answered {e.code} for {path.split('?')[0]}") from e
+        except urllib.error.URLError as e:
+            raise PullError(f"cannot reach the Worker: {e.reason}") from e
+
+    return fetch
+
+
+@dataclass
+class PullReport:
+    fetched: int = 0
+    new: int = 0
+    updated: int = 0
+    unknown_tokens: int = 0
+    photos: list[str] = field(default_factory=list)
+
+
+def _token_map(conn: sqlite3.Connection) -> dict[str, int]:
+    m = {}
+    # tokens retired by `roster rotate-tokens` still map to their student
+    for r in conn.execute("SELECT payload_json FROM events WHERE type = 'rotate_tokens' ORDER BY id"):
+        p = json.loads(r["payload_json"])
+        if p.get("old_student_token"):
+            m[p["old_student_token"]] = p["student_id"]
+    for r in conn.execute("SELECT id, student_token FROM students"):
+        m[r["student_token"]] = r["id"]
+    return m
+
+
+def apply_items(conn: sqlite3.Connection, items: list[dict]) -> PullReport:
+    rep = PullReport(fetched=len(items))
+    tokens = _token_map(conn)
+    for it in items:
+        sid = tokens.get(it.get("token", ""))
+        if sid is None:
+            rep.unknown_tokens += 1
+            continue
+        day, ts, key = it["day"], it["ts"], it.get("key")
+        cls = conn.execute("SELECT class_id FROM students WHERE id = ?", (sid,)).fetchone()
+        sess = conn.execute("SELECT id FROM sessions WHERE class_id = ? AND date = ?",
+                            (cls["class_id"], day)).fetchone() if cls else None
+        cur = conn.execute("SELECT * FROM submissions WHERE student_id = ? AND day = ?", (sid, day)).fetchone()
+        payload = {"student_id": sid, "day": day, "ts": ts, "set": it.get("set", ""), "n": it.get("n", 1)}
+        if cur is None:
+            conn.execute(
+                """INSERT INTO submissions (student_id, session_id, day, ts, photo_key, source, status)
+                   VALUES (?, ?, ?, ?, ?, 'phone', 'received')""",
+                (sid, sess["id"] if sess else None, day, ts, key),
+            )
+            log_event(conn, "submission", payload)
+            rep.new += 1
+        elif cur["photo_key"] != key or cur["source"] != "phone" or cur["status"] == "deleted":
+            conn.execute(
+                "UPDATE submissions SET photo_key = ?, source = 'phone', status = 'received', ts = MIN(ts, ?), "
+                "session_id = COALESCE(session_id, ?) WHERE id = ?",
+                (key, ts, sess["id"] if sess else None, cur["id"]),
+            )
+            log_event(conn, "submission_update", payload)
+            rep.updated += 1
+    return rep
+
+
+def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None = None) -> PullReport:
+    last = last_event(conn, "pull") or {}
+    since = last.get("next_since", "")
+    body = json.loads(fetch("/submissions" + (f"?since={urllib.parse.quote(since)}" if since else "")))
+    rep = apply_items(conn, body.get("items", []))
+    now = datetime.fromisoformat(body.get("now", datetime.now(timezone.utc).isoformat()).replace("Z", "+00:00"))
+    next_since = (now - MARGIN).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    if photos_dir:
+        out = Path(photos_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        for it in body.get("items", []):
+            key = it.get("key")
+            if not key:
+                continue
+            target = out / (key.replace("photo:", "").replace(":", "_").replace("/", "_") + ("" if "." in key else ".jpg"))
+            try:
+                target.write_bytes(fetch("/photo?key=" + urllib.parse.quote(key, safe="")))
+                rep.photos.append(str(target))
+            except PullError:
+                pass  # expired (7-day retention) or missing
+    log_event(conn, "pull", {"since": since, "next_since": next_since, "fetched": rep.fetched, "new": rep.new,
+                             "updated": rep.updated, "unknown_tokens": rep.unknown_tokens})
+    conn.commit()
+    return rep

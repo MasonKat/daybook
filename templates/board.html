@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block body %}
+<header class="top">
+  <span class="brand">{{ S.board_title }} · {{ cls.name }}</span>
+  <span class="who" id="b-poll">{{ S.board_poll_on if poll else S.board_poll_off }}</span>
+</header>
+<main class="board">
+<section class="card">
+  <div class="bar" role="img" aria-label="{{ S.class_bar }}">
+    <div class="fill" id="b-fill" style="width: {{ '%.1f' % reward.pct }}%"></div>
+    {% for m in reward.milestone_pcts() %}<span class="ms" style="left: {{ '%.1f' % m }}%"></span>{% endfor %}
+  </div>
+  <p class="muted" id="b-togo">{{ S.reward_to_go | fmt(label=reward.label, n=reward.to_go) }}</p>
+</section>
+<ul class="roster" id="roster">
+  {% for s in students %}
+  <li class="row{{ ' on' if s.done }}" data-id="{{ s.id }}">
+    <span class="nm">{{ s.display_name }}</span>
+    <span class="sub" title="{{ S.board_submitted }}">{{ ('✓ ' ~ s.time) if s.done else '' }}</span>
+    <span class="btns">
+      {% for p in (1, 2, 3) %}<button type="button" class="pt{{ ' sel' if s.points == p }}" data-p="{{ p }}">{{ p }}</button>{% endfor %}
+    </span>
+    <button type="button" class="subfor"{{ ' hidden' if s.done }}>{{ S.board_sub_for }}</button>
+  </li>
+  {% endfor %}
+</ul>
+<section class="card">
+  <h2>{{ S.board_three }}</h2>
+  <p id="b-three">{{ three|join(', ') if three else S.board_none }}</p>
+</section>
+</main>
+<script type="application/json" id="data">{{ js | safe }}</script>
+<script src="/static/app.js" defer></script>
+{% endblock %}

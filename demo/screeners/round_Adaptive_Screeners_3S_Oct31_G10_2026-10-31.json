@@ -1,0 +1,176 @@
+{
+ "set_id": "Adaptive_Screeners_3S_Oct31_G10",
+ "date": "2026-10-31",
+ "n_students": 13,
+ "n_quizzes": 12,
+ "set_pressure_index": 0.69,
+ "concept_difficulty": 0.48,
+ "top_challenging": [
+  "Q4",
+  "Q1",
+  "Q5"
+ ],
+ "reason_distribution": {
+  "시간 부족": 0.4,
+  "개념 혼동": 0.35,
+  "계산 실수": 0.25
+ },
+ "students": [
+  {
+   "student": "S901",
+   "name": "한가람",
+   "correct": 7,
+   "wrong": 4,
+   "blank": 1,
+   "blank_rate": 0.083,
+   "commitment": 0.9,
+   "reach_ceiling": 0.473,
+   "archetype": "안정형",
+   "top_reason": "계산 실수"
+  },
+  {
+   "student": "윤도담",
+   "name": "윤도담",
+   "correct": 4,
+   "wrong": 5,
+   "blank": 3,
+   "blank_rate": 0.25,
+   "commitment": 0.68,
+   "reach_ceiling": 0.538,
+   "archetype": "도전형",
+   "top_reason": "시간 부족"
+  },
+  {
+   "student": "S903",
+   "name": "서하늘",
+   "correct": 4,
+   "wrong": 7,
+   "blank": 1,
+   "blank_rate": 0.083,
+   "commitment": 0.85,
+   "reach_ceiling": 0.464,
+   "archetype": "안정형",
+   "top_reason": "개념 혼동"
+  },
+  {
+   "student": "S904",
+   "name": "임새벽",
+   "correct": 5,
+   "wrong": 5,
+   "blank": 2,
+   "blank_rate": 0.167,
+   "commitment": 0.98,
+   "reach_ceiling": 0.311,
+   "archetype": "안정형",
+   "top_reason": "시간 부족"
+  },
+  {
+   "student": "S905",
+   "name": "차온유",
+   "correct": 5,
+   "wrong": 6,
+   "blank": 1,
+   "blank_rate": 0.083,
+   "commitment": 0.67,
+   "reach_ceiling": 0.602,
+   "archetype": "안정형",
+   "top_reason": "계산 실수"
+  },
+  {
+   "student": "S906",
+   "name": "노별찬",
+   "correct": 8,
+   "wrong": 4,
+   "blank": 0,
+   "blank_rate": 0.0,
+   "commitment": 0.74,
+   "reach_ceiling": 0.722,
+   "archetype": "신중형",
+   "top_reason": "개념 혼동"
+  },
+  {
+   "student": "S907",
+   "name": "류이든",
+   "correct": 10,
+   "wrong": 2,
+   "blank": 0,
+   "blank_rate": 0.0,
+   "commitment": 0.95,
+   "reach_ceiling": 0.615,
+   "archetype": "신중형",
+   "top_reason": "시간 부족"
+  },
+  {
+   "student": "S908",
+   "name": "문가온",
+   "correct": 4,
+   "wrong": 6,
+   "blank": 2,
+   "blank_rate": 0.167,
+   "commitment": 0.54,
+   "reach_ceiling": 0.649,
+   "archetype": "신중형",
+   "top_reason": "개념 혼동"
+  },
+  {
+   "student": "S909",
+   "name": "방나래",
+   "correct": 6,
+   "wrong": 6,
+   "blank": 0,
+   "blank_rate": 0.0,
+   "commitment": 0.86,
+   "reach_ceiling": 0.38,
+   "archetype": "도전형",
+   "top_reason": "시간 부족"
+  },
+  {
+   "student": "S910",
+   "name": "탁보미",
+   "correct": 7,
+   "wrong": 2,
+   "blank": 3,
+   "blank_rate": 0.25,
+   "commitment": 0.9,
+   "reach_ceiling": 0.46,
+   "archetype": "도전형",
+   "top_reason": "계산 실수"
+  },
+  {
+   "student": "S911",
+   "name": "피솔빈",
+   "correct": 7,
+   "wrong": 3,
+   "blank": 2,
+   "blank_rate": 0.167,
+   "commitment": 0.58,
+   "reach_ceiling": 0.545,
+   "archetype": "신중형",
+   "top_reason": "시간 부족"
+  },
+  {
+   "student": "S912",
+   "name": "엄라온",
+   "correct": 5,
+   "wrong": 7,
+   "blank": 0,
+   "blank_rate": 0.0,
+   "commitment": 0.76,
+   "reach_ceiling": 0.336,
+   "archetype": "도전형",
+   "top_reason": "개념 혼동"
+  },
+  {
+   "student": "S999",
+   "name": "가상전학",
+   "correct": 6,
+   "wrong": 4,
+   "blank": 2,
+   "blank_rate": 0.167,
+   "commitment": 0.7,
+   "reach_ceiling": 0.5,
+   "archetype": "안정형",
+   "top_reason": "시간 부족"
+  }
+ ]
+}

@@ -1,0 +1,26 @@
+# DAYBOOK Worker. Deploy: see README "Teacher deploy steps".
+name = "daybook-worker"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+# The Cloudflare Pages origin of the static site (no trailing slash). CORS allows only this origin.
+ALLOWED_ORIGIN = "https://daybook.pages.dev"
+# Photo store: "kv" (default, free, no payment method) or "r2" (needs the [[r2_buckets]] block below).
+PHOTO_STORE = "kv"
+# Retention: photos expire after 7 days (KV expirationTtl; for R2 use the lifecycle rule in the README).
+PHOTO_TTL_DAYS = "7"
+# Submission records (token, day, ts; no photo) live 14 days so a weekly `daybook pull` never misses one.
+RECORD_TTL_DAYS = "14"
+RATE_PER_HOUR = "10"
+
+# Secret (not in this file): npx wrangler secret put TEACHER_TOKEN
+
+[[kv_namespaces]]
+binding = "SUBMISSIONS"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"   # from: npx wrangler kv namespace create SUBMISSIONS
+
+# Optional R2 photo store (requires a payment method on the Cloudflare account):
+# [[r2_buckets]]
+# binding = "PHOTOS"
+# bucket_name = "daybook-photos"
