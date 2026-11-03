@@ -23,6 +23,8 @@ def test_reseed_twice_with_every_table_filled(conn):
     conn.execute("INSERT INTO class_bonus (class_id, session_id, points, source, ref, ts) VALUES (?, ?, 5, 'live', 'x', 't')", (cls["id"], sess))
     conn.execute("INSERT INTO effort (student_id, set_id, attempted, correct, source, ts) VALUES (?, 's', 3, 2, 'live', 't')", (sid,))
     conn.execute("INSERT INTO moments (class_id, session_id, ts, text, image_key) VALUES (?, ?, 't', '장면', 'x.jpg')", (cls["id"], sess))
+    conn.execute("INSERT INTO settings (key, value, ts) VALUES ('practice_mode', 'manitoba', 't')")
+    conn.execute("INSERT INTO meetings (student_id, day, kind, ts) VALUES (?, '2026-11-05', 'slc', 't')", (sid,))
     conn.execute("INSERT INTO snoozes (student_id, rule, until, ts) VALUES (?, 'all', '2026-11-13', 't')", (sid,))
     conn.commit()
     tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")]
