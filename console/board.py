@@ -329,7 +329,13 @@ def make_handler(board: Board):
                     if self.path == "/api/teacher/publish":
                         return self._json(T.publish(conn, board.cfg))
                     if self.path == "/api/teacher/deploy":
-                        return self._json(T.deploy(board.cfg, runner=board.deploy_runner))
+                        res = T.deploy(board.cfg, runner=board.deploy_runner)
+                        if res.get("ok"):                     # G1: doctor shows the last deploy
+                            dbmod.log_event(conn, "deploy", {"project": board.cfg.extra.get("pages_project") or "daybook"})
+                            conn.commit()
+                        return self._json(res)
+                    if self.path == "/api/teacher/doctor":
+                        return self._json(T.doctor(conn, board.cfg, board.db_path))
                     if self.path == "/api/teacher/contact":
                         return self._json(T.contact_log(conn, body))
                     if self.path == "/api/teacher/snooze":

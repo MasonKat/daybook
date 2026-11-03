@@ -180,3 +180,17 @@ test('KV is used for photos only: no list operation anywhere', async () => {
   await studentGet(env, `/moments?t=${TOK}`);
   assert.equal(env.SUBMISSIONS.ops.list, 0);
 });
+
+test('G1: /health tells the version and whether D1 answers; /tokmap-info gives a count and a hash, never tokens', async () => {
+  const env = await ready();
+  const h = await call(env, new Request('https://w.example/health'));
+  assert.equal(h.body.ok, true); assert.equal(h.body.d1, true); assert.ok(h.body.version >= 6);
+  assert.equal((await call(env, new Request('https://w.example/tokmap-info'))).status, 401);
+  const info = await teacherGet(env, '/tokmap-info');
+  assert.equal(info.body.n, Object.keys(ALL).length);
+  assert.match(info.body.hash, /^[0-9a-f]{16}$/);
+  assert.ok(!JSON.stringify(info.body).includes(TOK));
+  const { createHash } = await import('node:crypto');
+  const text = Object.entries(ALL).sort(([a], [b]) => (a < b ? -1 : 1)).map(([t, c]) => `${t}:${c}`).join('\n');
+  assert.equal(info.body.hash, createHash('sha256').update(text).digest('hex').slice(0, 16));   // the console computes the same
+});

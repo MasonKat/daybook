@@ -481,5 +481,24 @@
   };
   loadRounds();
 
+  /* ------------------------------------------------------------ G1: 점검 (doctor) + G2: 백업 */
+  $('dr-run').onclick = function () {
+    $('dr-msg').textContent = S.running;
+    api('/api/teacher/doctor', {}).then(function (j) {
+      var ul = $('dr-lines'); ul.innerHTML = '';
+      j.lines.forEach(function (x) {
+        var li = el('li', { 'class': 'dl ' + ({ '✓': 'ok', '⚠': 'warn', '✗': 'bad' }[x.status] || '') });
+        li.appendChild(el('b', {}, x.status + ' ')); li.appendChild(document.createTextNode(x.label + (x.detail ? ' — ' + x.detail : '')));
+        if (x.fix && x.status !== '✓') li.appendChild(el('div', { 'class': 'muted fix' }, '→ ' + x.fix));
+        ul.appendChild(li);
+      });
+      $('dr-msg').textContent = j.ok ? '✓' : '✗';
+    });
+  };
+  $('bk-run').onclick = function () {
+    $('dr-msg').textContent = S.running;
+    api('/api/teacher/backup', {}).then(function (j) { $('dr-msg').textContent = j.ok ? j.message : (j.error || ''); });
+  };
+
   loadRoster(); loadNotes(); loadMoments(); loadWeekly();
 })();

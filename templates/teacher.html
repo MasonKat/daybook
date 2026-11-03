@@ -6,11 +6,19 @@
 </header>
 <main class="teacher">
 <nav class="tnav">
-  <a href="#t-need">{{ S.c_need }}</a><a href="#t-plan">{{ S.c_plan }}</a><a href="#t-status">{{ S.c_status }}</a>
+  <a href="#t-doctor">{{ S.g_doctor }}</a><a href="#t-need">{{ S.c_need }}</a><a href="#t-plan">{{ S.c_plan }}</a><a href="#t-status">{{ S.c_status }}</a>
   <a href="#t-good">{{ S.c_good }}</a><a href="#t-rounds">{{ S.r_title }}</a>
   <a href="#t-roster">{{ S.t_roster }}</a><a href="#t-notes">{{ S.t_notes }}</a><a href="#t-import">{{ S.t_import }}</a>
   <a href="#t-moments">{{ S.t_moments }}</a><a href="#t-publish">{{ S.t_publish }}</a><a href="#t-weekly">{{ S.t_weekly }}</a>
 </nav>
+
+<section class="card" id="t-doctor">
+  <h2>{{ S.g_doctor }}</h2>
+  <p class="muted">{{ S.g_doctor_hint }}</p>
+  <div class="trow"><button type="button" class="btn primary sm" id="dr-run">{{ S.g_doctor_run }}</button>
+    <button type="button" class="btn ghost sm" id="bk-run">{{ S.g_backup_run }}</button> <span class="muted" id="dr-msg"></span></div>
+  <ul class="tlist doctor" id="dr-lines"></ul>
+</section>
 
 <section class="card" id="t-need">
   <h2>{{ S.c_need }}</h2>

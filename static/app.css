@@ -516,3 +516,8 @@ tr.rc.skipped td:nth-child(2) { color: var(--err); }
 .rchips .chip { margin: 2px; }
 .rvids { list-style: none; padding: 0; margin: 6px 0; } .rvids li { margin: 6px 0; }
 .rline.insight { margin-top: 6px; }
+
+/* G1: 점검 */
+.doctor { list-style: none; padding-left: 0; } .doctor .dl { padding: 3px 0; border-bottom: 1px solid var(--line); }
+.doctor .dl.ok b { color: var(--ok); } .doctor .dl.warn b { color: var(--adjust); } .doctor .dl.bad b { color: var(--err); }
+.doctor .fix { margin-left: 18px; font-size: 12px; }

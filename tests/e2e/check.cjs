@@ -679,6 +679,12 @@ print(c.execute("SELECT COUNT(*), SUM(correct) FROM effort WHERE source = 'live'
     const terr = [];
     tpage.on('console', (m) => { if (m.type() === 'error') terr.push(m.text()); });
     await tpage.goto(BOARD + '/teacher', { waitUntil: 'networkidle' });
+    // G1: 점검 runs the doctor against the local dev Worker
+    await tpage.click('#dr-run');
+    await tpage.waitForSelector('#dr-lines li', { timeout: 15000 }).catch(() => {});
+    const drText = await tpage.textContent('#dr-lines');
+    check(/✓ Worker \/health/.test(drText) && /✓ Worker D1/.test(drText) && /✓ database integrity/.test(drText) && /student links on the Worker/.test(drText),
+      `점검: ${await tpage.locator('#dr-lines li').count()} lines, Worker /health and D1 ✓, integrity ✓`);
     check((await tpage.locator('#roster-rows tr').count()) === 22, `roster lists every class (${await tpage.locator('#roster-rows tr').count()} students)`);
     // F11: add a student from the tab, links + messages to copy; search and the class filter
     await tpage.fill('#sa-full', '도하윤');

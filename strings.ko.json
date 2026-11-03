@@ -357,6 +357,10 @@
   "review_videos": "추천 영상",
   "review_link": "추천 영상 보기",
   "t_import_insights": "분석 결과 (insights.json)",
+  "g_doctor": "점검",
+  "g_doctor_hint": "수업 전과 발행 전에 한 번 눌러요. ✗가 없으면 시작해도 돼요.",
+  "g_doctor_run": "점검",
+  "g_backup_run": "백업",
   "parent_msg": {
     "_note": "Parent-facing drafts (F13.6): warm and formal, no emoji, never playful. reason_* lines are for the teacher only.",
     "greeting": "안녕하세요, {g}. AMP 수학입니다.",

@@ -124,3 +124,12 @@ def test_roster_csv_preview_then_import(tserver, conn, klass):  # noqa: F811
     assert conn.execute("SELECT parent_phone FROM students WHERE ext_id = 'S901'").fetchone()[0] == "010-1111-2222"
     assert sent[-1][0] == "/tokmap"
     assert call(url + "/api/teacher/roster-import", {"files": [{"name": "x.txt", "data": f[0]["data"]}]})[0] == 400
+
+
+def test_doctor_button(tserver):  # noqa: F811
+    """G1: the Teacher tab's 점검 runs the same checks as `daybook doctor`."""
+    url, b, sent = tserver
+    code, j = call(url + "/api/teacher/doctor", {})
+    labels = [x["label"] for x in j["lines"]]
+    assert code == 200 and "database integrity" in labels and "dist/ no-PII lint" in labels
+    assert all(x["status"] in ("✓", "⚠", "✗") for x in j["lines"]) and j["ok"] in (True, False)

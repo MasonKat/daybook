@@ -19,6 +19,7 @@ class Config:
     moments_dir: str = "moments"                  # local store of 오늘의 장면 images (gitignored)
     board_poll_seconds: int = 60
     extra: dict = field(default_factory=dict)
+    path: str = ""               # G1: the daybook.json this came from ("" = none found)
 
     @property
     def worker(self) -> str:
@@ -43,6 +44,7 @@ def load(path: str | Path | None = None) -> Config:
         moments_dir=data.get("moments_dir", "moments"),
         board_poll_seconds=int(data.get("board_poll_seconds", 60)),
         extra={k: v for k, v in data.items()},
+        path=str(p.resolve()) if p.exists() else "",
     )
     cfg.worker_url = os.environ.get("DAYBOOK_WORKER_URL", cfg.worker_url)
     cfg.pages_url = os.environ.get("DAYBOOK_PAGES_URL", cfg.pages_url)

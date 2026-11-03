@@ -406,3 +406,11 @@ def roster_preview(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
     if body.get("write") and (rep.added or rep.updated):
         out["message"] = push_tokmap(conn, cfg)
     return out
+
+
+# ---------------------------------------------------------------- G1: 점검
+
+def doctor(conn: sqlite3.Connection, cfg: Config, db_path: str) -> dict:
+    from . import doctor as D
+    lines = D.run(conn, cfg, db_path, "dist")
+    return {"ok": D.ok(lines), "lines": D.as_json(lines)}

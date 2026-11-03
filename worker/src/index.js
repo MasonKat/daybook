@@ -10,6 +10,9 @@ const MKEY_RE = /^[a-z0-9]{1,12}:\d{4}-\d{2}-\d{2}:[1-3]$/;
 const TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/heic': 'heic', 'image/heif': 'heic' };
 const CHIPS = new Set(['ok', 'confused', 'rewatch']);
 const RID_RE = /^[a-f0-9]{16}$/;
+// G1: bumped with every feature the console relies on (doctor warns when the deployed Worker is older):
+// 1 base, 2 출석, 3 장면 + Live, 4 푼 문제 수, 5 주간 테스트 reports, 6 /health version + /tokmap-info
+export const WORKER_VERSION = 6;
 const REASONS = ['개념탈락', '계산실수', '정보이해부족', '시간부족'];   // F14: the teacher's Notion "Reasoning" options
 const REACTIONS = ['fire', 'clap', 'mind'];
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -537,7 +540,7 @@ async function route(req, env, url, h) {
     return new Response(img, { headers: { ...h, 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=600' } });
   }
   const teacherPaths = ['/submissions', '/photo', '/checkins', '/session', '/moment-put', '/tokmap',
-    '/live/open', '/live/next', '/live/reveal', '/live/close', '/live/state', '/live/results', '/rounds', '/reports'];
+    '/live/open', '/live/next', '/live/reveal', '/live/close', '/live/state', '/live/results', '/rounds', '/reports', '/tokmap-info'];
   if (teacherPaths.includes(p)) {
     if (!teacherOk(req, env)) return json({ ok: false, error: 'unauthorized' }, 401, {});
     const since = url.searchParams.get('since') || '';
@@ -563,6 +566,14 @@ async function route(req, env, url, h) {
       return json({ now: new Date().toISOString(), items }, 200, {});
     }
     if (p === '/rounds' && req.method === 'PUT') return putRounds(req, env);
+    if (p === '/tokmap-info' && req.method === 'GET') {
+      // G1: the count and a hash of the token map, so the console can compare it with the roster (never the tokens)
+      const rows = await all(env, 'SELECT token, class FROM tokmap ORDER BY token');
+      const text = rows.map((r) => `${r.token}:${r.class}`).join('\n');
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+      const hash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+      return json({ ok: true, n: rows.length, hash }, 200, {});
+    }
     if (p === '/session' && req.method === 'PUT') return putSession(req, env);
     if (p === '/moment-put' && req.method === 'PUT') return putMoment(req, env);
     if (p === '/tokmap' && req.method === 'PUT') {
@@ -573,7 +584,12 @@ async function route(req, env, url, h) {
     }
     return json({ ok: false, error: 'method' }, 405, {});
   }
-  if (p === '/' || p === '/health') return json({ ok: true }, 200, h);
+  if (p === '/' || p === '/health') {
+    // G1 doctor: the version and a cheap D1 read (never any record)
+    let d1 = false;
+    try { d1 = !!(await one(env, 'SELECT 1 AS x')); } catch { d1 = false; }
+    return json({ ok: true, version: WORKER_VERSION, d1 }, 200, h);
+  }
   return json({ ok: false, error: 'not_found' }, 404, h);
 }
 

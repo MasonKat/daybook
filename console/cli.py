@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import json
 import sys
 from datetime import date
 from pathlib import Path
@@ -1006,6 +1007,21 @@ def round_status(obj: Ctx, round_id):
     click.echo(f"{p['label']}: {p['done']}/{p['total']} 제출")
     for x in p["students"]:
         click.echo(f"  {'✓' if x['done'] else '·'} {x['class_name']} {x['display_name']} {x['at']}")
+
+
+# ---------------------------------------------------------------- G1/G2: preflight and backups
+
+@cli.command()
+@click.option("--dist", default="dist", show_default=True, help="The published site to lint")
+@click.option("--json", "as_json", is_flag=True, help="Machine-readable output")
+@click.pass_obj
+def doctor(obj: Ctx, dist, as_json):
+    """Preflight before every class and every publish: ✓ / ⚠ / ✗ with a one-line fix. Exit 0 when there is no ✗."""
+    from . import doctor as D
+    lines = D.run(obj.conn, obj.cfg, obj.db_path, dist)
+    click.echo(json.dumps(D.as_json(lines), ensure_ascii=False, indent=1) if as_json else D.text(lines))
+    if not D.ok(lines):
+        sys.exit(1)
 
 
 if __name__ == "__main__":
