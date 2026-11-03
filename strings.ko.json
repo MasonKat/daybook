@@ -96,5 +96,10 @@
   "summary": "{range} · 제출 {k}일 · 테스트 {dir} · 태도 +{w}",
   "summary_no_test": "{range} · 제출 {k}일 · 태도 +{w}",
   "room_sub": "주간 기록",
-  "pct": "{n}%"
+  "pct": "{n}%",
+  "taste_banner": "체험판 · 기록되지 않아요",
+  "taste_student": "학생 화면 보기",
+  "taste_parent": "학부모 화면 보기",
+  "taste_lead": "콩이의 한 달로 AMP 학습 기록을 미리 써 보세요.",
+  "taste_note": "사진과 입력은 이 기기 안에서만 쓰이고 어디에도 저장되지 않아요."
 }

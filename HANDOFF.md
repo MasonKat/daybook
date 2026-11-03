@@ -61,6 +61,13 @@ Fill `worker_url`, `pages_url`, `teacher_token` in `daybook.json` (gitignored). 
 - The goal is computed at the first publish as active students × remaining sessions × 2.4 and then frozen;
   `--goal N` fixes it by hand, and `class edit 고1A --goal 0` recomputes it.
 
+## 1b. Taste build for the students (F1)
+
+`scripts\deploy-taste.ps1` (or `make deploy-taste`) reseeds `demo.sqlite`, builds `dist-taste/` with only the demo
+student 콩 and deploys it to the Pages project `daybook-taste`, separate from the real one. It needs only
+`npx wrangler login`. Share the printed URL (landing → 학생 화면 보기 / 학부모 화면 보기); nothing a visitor does is sent
+or stored anywhere.
+
 ## 2. Import the roster
 
 Export the teacher's roster database as CSV. Expected columns: `Name, Student ID, Status, Number, Phone Number,

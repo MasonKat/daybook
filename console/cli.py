@@ -92,8 +92,9 @@ def init(obj: Ctx):
 @cli.command()
 @click.option("--out", default="dist", show_default=True)
 @click.option("--force", is_flag=True, help="Re-seed even if the database already has demo data.")
+@click.option("--no-publish", is_flag=True, help="Seed only (e.g. before `publish --taste`).")
 @click.pass_obj
-def demo(obj: Ctx, out, force):
+def demo(obj: Ctx, out, force, no_publish):
     """Seed the synthetic demo tenant (2 classes x 6 students) and publish it."""
     from . import demo as demomod
     conn = dbmod.connect(obj.db_path)
@@ -107,6 +108,8 @@ def demo(obj: Ctx, out, force):
     click.echo(f"screeners: {rep.imported} rows imported from {rep.files} rounds; unmatched: {len(rep.unmatched)}")
     for u in rep.unmatched:
         click.echo(f"  unmatched: {u}")
+    if no_publish:
+        return
     res = generate.publish(conn, obj.cfg, Path(out))
     _report_publish(res)
     if not res.ok:
@@ -464,13 +467,18 @@ def _report_publish(res):
 
 
 @cli.command()
-@click.option("--out", default="dist", show_default=True)
+@click.option("--out", default=None, help="Output folder (default dist/, or dist-taste/ with --taste)")
 @click.option("--date", "d", default=None, help="Publish as of this date (default today)")
+@click.option("--taste", is_flag=True, help="Taste build: only the demo student 콩 at /s/kong/ and /p/kong/, no Worker")
 @click.pass_obj
-def publish(obj: Ctx, out, d):
+def publish(obj: Ctx, out, d, taste):
     """Render dist/ (student, parent, go pages) and run the no-PII lint; exits non-zero if it fails."""
     today = parse_date(d) if d else None
-    res = generate.publish(obj.conn, obj.cfg, Path(out), today=today)
+    out = out or ("dist-taste" if taste else "dist")
+    try:
+        res = generate.publish(obj.conn, obj.cfg, Path(out), today=today, taste=taste)
+    except ValueError as e:
+        fail(str(e))
     _report_publish(res)
     if not res.ok:
         sys.exit(1)

@@ -225,7 +225,11 @@ def _week_days(mon: date, subs: dict, cd: set, today: date, wk: list[str]) -> li
     return out
 
 
-def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datetime) -> dict:
+TASTE_SLUG = "콩"      # the demo student shown in the taste build (F1)
+TASTE_PATH = "kong"   # fixed paths /s/kong/ and /p/kong/
+
+
+def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datetime, taste: bool = False) -> dict:
     S = strings()
     wk = S["weekdays"].split(",")
     mon, sun = M.week_bounds(today)
@@ -250,7 +254,9 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
     published_at = _publish_times(conn)
 
     students = []
-    for s in conn.execute("SELECT * FROM students_public WHERE active = 1 ORDER BY id"):
+    only = " AND slug = ?" if taste else ""
+    for s in conn.execute("SELECT * FROM students_public WHERE active = 1" + only + " ORDER BY id",
+                          (TASTE_SLUG,) if taste else ()):
         cls = classes.get(s["class_id"])
         subs = {r["day"]: r for r in conn.execute(
             "SELECT day, ts, source FROM submissions WHERE student_id = ? AND status != 'deleted'", (s["id"],))}
@@ -375,6 +381,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "stories": {st_["key"]: st_["hash"] for st_ in stories},
             "sets": set_labels(conn, cfg, s["class_id"]),
             "todayTime": _fmt_time(today_sub["ts"]) if today_sub else "",
+            "taste": taste,
             "S": {k: S[k] for k in JS_STRINGS},
         }
         students.append({
@@ -410,6 +417,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         "week_label": f"{_date_ko(mon)} – {_date_ko(sun)}",
         "updated": now.strftime("%Y-%m-%d %H:%M"),
         "go_js": json.dumps({"s": "/s/"}, separators=(",", ":")),
+        "taste": taste,
         "worker": cfg.worker,
     }
 
@@ -431,8 +439,14 @@ def headers_file(cfg: Config) -> str:
     )
 
 
-def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, now: datetime) -> dict:
-    ctx = build_context(conn, cfg, today, now)
+def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, now: datetime,
+                taste: bool = False) -> dict:
+    """Render the site into `out`. taste=True: only the demo student 콩 at /s/kong/ and /p/kong/, a landing page,
+    no Worker anywhere (uploads and check-ins run in the browser only)."""
+    if taste:
+        cfg = Config(worker_url="", pages_url="", teacher_token="", videos_path=cfg.videos_path,
+                     assignments_path=cfg.assignments_path, board_poll_seconds=cfg.board_poll_seconds)
+    ctx = build_context(conn, cfg, today, now, taste=taste)
     e = env()
     if out.exists():
         shutil.rmtree(out)
@@ -448,7 +462,7 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
                 make_thumb(v["thumb_src"], out / "t" / f"{v['id']}.jpg", max_w=360 if v["kind"] == "short" else 480)
     st, pt, gt, it = (e.get_template(n) for n in ("student.html", "parent.html", "go.html", "index.html"))
     for s in ctx["students"]:
-        sd = out / "s" / s["student_token"]
+        sd = out / "s" / (TASTE_PATH if taste else s["student_token"])
         sd.mkdir(parents=True)
         (sd / "index.html").write_text(st.render(ctx, me=s, page="student"), encoding="utf-8")
         manifest = {
@@ -459,12 +473,15 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
                        "purpose": "any"} for n in (192, 512)],
         }
         (sd / "manifest.webmanifest").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
-        pd = out / "p" / s["parent_token"]
+        pd = out / "p" / (TASTE_PATH if taste else s["parent_token"])
         pd.mkdir(parents=True)
         (pd / "index.html").write_text(pt.render(ctx, me=s, page="parent"), encoding="utf-8")
-    (out / "go").mkdir()
-    (out / "go" / "index.html").write_text(gt.render(ctx, page="go"), encoding="utf-8")
-    (out / "index.html").write_text(it.render(ctx, page="index"), encoding="utf-8")
+    if taste:
+        (out / "index.html").write_text(e.get_template("taste.html").render(ctx, page="taste"), encoding="utf-8")
+    else:
+        (out / "go").mkdir()
+        (out / "go" / "index.html").write_text(gt.render(ctx, page="go"), encoding="utf-8")
+        (out / "index.html").write_text(it.render(ctx, page="index"), encoding="utf-8")
     (out / "robots.txt").write_text("User-agent: *\nDisallow: /\n", encoding="utf-8")
     (out / "_headers").write_text(headers_file(cfg), encoding="utf-8")
     return ctx
@@ -479,23 +496,30 @@ class PublishResult:
 
 
 def publish(conn: sqlite3.Connection, cfg: Config, out: Path, today: date | None = None,
-            now: datetime | None = None) -> PublishResult:
+            now: datetime | None = None, taste: bool = False) -> PublishResult:
     now = now or M.kst_now()
     today = today or now.date()
     out = Path(out)
-    staging = out.parent / ".dist-staging"
-    ctx = render_site(conn, cfg, staging, today, now)
+    if taste and not conn.execute("SELECT 1 FROM events WHERE type = 'demo_seed' LIMIT 1").fetchone():
+        raise ValueError("the taste build only runs on the demo database (daybook --db demo.sqlite demo)")
+    staging = out.parent / (".taste-staging" if taste else ".dist-staging")
+    ctx = render_site(conn, cfg, staging, today, now, taste=taste)
     findings = lintmod.lint_dir(staging, lintmod.private_rows(conn), ctx["S"]["page_title"])
+    if taste:
+        findings += lintmod.lint_taste(staging, lintmod.private_rows(conn), TASTE_SLUG, [cfg.worker] if cfg.worker else [])
+        if len(ctx["students"]) != 1:
+            findings.append(lintmod.Finding("error", "-", "taste", f"expected 1 demo student, found {len(ctx['students'])}"))
     errs = lintmod.errors(findings)
     if errs:
         shutil.rmtree(staging, ignore_errors=True)
         conn.rollback()  # do not keep a goal frozen by a failed publish
-        log_event(conn, "publish_failed", {"errors": len(errs), "kinds": sorted({f.kind for f in errs})})
+        log_event(conn, "publish_failed", {"errors": len(errs), "kinds": sorted({f.kind for f in errs}), "taste": taste})
         conn.commit()
         return PublishResult(False, len(ctx["students"]), findings, out)
     if out.exists():
         shutil.rmtree(out)
     staging.rename(out)
-    log_event(conn, "publish", {"students": len(ctx["students"]), "date": today.isoformat(), "at": now_utc_iso()})
+    log_event(conn, "publish_taste" if taste else "publish",
+              {"students": len(ctx["students"]), "date": today.isoformat(), "at": now_utc_iso()})
     conn.commit()
     return PublishResult(True, len(ctx["students"]), findings, out)

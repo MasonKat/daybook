@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block body %}
+<main class="taste-land">
+  <p class="wordmark big">{{ S.app_name }}</p>
+  <p class="lead">{{ S.taste_lead }}</p>
+  <a class="btn primary wide" href="/s/kong/#today">{{ S.taste_student }}</a>
+  <a class="btn ghost wide" href="/p/kong/">{{ S.taste_parent }}</a>
+  <p class="muted">{{ S.taste_note }}</p>
+</main>
+{% endblock %}

@@ -1,6 +1,8 @@
 # generated
 dist/
 .dist-staging/
+dist-taste/
+.taste-staging/
 *.sqlite
 *.sqlite-journal
 photos/

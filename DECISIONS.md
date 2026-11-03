@@ -101,6 +101,15 @@ One line each. "deferred" = not built in P0, on purpose.
 - Contrast: light muted text #5b6472 (≥ 5.2:1 on every light background), green/amber direction words darkened in light mode; all dark-mode muted text ≥ 6:1.
 - Screenshots are taken at 390×844; the audit still renders every page at 360 and 390 px, light and dark.
 
+## F1: demo student 콩 and the taste build (2026-11-03)
+- 콩 (full name 강콩, S913, slug 콩) joins 고1A in the demo: submissions every day from 22 days ago to yesterday except one no-class day (streak 21), today left open for the visitor, 3 points on the last five sessions (five ♥), 2 on the others, three notes in the last three weeks, rising screener rows (appended to the committed rounds; the other students' rows are unchanged).
+- The demo now has 13 students (12 + 콩); the e2e expects 13.
+- `daybook publish --taste` renders only the student with slug 콩 from the demo database (refuses one without the `demo_seed` event), at `/s/kong/` and `/p/kong/`, a landing page instead of `/go/`, the banner on every page, no Worker URL (CSP `connect-src 'self'`), and logs `publish_taste` (not `publish`, so it never feeds the parent room's publish times).
+- Taste lint on top of the normal one: no Worker URL or Worker endpoint string in HTML/JSON, no other demo student's display name.
+- In the taste build the upload is simulated in the browser (500 ms, no shrink, no network); 출석 and reactions will be simulated the same way when F2–F4 land.
+- `make deploy-taste` / `scripts\deploy-taste.ps1` reseed `demo.sqlite` with `demo --force --no-publish` (so the real `dist/` is untouched) and deploy `dist-taste/` to the separate Pages project `daybook-taste`; the teacher runs them.
+- The taste banner is amber (#f59e0b), not a messenger brand colour.
+
 ## Deferred
 - deferred (local agent will add after the clone, before 수능 week): `daybook class cancel <class> <date>` so a closed day does not break streaks.
 - deferred: `export pdf` (the command is a stub that exits 2 with a message).

@@ -53,15 +53,15 @@ const kstToday = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 
 /* ---------- static server for dist/ (Pages-like: dir/ -> dir/index.html) */
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png',
   '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.txt': 'text/plain' };
-function staticServer() {
+function staticServer(root = DIST, port = PAGES_PORT) {
   return http.createServer((req, res) => {
     let p = decodeURIComponent(new URL(req.url, PAGES).pathname);
     if (p.endsWith('/')) p += 'index.html';
-    const f = path.join(DIST, p);
-    if (!f.startsWith(DIST) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end('not found'); }
+    const f = path.join(root, p);
+    if (!f.startsWith(root) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end('not found'); }
     res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream', 'Cache-Control': 'no-store' });
     fs.createReadStream(f).pipe(res);
-  }).listen(PAGES_PORT, '127.0.0.1');
+  }).listen(port, '127.0.0.1');
 }
 
 async function waitFor(url, tries = 50) {
@@ -146,7 +146,7 @@ async function audit(browser, url, file, label, viewport, colorScheme) {
     const students = fs.readdirSync(path.join(DIST, 's'));
     const parents = fs.readdirSync(path.join(DIST, 'p'));
     console.log(`\n[1] every page at 360x740 and 390x844, light and dark (${students.length} student, ${parents.length} parent, go, index)`);
-    check(students.length === 12 && parents.length === 12, 'dist/s and dist/p exist for all 12 students');
+    check(students.length === 13 && parents.length === 13, 'dist/s and dist/p exist for all 13 demo students (12 + 콩)');
     const targets = [];
     for (const t of students) targets.push([`${PAGES}/s/${t}/`, path.join(DIST, 's', t, 'index.html'), `s/${t.slice(0, 6)}…`]);
     for (const t of parents) targets.push([`${PAGES}/p/${t}/`, path.join(DIST, 'p', t, 'index.html'), `p/${t.slice(0, 6)}…`]);
@@ -396,6 +396,42 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today], { encoding: 'utf-8' }));
     check(await bp.evaluate(() => document.documentElement.scrollWidth) <= 390 && berrs.length === 0, 'board fits 390 px with 0 console errors');
     await bp.screenshot({ path: path.join(SHOTS, 'board.png'), fullPage: true });
     await bctx.close();
+
+    console.log('\n[7] taste build (F1): only 콩, no Worker, nothing stored');
+    console.log('      ' + daybook('publish', '--taste').trim().split('\n').pop());
+    const TASTE = 'http://127.0.0.1:8791', TDIST = path.join(ROOT, 'dist-taste');
+    const tsrv = staticServer(TDIST, 8791);
+    try {
+      await waitFor(TASTE + '/');
+      const pagesT = [];
+      const walkT = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walkT(path.join(d, e.name)) : [path.join(d, e.name)]));
+      for (const f of walkT(TDIST)) if (f.endsWith('index.html')) pagesT.push(path.relative(TDIST, f).split(path.sep).join('/'));
+      check(JSON.stringify(pagesT.sort()) === JSON.stringify(['index.html', 'p/kong/index.html', 's/kong/index.html']), `dist-taste holds only the landing, /s/kong/, /p/kong/ (${pagesT.join(', ')})`);
+      const tctx = await browser.newContext({ viewport: PHONE });
+      const tp = await tctx.newPage();
+      const terrs = [], treqs = [];
+      tp.on('console', (m) => { if (m.type() === 'error') terrs.push(m.text()); });
+      tp.on('pageerror', (e) => terrs.push(String(e)));
+      tp.on('request', (r) => { const u = r.url(); if (!u.startsWith(TASTE) && !u.startsWith('blob:') && !u.startsWith('data:')) treqs.push(u); });
+      await tp.goto(TASTE + '/', { waitUntil: 'networkidle' });
+      check(await tp.locator('a.btn', { hasText: '학생 화면 보기' }).count() === 1 && await tp.locator('a.btn', { hasText: '학부모 화면 보기' }).count() === 1, 'landing has the two buttons');
+      check((await tp.textContent('.taste-bar')) === '체험판 · 기록되지 않아요', 'banner "체험판 · 기록되지 않아요"');
+      await tp.screenshot({ path: path.join(SHOTS, 'taste-landing.png') });
+      await tp.click('a.btn.primary');
+      await tp.waitForURL(/\/s\/kong\//);
+      await tp.waitForLoadState('networkidle');
+      check(await tp.isVisible('.taste-bar') && (await tp.textContent('.who, .sbar')).length > 0, 'student page /s/kong/ with the banner');
+      check(/^20$|^21$/.test((await tp.textContent('.story[data-story="streak"] b')).trim()), `콩's streak ring shows ${(await tp.textContent('.story[data-story="streak"] b')).trim()}`);
+      await tp.setInputFiles('#photo', png);
+      await tp.click('#post');
+      await tp.waitForSelector('#st-done:not([hidden])', { timeout: 5000 });
+      check(/연속 2[12]일/.test(await tp.textContent('#d-streak')), `upload simulated locally: 오늘 완료, ${await tp.textContent('#d-streak')}`);
+      await tp.goto(TASTE + '/p/kong/', { waitUntil: 'networkidle' });
+      check(await tp.isVisible('.taste-bar') && /AMP 수학 · 콩/.test(await tp.textContent('.room-title')), 'parent page /p/kong/ with the banner');
+      check(treqs.length === 0, `0 requests outside the taste site during the whole visit (${treqs.slice(0, 2).join(', ')})`);
+      check(terrs.length === 0, `0 console errors in the taste build (${terrs.length})`);
+      await tctx.close();
+    } finally { tsrv.close(); }
   } finally {
     await browser.close();
     srv.close();

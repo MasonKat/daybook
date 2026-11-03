@@ -3,7 +3,7 @@
 **Status (2026-11-03, cloud build + design pass v1):**
 1. P1 complete and tested: schema + `students_public`, `init`, `demo`, `roster add/list/import`, Worker `/submit` + `/submissions`, student 오늘 tab, `pull`, parent page, `publish` + no-PII lint, `import screeners`, deploy steps.
 2. P2 complete: board + attitude buttons, `score`, class reward bar, `note`, `weekly`, Playwright checks. P3: manifest/icons/standalone, `rotate-tokens`, `export pdf` stub, Worker node tests.
-3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 75 pytest + 10 Worker node tests + 99 Playwright checks (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
+3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 79 pytest + 10 Worker node tests + 110 Playwright checks (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
    Design v2: shorts reels + 강의 cards, story rings with content, status-coloured profile tiles, one weekly report per parent message.
 4. Not done here (needs the teacher): the Cloudflare deploy, and a real-phone install test on iPhone Safari / Android Chrome. Deferred items are listed in `DECISIONS.md`.
 5. Real data is attached by the local agents: see `HANDOFF.md`. This repo holds synthetic data only.
@@ -74,6 +74,22 @@ Other commands: `daybook score <class> <date> <slug> <0-3>`, `daybook submit <sl
 `daybook roster edit <slug> --display <name>`, `daybook roster rotate-tokens <class> [--student slug]`,
 `daybook import tests <csv>`, `daybook pull --photos photos/`, `daybook class list|edit`, `daybook export pdf` (stub).
 Every command has `--help`.
+
+## Taste build (F1): let students try it tonight
+
+A separate, safe site with only the synthetic demo student 콩, at `/s/kong/` and `/p/kong/` plus a landing page
+("학생 화면 보기", "학부모 화면 보기"). Every page carries the banner "체험판 · 기록되지 않아요"; the Worker is never
+called (uploads are simulated in the browser), and the lint fails if a Worker URL or another student's name gets in.
+It is built from `demo.sqlite` only and refuses a real database.
+
+```bash
+make deploy-taste
+```
+
+Windows: `powershell -ExecutionPolicy Bypass -File scripts\deploy-taste.ps1`. Both reseed the demo, run
+`daybook publish --taste` into `dist-taste/` and deploy it to the Pages project `daybook-taste` (created on the first
+deploy; the URL is printed, usually `https://daybook-taste.pages.dev`). Needs `npx wrangler login` once, nothing else:
+no KV, no Worker, no secret. `make taste` builds without deploying.
 
 ## Teacher deploy steps (Cloudflare, free plan)
 

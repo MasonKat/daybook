@@ -1,7 +1,7 @@
 {
  "set_id": "Adaptive_Screeners_3S_Oct31_G10",
  "date": "2026-10-31",
- "n_students": 13,
+ "n_students": 14,
  "n_quizzes": 12,
  "set_pressure_index": 0.69,
  "concept_difficulty": 0.48,
@@ -159,6 +159,18 @@
    "reach_ceiling": 0.336,
    "archetype": "도전형",
    "top_reason": "개념 혼동"
+  },
+  {
+   "student": "S913",
+   "name": "강콩",
+   "correct": 10,
+   "wrong": 2,
+   "blank": 0,
+   "blank_rate": 0.0,
+   "commitment": 0.9,
+   "reach_ceiling": 0.68,
+   "archetype": "도전형",
+   "top_reason": "시간 부족"
   },
   {
    "student": "S999",

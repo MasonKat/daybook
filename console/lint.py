@@ -143,5 +143,26 @@ def lint_dir(root: Path, students: list[PrivateRow], page_title: str) -> list[Fi
     return findings
 
 
+WORKER_HINT_RE = re.compile(r"workers\.dev|/submit\b|/status\?|/checkin\b|/react\b|X-Teacher-Token", re.I)
+
+
+def lint_taste(root: Path, students: list[PrivateRow], taste_slug_display: str, worker_urls: list[str]) -> list[Finding]:
+    """Taste build (F1): only the demo student's display name, and no Worker URL anywhere."""
+    out: list[Finding] = []
+    for path in sorted(p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in TEXT_SUFFIXES):
+        rel = path.relative_to(root).as_posix()
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for u in worker_urls:
+            if u and u in text:
+                out.append(Finding("error", rel, "taste_worker", u))
+        if path.suffix.lower() in (".html", ".htm", ".json", ".webmanifest"):
+            for m in WORKER_HINT_RE.finditer(text):
+                out.append(Finding("error", rel, "taste_worker", m.group(0)))
+            for s in students:
+                if s.display_name != taste_slug_display and len(s.display_name) >= 2 and s.display_name in text:
+                    out.append(Finding("error", rel, "taste_name", f"student id {s.id}"))
+    return out
+
+
 def errors(findings: list[Finding]) -> list[Finding]:
     return [f for f in findings if f.level == "error"]

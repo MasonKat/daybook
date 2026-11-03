@@ -53,8 +53,9 @@
     var S = D.S;
     var WD = S.weekdays.split(',');
     var m = location.pathname.match(/\/s\/([a-z2-7]{26})\//);
-    var tok = m ? m[1] : '';
-    if (tok) LS.set('daybook.token', tok);
+    var TASTE = !!D.taste;   /* taste build (F1): no Worker, nothing leaves this browser */
+    var tok = TASTE ? 'kong' : (m ? m[1] : '');
+    if (tok && !TASTE) LS.set('daybook.token', tok);
     var set = (new URLSearchParams(location.search).get('set') || '').replace(/[^\w\-]/g, '').slice(0, 80);
     var today = kstDay();
     var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -308,7 +309,7 @@
       var f = e.target.files && e.target.files[0];
       e.target.value = '';
       if (!f) return;
-      if (!D.worker) { showErr(S.no_worker); return; }
+      if (!D.worker && !TASTE) { showErr(S.no_worker); return; }
       if (pickedUrl) URL.revokeObjectURL(pickedUrl);
       picked = f;
       pickedUrl = URL.createObjectURL(f);
@@ -316,9 +317,31 @@
       busy(false);
       show('preview');
     });
+    function onResult(j) {
+      busy(false);
+      if (j.ok) {
+        if (j.day) today = j.day;
+        known[today] = 1;
+        if (j.ts) {
+          var kt = new Date(Date.parse(j.ts) + 9 * 3600e3).toISOString().slice(11, 16);
+          LS.set(TKEY + today, kt);
+        }
+        remember((j.days || []).concat([today]));
+        renderLive();
+        picked = null;
+        showDone(!!j.already);
+      } else {
+        showErr(j.status === 429 ? S.upload_rate : S.upload_error);
+      }
+    }
     $('post').addEventListener('click', function () {
       if (!picked) return;
       busy(true);
+      if (TASTE) {   /* simulate the Worker: the photo never leaves the browser */
+        var first = LS.get(TKEY + today) ? null : new Date().toISOString();
+        setTimeout(function () { onResult({ ok: true, day: today, ts: first, already: !!known[today], days: [today] }); }, 500);
+        return;
+      }
       shrink(picked)
         .then(function (blob) {
           var fd = new FormData();
@@ -331,23 +354,7 @@
         .then(function (r) {
           return r.json().catch(function () { return {}; }).then(function (j) { j.status = r.status; return j; });
         })
-        .then(function (j) {
-          busy(false);
-          if (j.ok) {
-            if (j.day) today = j.day;
-            known[today] = 1;
-            if (j.ts) {
-              var kt = new Date(Date.parse(j.ts) + 9 * 3600e3).toISOString().slice(11, 16);
-              LS.set(TKEY + today, kt);
-            }
-            remember((j.days || []).concat([today]));
-            renderLive();
-            picked = null;
-            showDone(!!j.already);
-          } else {
-            showErr(j.status === 429 ? S.upload_rate : S.upload_error);
-          }
-        })
+        .then(onResult)
         .catch(function () {
           busy(false);
           showErr(navigator.onLine === false ? S.upload_offline : S.upload_error);

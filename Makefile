@@ -4,7 +4,7 @@ VENV := .venv
 BIN := $(VENV)/bin
 DEMO_ENV := DAYBOOK_DB=demo.sqlite DAYBOOK_CONFIG=demo/daybook.demo.json
 
-.PHONY: help setup init demo check test test-worker e2e node-deps publish deploy-pages clean
+.PHONY: help setup init demo check test test-worker e2e node-deps publish deploy-pages taste deploy-taste clean
 PAGES_PROJECT ?= daybook
 
 help:
@@ -13,6 +13,7 @@ help:
 	@echo "make test        pytest only        make test-worker   node tests of the Worker"
 	@echo "make init        create daybook.sqlite (real data; see README)"
 	@echo "make deploy-pages  daybook publish + wrangler pages deploy ./dist (real data)"
+	@echo "make taste       the taste build (demo student 콩 only) into dist-taste/; make deploy-taste deploys it"
 
 setup: $(BIN)/daybook
 
@@ -53,5 +54,14 @@ publish: setup
 deploy-pages: publish
 	cd worker && npx wrangler pages deploy ../dist --project-name $(PAGES_PROJECT) --branch main
 
+# F1 taste build: a fresh demo seed (demo.sqlite only), then only 콩's pages into dist-taste/ (no Worker).
+taste: setup
+	$(DEMO_ENV) $(BIN)/daybook init
+	$(DEMO_ENV) $(BIN)/daybook demo --force --no-publish
+	$(DEMO_ENV) $(BIN)/daybook publish --taste
+
+deploy-taste: taste
+	cd worker && npx wrangler pages deploy ../dist-taste --project-name daybook-taste --branch main
+
 clean:
-	rm -rf dist .dist-staging demo.sqlite
+	rm -rf dist dist-taste .dist-staging .taste-staging demo.sqlite

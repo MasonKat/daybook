@@ -13,7 +13,8 @@
 <link rel="stylesheet" href="/static/app.css">
 {% block head %}{% endblock %}
 </head>
-<body data-page="{{ page }}">
+<body data-page="{{ page }}"{% if taste %} data-taste="1"{% endif %}>
+{% if taste %}<div class="taste-bar" role="note">{{ S.taste_banner }}</div>{% endif %}
 {% block body %}{% endblock %}
 </body>
 </html>
