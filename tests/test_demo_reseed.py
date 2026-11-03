@@ -1,0 +1,53 @@
+"""`daybook demo --force` on an existing demo database: every table is cleared children-first (from the schema's own
+foreign keys), so a table added later can never break the re-seed again."""
+import pytest
+
+from console import demo, importers, ops, rounds as R
+from console.config import ROOT
+
+from conftest import TODAY
+
+
+def test_reseed_twice_with_every_table_filled(conn):
+    conn.execute("PRAGMA foreign_keys = ON")
+    demo.seed(conn, today=TODAY)
+    importers.import_screeners(conn, ROOT / "demo" / "screeners")
+    importers.import_insights(conn, demo.write_demo_insights(conn, TODAY, ROOT / "demo" / ".reseed-test.json"))
+    (ROOT / "demo" / ".reseed-test.json").unlink()
+    cls = conn.execute("SELECT * FROM classes WHERE name = '고1A'").fetchone()
+    sid = conn.execute("SELECT id FROM students WHERE class_id = ? LIMIT 1", (cls["id"],)).fetchone()[0]
+    sess = conn.execute("SELECT id FROM sessions WHERE class_id = ? LIMIT 1", (cls["id"],)).fetchone()[0]
+    R.add(conn, "Adaptive_Screeners_1S_Nov06_G10", "1학년", "고1A", 20, "2026-11-06 20:00", "2026-11-08 23:59")
+    conn.execute("""INSERT INTO test_reports (student_id, round_id, incorrect, missed, hardest, reasons, ts, updated)
+                    VALUES (?, 'Adaptive_Screeners_1S_Nov06_G10', '[1]', '[]', '[]', '["시간부족"]', 't', 't')""", (sid,))
+    conn.execute("INSERT INTO class_bonus (class_id, session_id, points, source, ref, ts) VALUES (?, ?, 5, 'live', 'x', 't')", (cls["id"], sess))
+    conn.execute("INSERT INTO effort (student_id, set_id, attempted, correct, source, ts) VALUES (?, 's', 3, 2, 'live', 't')", (sid,))
+    conn.execute("INSERT INTO moments (class_id, session_id, ts, text, image_key) VALUES (?, ?, 't', '장면', 'x.jpg')", (cls["id"], sess))
+    conn.execute("INSERT INTO snoozes (student_id, rule, until, ts) VALUES (?, 'all', '2026-11-13', 't')", (sid,))
+    conn.commit()
+    tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")]
+    empty = [t for t in tables if t != "events" and not conn.execute(f"SELECT 1 FROM {t} LIMIT 1").fetchone()]
+    assert empty == [], empty                                   # every table has rows before the re-seed
+    for _ in range(2):
+        demo.seed(conn, today=TODAY, force=True)
+        assert conn.execute("SELECT COUNT(*) FROM students").fetchone()[0] == 22
+        assert conn.execute("SELECT COUNT(*) FROM rounds").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM test_reports").fetchone()[0] == 0
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+    assert conn.execute("SELECT COUNT(*) FROM events WHERE type = 'demo_seed'").fetchone()[0] == 3    # events are kept
+
+
+def test_clear_order_covers_the_whole_schema_children_first(conn):
+    order = demo.clear_order(conn)
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")}
+    assert set(order) == tables - {"events"}
+    pos = {t: i for i, t in enumerate(order)}
+    for t in order:
+        for fk in conn.execute(f"PRAGMA foreign_key_list({t})"):
+            if fk[2] != t:
+                assert pos[t] < pos[fk[2]], (t, fk[2])          # a child is cleared before its parent
+
+
+def test_force_never_touches_a_real_database(conn, klass):
+    with pytest.raises(demo.DemoError, match="real"):
+        demo.seed(conn, today=TODAY, force=True)

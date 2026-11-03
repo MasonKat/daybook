@@ -60,6 +60,28 @@ class DemoError(RuntimeError):
     pass
 
 
+KEEP_TABLES = {"events"}          # append-only (triggers) and it holds the demo_seed marker
+
+
+def clear_order(conn: sqlite3.Connection) -> list[str]:
+    """Every data table (but events), children before parents, from the schema's own foreign keys (PRAGMA
+    foreign_key_list), so a new table never breaks `demo --force` again."""
+    tables = [r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+    tables = [t for t in tables if t not in KEEP_TABLES]
+    parents = {t: {r[2] for r in conn.execute(f"PRAGMA foreign_key_list({t})")} - {t} for t in tables}
+    order, done = [], set()
+    while len(order) < len(tables):
+        # a table can go once no remaining table references it
+        ready = [t for t in tables if t not in done and not any(t in parents[o] for o in tables if o not in done and o != t)]
+        if not ready:
+            raise DemoError("foreign keys form a cycle; cannot clear the demo database")
+        for t in ready:
+            order.append(t)
+            done.add(t)
+    return order
+
+
 def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = False, rng_seed: int = 20261106) -> None:
     today = today or M.kst_today()
     n = conn.execute("SELECT COUNT(*) FROM students").fetchone()[0]
@@ -70,8 +92,7 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
     if n and not force:
         raise DemoError("demo data already present; use --force to re-seed (or delete the demo database)")
     if n:
-        for t in ("attitude", "submissions", "checkins", "moments", "tests", "notes", "effort", "contacts", "snoozes",
-                  "parent_profiles", "class_bonus", "sessions", "students", "classes"):
+        for t in clear_order(conn):
             conn.execute(f"DELETE FROM {t}")
 
     rng = random.Random(rng_seed)
