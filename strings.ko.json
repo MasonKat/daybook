@@ -124,5 +124,14 @@
   "ck_closed": "지금은 출석 시간이 아니에요",
   "ck_none": "오늘은 출석할 수업이 없어요",
   "ck_rate": "오늘은 더 시도할 수 없어요. 선생님께 말해 주세요",
-  "ck_error": "출석하지 못했어요. 다시 시도해 주세요."
+  "ck_error": "출석하지 못했어요. 다시 시도해 주세요.",
+  "line_label": "오늘 한 줄 (선택)",
+  "line_ph": "오늘 배운 것, 헷갈린 것 한 줄",
+  "chip_ok": "이해됐어요",
+  "chip_confused": "아직 헷갈려요",
+  "chip_rewatch": "다시 볼 영상 있어요",
+  "my_lines": "내 한 줄",
+  "day_class": "출석 {in} → 끝 {out}",
+  "day_study": "끝 {out}",
+  "lines_empty": "아직 남긴 한 줄이 없어요."
 }

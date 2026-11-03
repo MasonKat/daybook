@@ -3,6 +3,7 @@
 const TOKEN_RE = /^[a-z2-7]{26}$/;
 const TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/heic': 'heic', 'image/heif': 'heic' };
 const MAX_BYTES = 8 * 1024 * 1024;
+const CHIPS = new Set(['ok', 'confused', 'rewatch']);
 const DAY = 86400;
 
 export const seoulDay = (ms) => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10);
@@ -69,8 +70,13 @@ async function submit(req, env, h) {
     });
   }
   const set = String(form.get('set') || '').replace(/[^\w-]/g, '').slice(0, 80);
+  // F3: optional one-line review (<= 40 characters) and one quick chip
+  const rawLine = form.get('line');
+  const line = rawLine === null ? null : String(rawLine).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 40);
+  const chip = CHIPS.has(String(form.get('chip') || '')) ? String(form.get('chip')) : (form.get('chip') === null ? null : '');
   const iso = new Date(now).toISOString();
-  const rec = { token, set: set || (prev && prev.set) || '', day, ts: (prev && prev.ts) || iso, updated: iso, key, n: ((prev && prev.n) || 0) + 1 };
+  const rec = { token, set: set || (prev && prev.set) || '', day, ts: (prev && prev.ts) || iso, updated: iso, key, n: ((prev && prev.n) || 0) + 1,
+    line: line !== null ? line : (prev && prev.line) || '', chip: chip !== null ? chip : (prev && prev.chip) || '' };
   await kv.put(recKey, JSON.stringify(rec), { expirationTtl: num(env.RECORD_TTL_DAYS, 14) * DAY, metadata: rec });
   const days = await recentDays(env, token, day);
   return json({ ok: true, ts: rec.ts, day, already: !!prev, days }, 200, h);

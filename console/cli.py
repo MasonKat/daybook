@@ -349,6 +349,29 @@ def session_start(obj: Ctx, class_name, d, at, set_id, topic, new_code):
         click.echo(f"handout QR URL (no token): {base}/go/?set={set_id}")
 
 
+@cli.command("lines")
+@click.argument("class_name")
+@click.option("--date", "d", default=None, help="Day (default today); --days for more")
+@click.option("--days", default=1, show_default=True, help="How many days back")
+@click.pass_obj
+def lines_cmd(obj: Ctx, class_name, d, days):
+    """The students' 오늘 한 줄 and chips (teacher only; parents do not see them by default)."""
+    from datetime import timedelta
+    conn = obj.conn
+    cls = ops.get_class(conn, class_name)
+    end = parse_date(d)
+    S = configmod.strings()
+    rows = conn.execute(
+        """SELECT s.display_name, sub.day, sub.reflection, sub.chip FROM submissions sub JOIN students s ON s.id = sub.student_id
+           WHERE s.class_id = ? AND sub.day BETWEEN ? AND ? AND (sub.reflection IS NOT NULL OR sub.chip IS NOT NULL)
+           ORDER BY sub.day DESC, s.id""", (cls["id"], (end - timedelta(days=days - 1)).isoformat(), end.isoformat())).fetchall()
+    for r in rows:
+        chip = S.get("chip_" + (r["chip"] or ""), "") if r["chip"] else ""
+        click.echo(f"{r['day']}  {r['display_name']}\t{chip}\t{r['reflection'] or ''}")
+    if not rows:
+        click.echo("no lines")
+
+
 @cli.command("checkin")
 @click.argument("slug")
 @click.option("--date", "d", default=None)

@@ -159,6 +159,20 @@ body[data-page="student"] .app { display: flex; flex-direction: column; height: 
 .pv { position: relative; border-radius: var(--s4); overflow: hidden; background: var(--card); }
 .pv img { display: block; width: 100%; max-height: 52vh; object-fit: contain; }
 .pv-busy { position: absolute; inset: 0; margin: 0; display: flex; align-items: center; justify-content: center; background: rgba(5, 7, 12, .55); color: #fff; font-weight: 700; }
+.reflect { margin-top: var(--s3); }
+.reflect .rl { display: block; font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+#line { width: 100%; min-height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: 15px var(--font); padding: 0 var(--s3); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--s2); }
+.cbtn { min-height: 36px; padding: 0 var(--s3); border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: 600 13px var(--font); cursor: pointer; }
+.cbtn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.dayline { margin: 2px 0 var(--s1); font-weight: 700; font-size: 15px; }
+.mylines { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.mylines li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; background: var(--card); border-radius: var(--s3); padding: var(--s2) var(--s3); font-size: 14px; }
+.mylines li.empty { background: none; padding: 0; }
+.mylines .ld { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lchip { font-size: 12px; font-weight: 700; color: var(--accent); }
+body[data-page="student"] .lchip { color: #93c5fd; }
+@media (prefers-color-scheme: light) { body[data-page="student"] .lchip { color: #1d4ed8; } }
 .pv-actions { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; margin-top: var(--s3); }
 .done .check { width: 104px; height: 104px; margin: var(--s4) auto 0; border-radius: 50%; background: var(--ok); color: #fff; font-size: 60px; line-height: 104px; font-weight: 700; animation: pop .2s ease-out; }
 @keyframes pop { from { transform: scale(.6); opacity: .4; } to { transform: scale(1); opacity: 1; } }
@@ -284,6 +298,7 @@ body[data-page="parent"] { font-size: 14px; }
 .ritual { list-style: none; padding: 0; margin: 0 0 6px; font-size: 12px; color: var(--muted); }
 .ritual .rw { display: inline-block; min-width: 18px; font-weight: 700; color: var(--fg); }
 .ritual .late { color: var(--adjust); }
+.ritual .rline2 { display: block; margin-left: 22px; color: var(--fg); }
 .trend { width: 100%; height: auto; display: block; }
 .trend .grid { stroke: var(--line); stroke-width: 1; }
 .trend .axis { fill: var(--muted); font-size: 11px; }
@@ -321,7 +336,9 @@ body[data-page="parent"] { font-size: 14px; }
 .arr { background: var(--card); border-radius: 999px; padding: 2px 10px; }
 .roster .ck { grid-area: ck; font-size: 13px; color: var(--muted); }
 .roster .ckfor { font: inherit; font-size: 13px; min-height: 36px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer; }
-.roster .row { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "nm sub" "ck ck" "btns subfor"; gap: 6px var(--s2); align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.roster .bline { grid-area: bline; font-size: 13px; color: var(--muted); }
+.roster .bline:empty { display: none; }
+.roster .row { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "nm sub" "ck ck" "btns subfor" "bline bline"; gap: 6px var(--s2); align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .roster .nm { grid-area: nm; font-size: 20px; font-weight: 700; }
 .roster .sub { grid-area: sub; color: var(--up); font-weight: 700; margin: 0; font-size: 15px; }
 .roster .btns { grid-area: btns; display: flex; gap: var(--s2); }
@@ -329,7 +346,7 @@ body[data-page="parent"] { font-size: 14px; }
 .roster .pt { width: 52px; height: 44px; font-size: 20px; font-weight: 700; }
 .roster .pt.sel { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 .roster .subfor { grid-area: subfor; padding: var(--s2) var(--s3); font-size: 14px; min-height: 44px; }
-@media (min-width: 640px) { .roster .row { grid-template-columns: 1fr 110px 100px auto auto; grid-template-areas: "nm ck sub btns subfor"; } }
+@media (min-width: 640px) { .roster .row { grid-template-columns: 1fr 110px 100px auto auto; grid-template-areas: "nm ck sub btns subfor" "bline bline bline bline bline"; } }
 
 /* ---------- taste build (F1) */
 .taste-bar { position: relative; z-index: 20; background: #f59e0b; color: #1f1300; text-align: center; font: 700 12px/1 var(--font); padding: 6px var(--s2); letter-spacing: .02em; }

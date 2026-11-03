@@ -73,6 +73,8 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
         studs = [add_student(conn, cid, full, ext_id=ext) for full, ext in STUDENTS[cname]]
         cdays = sorted(M.scheduled_days(cls["weekday_mask"], start, today))
         sess = {d: ops.ensure_session(conn, cid, d, SET_IDS[min(2, (d - start).days // 7)]) for d in cdays}
+        for sid_ in sess.values():
+            conn.execute("UPDATE sessions SET start_time = '18:00', code = ? WHERE id = ?", (f"{rng.randint(0, 9999):04d}", sid_))
         for i, s in enumerate(studs):
             p = [0.92, 0.85, 0.7, 0.95, 0.6, 0.8][i]
             d = start
@@ -93,6 +95,10 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
             for d, sid in sess.items():
                 if d < today:
                     ops.set_attitude(conn, s["id"], sid, rng.choice([1, 2, 2, 3, 3, 3, 0]))
+                    if rng.random() < 0.85:
+                        at = datetime.combine(d, time(17, rng.randint(40, 59)) if rng.random() < .8 else time(18, rng.randint(0, 9)), KST)
+                        ops.record_checkin(conn, s["id"], sid, at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+                                           rng.choice(["phone"] * 6 + ["teacher"]))
             wk_now, wk_prev = M.iso_week(today), M.iso_week(today - timedelta(days=7))
             ops.add_note(conn, s["id"], wk_prev, NOTES[(i + 2) % len(NOTES)])
             ops.add_note(conn, s["id"], wk_now, NOTES[i % len(NOTES)])
@@ -124,6 +130,15 @@ def _seed_kong(conn: sqlite3.Connection, class_id: int, sess: dict, today: date,
     hearts = set(past[-5:]) if len(past) >= 5 else set(past)
     for x in past:
         ops.set_attitude(conn, s["id"], sess[x], 3 if x in hearts else 2)
+        at = datetime.combine(x, time(17, 50 + rng.randint(0, 9)), KST)
+        ops.record_checkin(conn, s["id"], sess[x], at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"), "phone")
+    lines = [("ok", "인수분해 공식이 드디어 손에 붙었어요"), ("confused", "나머지정리 2번 유형이 아직 헷갈려요"),
+             ("rewatch", "11월 1주 풀이 영상 다시 볼래요"), ("ok", "오늘은 실수 없이 다 풀었다!"), (None, "검산 한 줄 습관 들이는 중"),
+             ("ok", "")]
+    days_with = sorted((x for x in (today - timedelta(days=k) for k in range(1, 15)) if x != gap), reverse=True)
+    for (chip, text), x in zip(lines, days_with[::2]):
+        conn.execute("UPDATE submissions SET reflection = ?, chip = ? WHERE student_id = ? AND day = ?",
+                     (text or None, chip, s["id"], x.isoformat()))
     for k, text in enumerate(KONG_NOTES):
         ops.add_note(conn, s["id"], M.iso_week(today - timedelta(days=7 * (2 - k))), text)
 

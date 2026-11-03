@@ -15,7 +15,8 @@ from .config import Config
 from .db import last_event, log_event
 
 Fetch = Callable[[str], bytes]   # url path+query -> response body
-MARGIN = timedelta(minutes=5)    # KV listing is eventually consistent; re-read a small overlap (upserts are idempotent)
+MARGIN = timedelta(minutes=5)
+CHIPS = ("ok", "confused", "rewatch")    # KV listing is eventually consistent; re-read a small overlap (upserts are idempotent)
 
 
 class PullError(RuntimeError):
@@ -92,19 +93,22 @@ def apply_items(conn: sqlite3.Connection, items: list[dict]) -> PullReport:
                             (cls["class_id"], day)).fetchone() if cls else None
         cur = conn.execute("SELECT * FROM submissions WHERE student_id = ? AND day = ?", (sid, day)).fetchone()
         payload = {"student_id": sid, "day": day, "ts": ts, "set": it.get("set", ""), "n": it.get("n", 1)}
+        line = str(it.get("line") or "")[:40] or None
+        chip = it.get("chip") if it.get("chip") in CHIPS else None
         if cur is None:
             conn.execute(
-                """INSERT INTO submissions (student_id, session_id, day, ts, photo_key, source, status)
-                   VALUES (?, ?, ?, ?, ?, 'phone', 'received')""",
-                (sid, sess["id"] if sess else None, day, ts, key),
+                """INSERT INTO submissions (student_id, session_id, day, ts, photo_key, source, status, reflection, chip)
+                   VALUES (?, ?, ?, ?, ?, 'phone', 'received', ?, ?)""",
+                (sid, sess["id"] if sess else None, day, ts, key, line, chip),
             )
             log_event(conn, "submission", payload)
             rep.new += 1
-        elif cur["photo_key"] != key or cur["source"] != "phone" or cur["status"] == "deleted":
+        elif (cur["photo_key"] != key or cur["source"] != "phone" or cur["status"] == "deleted"
+              or (cur["reflection"] or None) != line or (cur["chip"] or None) != chip):
             conn.execute(
                 "UPDATE submissions SET photo_key = ?, source = 'phone', status = 'received', ts = MIN(ts, ?), "
-                "session_id = COALESCE(session_id, ?) WHERE id = ?",
-                (key, ts, sess["id"] if sess else None, cur["id"]),
+                "session_id = COALESCE(session_id, ?), reflection = ?, chip = ? WHERE id = ?",
+                (key, ts, sess["id"] if sess else None, line, chip, cur["id"]),
             )
             log_event(conn, "submission_update", payload)
             rep.updated += 1

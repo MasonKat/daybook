@@ -3,7 +3,7 @@
 **Status (2026-11-03, cloud build + design pass v1):**
 1. P1 complete and tested: schema + `students_public`, `init`, `demo`, `roster add/list/import`, Worker `/submit` + `/submissions`, student 오늘 tab, `pull`, parent page, `publish` + no-PII lint, `import screeners`, deploy steps.
 2. P2 complete: board + attitude buttons, `score`, class reward bar, `note`, `weekly`, Playwright checks. P3: manifest/icons/standalone, `rotate-tokens`, `export pdf` stub, Worker node tests.
-3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 83 pytest + 18 Worker node tests + 121 Playwright checks (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
+3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 87 pytest + 19 Worker node tests + 128 Playwright checks (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
    Design v2: shorts reels + 강의 cards, story rings with content, status-coloured profile tiles, one weekly report per parent message.
 4. Not done here (needs the teacher): the Cloudflare deploy, and a real-phone install test on iPhone Safari / Android Chrome. Deferred items are listed in `DECISIONS.md`.
 5. Real data is attached by the local agents: see `HANDOFF.md`. This repo holds synthetic data only.

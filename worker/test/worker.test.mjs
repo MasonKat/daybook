@@ -106,7 +106,7 @@ test('/submissions and /photo need the teacher token; since filters', async () =
   const ok = await call(env, new Request('https://w.example/submissions', { headers: { 'X-Teacher-Token': TEACHER } }));
   assert.equal(ok.status, 200);
   assert.equal(ok.body.items.length, 3);
-  assert.deepEqual(Object.keys(ok.body.items[0]).sort(), ['day', 'key', 'n', 'set', 'token', 'ts', 'updated']);
+  assert.deepEqual(Object.keys(ok.body.items[0]).sort(), ['chip', 'day', 'key', 'line', 'n', 'set', 'token', 'ts', 'updated']);
   const later = await call(env, new Request(`https://w.example/submissions?since=${encodeURIComponent(ok.body.now)}`, { headers: { 'X-Teacher-Token': TEACHER } }));
   assert.equal(later.body.items.length, 0);
   const key = ok.body.items[0].key;
@@ -129,4 +129,21 @@ test('/status returns the days this token submitted', async () => {
 test('seoulDay rolls over at 15:00 UTC', () => {
   assert.equal(seoulDay(Date.parse('2026-11-04T14:59:59Z')), '2026-11-04');
   assert.equal(seoulDay(Date.parse('2026-11-04T15:00:00Z')), '2026-11-05');
+});
+
+test('F3: one-line review (<= 40 chars) and a known chip ride along; a replacement without them keeps them', async () => {
+  const env = mkEnv();
+  const fd = new FormData();
+  fd.append('t', TOK); fd.append('line', '  분수 통분이 이제 이해됐어요!\n'.padEnd(60, '!')); fd.append('chip', 'ok');
+  fd.append('photo', new File([new Uint8Array(10)], 'p.jpg', { type: 'image/jpeg' }));
+  const a = await call(env, new Request('https://w.example/submit', { method: 'POST', body: fd, headers: { Origin: ORIGIN } }));
+  const rec = JSON.parse(env.SUBMISSIONS.m.get(`sub:${a.body.day}:${TOK}`).v);
+  assert.equal(rec.chip, 'ok'); assert.equal([...rec.line].length, 40); assert.ok(!rec.line.includes('\n'));
+  await call(env, submitReq());                                   // no line/chip fields: keep the earlier ones
+  const rec2 = JSON.parse(env.SUBMISSIONS.m.get(`sub:${a.body.day}:${TOK}`).v);
+  assert.equal(rec2.chip, 'ok'); assert.equal(rec2.line, rec.line);
+  const fd2 = new FormData(); fd2.append('t', TOK); fd2.append('chip', 'hacker');
+  fd2.append('photo', new File([new Uint8Array(10)], 'p.jpg', { type: 'image/jpeg' }));
+  await call(env, new Request('https://w.example/submit', { method: 'POST', body: fd2, headers: { Origin: ORIGIN } }));
+  assert.equal(JSON.parse(env.SUBMISSIONS.m.get(`sub:${a.body.day}:${TOK}`).v).chip, '');
 });

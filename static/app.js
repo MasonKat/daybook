@@ -272,7 +272,7 @@
 
     /* ---- 오늘: the ritual. Class day: ① 출석 (4-digit code) → ② 과제 끝 (photo). Other days: 오늘 공부 인증 (photo). */
     var classToday = TASTE || (D.classDays || []).indexOf(today) >= 0 || isClassDay(today);
-    var CKEY = 'daybook.ck.' + tok + '.';
+    var CKEY = 'daybook.ck.' + tok + '.', LKEY2 = 'daybook.line.' + tok + '.';
     var ckTime = LS.get(CKEY + today) || (today === D.pub ? D.checkinTime || '' : '');
     function hhmm(iso) { return new Date(Date.parse(iso) + 9 * 3600e3).toISOString().slice(11, 16); }
     function renderRitual() {
@@ -347,6 +347,7 @@
       var t = LS.get(TKEY + today) || (today === D.pub ? D.todayTime : '');
       var md = Number(today.slice(5, 7)) + '/' + Number(today.slice(8, 10));
       $('d-shot').textContent = t ? fmt(S.recorded_at, { date: md, t: t }) : fmt(S.recorded, { date: md });
+      $('d-day').textContent = classToday ? fmt(S.day_class, { 'in': ckTime || '–', out: t || '✓' }) : fmt(S.day_study, { out: t || '✓' });
       $('d-replaced').hidden = !replaced;
       $('d-streak').textContent = fmt(S.streak_label, { n: streakNow() });
       $('d-class').textContent = fmt(S.class_plus, { n: D.classTotal || 0 });
@@ -359,6 +360,7 @@
       $('pv-retake').style.pointerEvents = on ? 'none' : '';
     }
 
+    try { var saved = JSON.parse(LS.get(LKEY2 + today) || 'null'); if (saved) addMyLine(saved.t, saved.c); } catch (e) { /* ignore */ }
     if (known[today]) showDone(false);
     else show(idleState());
     renderLive();
@@ -379,7 +381,27 @@
         .catch(function () { /* offline: the published data is enough */ });
     }
 
-    var picked = null, pickedUrl = null;
+    var picked = null, pickedUrl = null, chip = '';
+    $('chips').addEventListener('click', function (e) {
+      var b = e.target.closest('.cbtn');
+      if (!b) return;
+      chip = chip === b.getAttribute('data-chip') ? '' : b.getAttribute('data-chip');
+      var all = $('chips').children;
+      for (var i = 0; i < all.length; i++) all[i].setAttribute('aria-pressed', all[i].getAttribute('data-chip') === chip ? 'true' : 'false');
+    });
+    function lineNow() { return ($('line').value || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 40); }
+    function addMyLine(text, chipKey) {
+      if (!text && !chipKey) return;
+      var ul = $('mylines'), li = ul.querySelector('li[data-date="' + today + '"]');
+      var empty = ul.querySelector('.empty');
+      if (empty) ul.removeChild(empty);
+      if (!li) { li = document.createElement('li'); li.setAttribute('data-date', today); ul.insertBefore(li, ul.firstChild); }
+      li.innerHTML = '';
+      var add = function (cls, t) { if (!t) return; var sp = document.createElement('span'); sp.className = cls; sp.textContent = t; li.appendChild(sp); };
+      add('ld', Number(today.slice(5, 7)) + '/' + Number(today.slice(8, 10)) + ' (' + WD[weekday(today)] + ')');
+      add('lchip', chipKey ? S['chip_' + chipKey] : '');
+      add('lt2', text);
+    }
     $('photo').addEventListener('change', function (e) {
       var f = e.target.files && e.target.files[0];
       e.target.value = '';
@@ -402,6 +424,10 @@
           LS.set(TKEY + today, kt);
         }
         remember((j.days || []).concat([today]));
+        if (lineNow() || chip) {
+          LS.set(LKEY2 + today, JSON.stringify({ t: lineNow(), c: chip }));
+          addMyLine(lineNow(), chip);
+        }
         renderLive();
         renderRitual();
         picked = null;
@@ -423,6 +449,8 @@
           var fd = new FormData();
           fd.append('t', tok);
           if (set) fd.append('set', set);
+          if (lineNow()) fd.append('line', lineNow());   /* empty = keep what an earlier upload today sent */
+          if (chip) fd.append('chip', chip);
           var ext = blob.type === 'image/png' ? 'png' : (/hei[cf]/.test(blob.type) ? 'heic' : 'jpg');
           fd.append('photo', blob, 'photo.' + ext);
           return fetch(D.worker + '/submit', { method: 'POST', body: fd });
@@ -492,6 +520,8 @@
         row.classList.toggle('on', !!s.done);
         row.querySelector('.sub').textContent = s.done ? '✓ ' + s.time : '';
         row.querySelector('.subfor').hidden = !!s.done;
+        var bl = row.querySelector('.bline');
+        if (bl) bl.textContent = s.line || '';
         var ck = row.querySelector('.ck');
         if (ck && s.ck) ck.textContent = (D.S_in || '출석') + ' ' + s.ck;
         var bs = row.querySelectorAll('.pt');

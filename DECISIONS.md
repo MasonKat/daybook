@@ -121,6 +121,14 @@ One line each. "deferred" = not built in P0, on purpose.
 - Parent weekly report: one line per class day so far, "화 출석 18:02 · 끝 20:55" (– when missing); "지각" only with `"show_late": true` in daybook.json and a check-in after the start time. No points depend on time.
 - The deployed Worker must be redeployed (`cd worker && npx wrangler deploy`) for 출석; an older Worker keeps uploads working and `pull` skips check-ins.
 
+## F3: 과제 끝 with 오늘 한 줄 (2026-11-03)
+- Schema v3 (additive): `submissions.reflection` (0–40 characters) and `submissions.chip` (`ok` 이해됐어요 · `confused` 아직 헷갈려요 · `rewatch` 다시 볼 영상 있어요).
+- The preview step has an optional text field (maxlength 40) and three toggle chips (one at a time). The page sends `line`/`chip` only when filled; the Worker keeps the earlier ones on a re-upload without them, trims control characters and caps 40 characters; unknown chips become empty.
+- Who sees it: the teacher on the board row and with `daybook lines <class> [--date] [--days N]`; the student on 내 기록 ("내 한 줄", newest first, at most 30); parents only with `"parent_shows_reflection": true` in daybook.json (a quoted line under that day's 출석/끝 row).
+- Student-written text never blocks the teacher's publish: `lint.text_scrubber` (console code, may read the private columns) drops a line that holds a phone number, any full name / ext_id / parent phone, a raw id or a brand word; the chip still shows. The original stays in the local database for the teacher.
+- The done screen is the day summary: "출석 18:02 → 끝 20:55" on a class day ("끝 20:55" otherwise), 오늘의 한 장, 연속, 반 누적. "장면" joins it with F4.
+- Demo: sessions start at 18:00 with a code; students who usually come get check-ins at 17:40–18:09 (some by 출석 처리); 콩 has a check-in for every past class day and six reviews.
+
 ## Deferred
 - deferred (local agent will add after the clone, before 수능 week): `daybook class cancel <class> <date>` so a closed day does not break streaks.
 - deferred: `export pdf` (the command is a stub that exits 2 with a message).

@@ -27,6 +27,7 @@
       {% for p in (1, 2, 3) %}<button type="button" class="pt{{ ' sel' if s.points == p }}" data-p="{{ p }}">{{ p }}</button>{% endfor %}
     </span>
     <button type="button" class="subfor"{{ ' hidden' if s.done }}>{{ S.board_sub_for }}</button>
+    <span class="bline">{{ s.line }}</span>
   </li>
   {% endfor %}
 </ul>

@@ -213,18 +213,25 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     await page.setInputFiles('#photo', png);
     await page.waitForSelector('#st-preview:not([hidden])', { timeout: 5000 });
     check(await page.isVisible('#preview') && await page.isVisible('#post'), 'choosing a photo shows the preview with "올리기"');
+    const LINE = '통분 이제 이해됐어요';
+    check(await page.isVisible('#line') && (await page.getAttribute('#line', 'maxlength')) === '40' && (await page.locator('#chips .cbtn').count()) === 3,
+      '오늘 한 줄 (0–40 chars) and three chips before 올리기');
+    await page.fill('#line', LINE);
+    await page.click('#chips .cbtn[data-chip="ok"]');
     await page.click('#post');
     await page.waitForSelector('#st-done:not([hidden])', { timeout: 15000 });
     check((await page.textContent('.done-title')) === '오늘 완료', '"오늘 완료" shown');
     check(/연속 \d+일/.test(await page.textContent('#d-streak')), `streak shown: ${await page.textContent('#d-streak')}`);
     check(/반 누적 \+\d+/.test(await page.textContent('#d-class')), `class total shown: ${await page.textContent('#d-class')}`);
     check(await page.isVisible('#st-done label.small'), '"다시 올리기" offered');
+    check(/^출석 \d\d:\d\d → 끝 \d\d:\d\d$/.test(await page.textContent('#d-day')), `day summary "${await page.textContent('#d-day')}"`);
     check(/^오늘의 한 장 · \d+\/\d+ 기록됨 \d\d:\d\d$/.test(await page.textContent('#d-shot')), `"${await page.textContent('#d-shot')}" (no photo)`);
     await page.waitForTimeout(250);
     await page.screenshot({ path: path.join(SHOTS, 'student-done.png') });
     let subs = await workerGet('/submissions');
     let rec = subs.items.find((i) => i.token === tok);
     check(rec && rec.day === today && rec.n === 1, 'record landed in KV with today\'s Seoul date');
+    check(rec && rec.line === LINE && rec.chip === 'ok', 'the line and the chip are stored with the submission');
     const photo1 = await workerGet('/photo?key=' + encodeURIComponent(rec.key));
     const dim = jpegSize(photo1);
     check(dim && Math.max(dim.w, dim.h) <= 1600 && photo1.length < 1024 * 1024, `photo shrunk in the browser: ${fs.statSync(png).size} B png 3000x2000 -> ${photo1.length} B jpeg ${dim && dim.w + 'x' + dim.h}`);
@@ -338,6 +345,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     check(jump >= -2 && jump <= 24, `tapping a month highlight scrolls the grid to it (${jump}px from the top)`);
     await page.evaluate(() => { document.getElementById('s-main').scrollTop = 0; });
     await page.waitForTimeout(500);
+    check((await page.locator('#mylines li', { hasText: LINE }).count()) === 1, 'the student sees their own line on the profile');
     check((await page.locator('.msgs .bubble').count()) >= 1 && (await page.locator('#tab-me input, #tab-me textarea').count()) === 0, 'teacher messages as bubbles, no input box');
     const meOverflow = await page.evaluate(() => { const m = document.getElementById('s-main'); return m.scrollWidth - m.clientWidth; });
     const tileW = await page.evaluate(() => Array.from(document.querySelectorAll('#tiles .tile')).slice(0, 3).map((t) => t.getBoundingClientRect().right));
@@ -392,6 +400,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
         check(/✓ \d\d:\d\d/.test(cell), `newest report shows today's ✓ and time (${cell})`);
         const rit = await last.locator('.ritual').innerText().catch(() => '');
         check(/출석 \d\d:\d\d · 끝 \d\d:\d\d/.test(rit) && !/지각/.test(rit), `parent row shows both times (${rit.split('\n').pop()}), no 지각 label`);
+        check(!(await pp.content()).includes(LINE), 'the parent page does not show the line (parent_shows_reflection: false)');
         check(/제출 \d+일 \(수업일 \d+일 중 \d+일\)|제출 \d+일$/m.test(await last.innerText()), 'count reads "제출 k일 (수업일 c일 중 d일)"');
         check(/^주간 리포트 · \d{1,2}월 \d주 \(\d+\/\d+–\d+\/\d+\)$/.test((await last.locator('.report h2').innerText()).trim()), `title "${(await last.locator('.report h2').innerText()).trim()}"`);
         check(/업데이트 \d{4}-\d\d-\d\d \d\d:\d\d/.test(await pp.textContent('footer')), 'footer update time');
@@ -418,6 +427,8 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     check((await bp.textContent('#b-code')).trim() === CODE && /\d\d:\d\d/.test(await bp.textContent('#b-arrivals')), `board shows 오늘의 코드 ${CODE} and the arrival`);
     const row = bp.locator('.row', { hasText: pick.display_name });
     check(/출석 \d\d:\d\d/.test(await row.locator('.ck').innerText()), 'the row shows the pulled 출석 time');
+    check((await row.locator('.bline').innerText()).includes(LINE), 'the board shows the student\'s line to the teacher');
+    check(daybook('lines', CLASS_ON).includes(LINE), '`daybook lines` shows it in the console');
     const otherId = await bp.locator('.row').filter({ has: bp.locator('button.ckfor') }).first().getAttribute('data-id');
     const other = bp.locator(`.row[data-id="${otherId}"]`);
     await other.locator('button.ckfor').click();

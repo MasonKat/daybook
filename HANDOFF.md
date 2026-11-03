@@ -216,6 +216,9 @@ make deploy-pages
 "출석 처리" on the board, or `daybook checkin <slug>`, covers a phone problem. After pulling this version, redeploy the
 Worker once: `cd worker && npx wrangler deploy`.
 
+오늘 한 줄 (F3): students may add one line and a chip when they upload. Read them with `daybook lines 고1A --days 7`
+or on the board. Parents do not see them unless `"parent_shows_reflection": true` is set in daybook.json.
+
 In class (P2, from the week after the pilot): `daybook board 고1A` → http://127.0.0.1:8787 (attitude 1·2·3, live ✓,
 "대신 제출"). Without the board: `daybook score 고1A <date> <slug> <0-3>` and `daybook submit <slug> --source paper`.
 

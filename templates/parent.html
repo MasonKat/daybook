@@ -10,7 +10,7 @@
       </ol>
       {% if w.ritual %}
       <ul class="ritual tnum">
-        {% for r in w.ritual %}<li><span class="rw">{{ r.wd }}</span> {{ S.ritual_in }} {{ r['in'] or '–' }} · {{ S.ritual_out }} {{ r.out or '–' }}{% if r.late %} <span class="late">{{ S.late }}</span>{% endif %}</li>{% endfor %}
+        {% for r in w.ritual %}<li><span class="rw">{{ r.wd }}</span> {{ S.ritual_in }} {{ r['in'] or '–' }} · {{ S.ritual_out }} {{ r.out or '–' }}{% if r.late %} <span class="late">{{ S.late }}</span>{% endif %}{% if r.line %}<span class="rline2">“{{ r.line }}”</span>{% endif %}</li>{% endfor %}
       </ul>
       {% endif %}
       <p class="rline"><b>{{ S.sub_count | fmt(k=w.k) }}</b>{% if w.c %} <span class="muted">({{ S.sub_detail | fmt(c=w.c, d=w.d) }})</span>{% endif %}</p>

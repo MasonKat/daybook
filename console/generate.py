@@ -28,7 +28,8 @@ SVG_W, SVG_H = 320, 150
 JS_STRINGS = ("done_title", "streak_label", "class_plus", "reward_to_go", "uploading", "upload_error",
               "upload_rate", "upload_offline", "replaced", "no_worker", "today_set", "set_default", "weekdays", "story_streak",
               "recorded_at", "recorded", "ritual_class", "ritual_study", "study_cta", "end_cta", "ck_done", "ck_bad",
-              "ck_closed", "ck_none", "ck_rate", "ck_error")
+              "ck_closed", "ck_none", "ck_rate", "ck_error", "chip_ok", "chip_confused", "chip_rewatch", "day_class",
+              "day_study")
 YT_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 WEEKDAYS_FULL = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
 PARENT_WEEKS = 8      # weeks kept in the parent room
@@ -230,7 +231,13 @@ TASTE_SLUG = "콩"      # the demo student shown in the taste build (F1)
 TASTE_PATH = "kong"   # fixed paths /s/kong/ and /p/kong/
 
 
-def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datetime, taste: bool = False) -> dict:
+CHIP_KEYS = ("ok", "confused", "rewatch")
+
+
+def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datetime, taste: bool = False,
+                  scrub=None) -> dict:
+    """`scrub` (from lint.text_scrubber) filters text students wrote; without it student lines are left out."""
+    scrub = scrub or (lambda _t: "")
     S = strings()
     wk = S["weekdays"].split(",")
     mon, sun = M.week_bounds(today)
@@ -254,6 +261,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
     newest_thumb = next((v["thumb"] for v in (new_videos or videos) if v["thumb"]), "")
     published_at = _publish_times(conn)
     show_late = bool(cfg.extra.get("show_late", False))
+    show_lines = bool(cfg.extra.get("parent_shows_reflection", False))   # off by default: students write honestly
 
     students = []
     only = " AND slug = ?" if taste else ""
@@ -261,7 +269,16 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                           (TASTE_SLUG,) if taste else ()):
         cls = classes.get(s["class_id"])
         subs = {r["day"]: r for r in conn.execute(
-            "SELECT day, ts, source FROM submissions WHERE student_id = ? AND status != 'deleted'", (s["id"],))}
+            "SELECT day, ts, source, reflection, chip FROM submissions WHERE student_id = ? AND status != 'deleted'",
+            (s["id"],))}
+        lines = []
+        for dd in sorted(subs, reverse=True):
+            r = subs[dd]
+            text = scrub(r["reflection"])
+            if (text or r["chip"] in CHIP_KEYS) and date.fromisoformat(dd) <= today:
+                d0 = date.fromisoformat(dd)
+                lines.append({"date": dd, "label": f"{d0.month}/{d0.day} ({wk[d0.weekday()]})", "text": text,
+                              "chip": S["chip_" + r["chip"]] if r["chip"] in CHIP_KEYS else ""})
         sub_days = {date.fromisoformat(d) for d in subs if date.fromisoformat(d) <= today}
         cd = cdays.get(s["class_id"], set())
         days_upto_today = {d for d in cd if d <= today}
@@ -355,7 +372,11 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                 t_in = _fmt_time(ck["ts"]) if ck else ""
                 late = bool(show_late and ck and ck["start_time"] and t_in > ck["start_time"])
                 if t_in or x["time"]:
-                    ritual.append({"wd": x["wd"], "in": t_in, "out": x["time"], "late": late})
+                    sub_row = subs.get(x["date"])
+                    line = ""
+                    if show_lines and sub_row:
+                        line = scrub(sub_row["reflection"]) or (S["chip_" + sub_row["chip"]] if sub_row["chip"] in CHIP_KEYS else "")
+                    ritual.append({"wd": x["wd"], "in": t_in, "out": x["time"], "late": late, "line": line})
             wsum = _sum_upto(att, wm, cut)
             dir_eff = S["dir_" + trend["lines"]["eff"].dir] if trend else ""
             rng = f"{_md(wm)}–{_md(we)}"
@@ -421,6 +442,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "tiles": tiles,
             "room": room,
             "months": months,
+            "lines": lines[:30],
             "bio": S["bio"].format(cls=cls["name"] if cls else "", n=len(sub_days)),
             "js": json_script(js),
         })
@@ -463,7 +485,7 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
     if taste:
         cfg = Config(worker_url="", pages_url="", teacher_token="", videos_path=cfg.videos_path,
                      assignments_path=cfg.assignments_path, board_poll_seconds=cfg.board_poll_seconds)
-    ctx = build_context(conn, cfg, today, now, taste=taste)
+    ctx = build_context(conn, cfg, today, now, taste=taste, scrub=lintmod.text_scrubber(conn))
     e = env()
     if out.exists():
         shutil.rmtree(out)

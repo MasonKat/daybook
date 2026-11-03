@@ -110,6 +110,13 @@
   </div>
   <div id="st-preview" class="state" hidden>
     <div class="pv"><img id="preview" alt=""><p class="pv-busy" id="pv-busy" hidden>{{ S.uploading }}</p></div>
+    <div class="reflect">
+      <label class="rl" for="line">{{ S.line_label }}</label>
+      <input id="line" type="text" maxlength="40" autocomplete="off" enterkeyhint="done" placeholder="{{ S.line_ph }}">
+      <div class="chips" id="chips">
+        {% for k in ("ok", "confused", "rewatch") %}<button type="button" class="cbtn" data-chip="{{ k }}" aria-pressed="false">{{ S['chip_' ~ k] }}</button>{% endfor %}
+      </div>
+    </div>
     <div class="pv-actions">
       <label class="btn ghost" for="photo" id="pv-retake">{{ S.retake_photo }}</label>
       <button type="button" class="btn primary" id="post">{{ S.post_cta }}</button>
@@ -119,6 +126,7 @@
     <div class="check" aria-hidden="true">✓</div>
     <h1 class="done-title">{{ S.done_title }}</h1>
     <p class="muted" id="d-replaced" hidden>{{ S.replaced }}</p>
+    <p class="dayline tnum" id="d-day"></p>
     <p class="shot" id="d-shot"></p>
     <ul class="stats">
       <li id="d-streak"></li>
@@ -151,6 +159,11 @@
     {% for t in me.tiles %}{% if t.month %}<li class="mhead" id="m-{{ t.key }}">{{ t.month }}</li>{% else %}<li class="tile {{ t.st }}" data-date="{{ t.date }}"><span class="tl tnum">{{ t.label }}</span><span class="tw">{{ t.wd }}</span>{% if t.heart %}<span class="hrt" title="{{ S.tile_heart }}">♥</span>{% endif %}{% if t.st == 'miss' %}<span class="mdot" aria-hidden="true"></span>{% endif %}</li>{% endif %}{% endfor %}
   </ol>
   <p class="legend"><span class="lg-sw sub"></span>{{ S.tile_sub }}<span class="lg-sw hl"></span>{{ S.tile_heart }}<span class="lg-sw miss"></span>{{ S.tile_miss }}<span class="lg-sw off"></span>{{ S.tile_off }}</p>
+
+  <h2 class="sec-h">{{ S.my_lines }}</h2>
+  <ul class="mylines" id="mylines">
+    {% for l in me.lines %}<li data-date="{{ l.date }}"><span class="ld">{{ l.label }}</span>{% if l.chip %}<span class="lchip">{{ l.chip }}</span>{% endif %}{% if l.text %}<span class="lt2">{{ l.text }}</span>{% endif %}</li>{% else %}<li class="muted empty">{{ S.lines_empty }}</li>{% endfor %}
+  </ul>
 
   <h2 class="sec-h">{{ S.teacher_messages }}</h2>
   <div class="msgs">

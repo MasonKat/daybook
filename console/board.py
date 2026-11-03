@@ -49,7 +49,7 @@ class Board:
         cls = conn.execute("SELECT * FROM classes WHERE id = ?", (self.class_id,)).fetchone()
         sess = conn.execute("SELECT * FROM sessions WHERE id = ?", (self.session_id,)).fetchone()
         rows = conn.execute(
-            """SELECT s.id, s.display_name, sub.ts, a.points, c.ts AS ck FROM students_public s
+            """SELECT s.id, s.display_name, sub.ts, sub.reflection, sub.chip, a.points, c.ts AS ck FROM students_public s
                LEFT JOIN submissions sub ON sub.student_id = s.id AND sub.day = ? AND sub.status != 'deleted'
                LEFT JOIN attitude a ON a.student_id = s.id AND a.session_id = ?
                LEFT JOIN checkins c ON c.student_id = s.id AND c.session_id = ?
@@ -59,7 +59,9 @@ class Board:
         three = [r["display_name"] for r in rows if r["points"] == 3]
         hm = lambda ts: M.utc_iso_to_kst(ts).strftime("%H:%M") if ts else ""   # noqa: E731
         students = [{"id": r["id"], "display_name": r["display_name"], "done": r["ts"] is not None, "time": hm(r["ts"]),
-                     "points": r["points"], "ck": hm(r["ck"])} for r in rows]
+                     "points": r["points"], "ck": hm(r["ck"]),
+                     "line": " · ".join(x for x in ((self.S.get("chip_" + (r["chip"] or ""), "") if r["chip"] else ""),
+                                                    r["reflection"] or "") if x)} for r in rows]
         arrivals = [{"initial": r["display_name"][:1], "time": hm(r["ck"])}
                     for r in sorted((r for r in rows if r["ck"]), key=lambda r: r["ck"])]
         return {"cls": cls, "students": students, "reward": reward, "three": three, "arrivals": arrivals,
@@ -69,7 +71,8 @@ class Board:
         st = self.state(conn)
         r = st["reward"]
         return {
-            "students": {str(s["id"]): {"done": s["done"], "time": s["time"], "points": s["points"], "ck": s["ck"]}
+            "students": {str(s["id"]): {"done": s["done"], "time": s["time"], "points": s["points"], "ck": s["ck"],
+                                        "line": s["line"]}
                          for s in st["students"]},
             "pct": r.pct,
             "togo": self.S["reward_to_go"].format(label=r.label, n=r.to_go),

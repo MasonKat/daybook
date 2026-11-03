@@ -146,6 +146,26 @@ def lint_dir(root: Path, students: list[PrivateRow], page_title: str) -> list[Fi
 WORKER_HINT_RE = re.compile(r"workers\.dev|/submit\b|/status\?|/checkin\b|/react\b|X-Teacher-Token", re.I)
 
 
+def text_scrubber(conn: sqlite3.Connection):
+    """For text a student wrote (오늘 한 줄): returns f(text) -> text, or "" when the text would trip the lint
+    (a phone number, any full name / ext_id / parent phone, a raw id). The page then simply leaves it out."""
+    rows = private_rows(conn)
+    names = [r.full_name.strip() for r in rows if r.full_name and r.full_name.strip()]
+    ids = [_bounded(r.ext_id) for r in rows if r.ext_id and r.ext_id.strip()]
+    phones = [_digits(r.parent_phone) for r in rows if len(_digits(r.parent_phone)) >= 7]
+
+    def scrub(text: str | None) -> str:
+        t = (text or "").strip()
+        if not t:
+            return ""
+        d = _digits(t)
+        if (PHONE_RE.search(t) or RAW_ID_RE.search(t) or BRAND_RE.search(t) or any(n in t for n in names)
+                or any(rx.search(t) for rx in ids) or any(p in d for p in phones)):
+            return ""
+        return t
+    return scrub
+
+
 def lint_taste(root: Path, students: list[PrivateRow], taste_slug_display: str, worker_urls: list[str]) -> list[Finding]:
     """Taste build (F1): only the demo student's display name, and no Worker URL anywhere."""
     out: list[Finding] = []
