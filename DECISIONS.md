@@ -140,14 +140,17 @@ One line each. "deferred" = not built in P0, on purpose.
 - `/moments` for a token whose class is unknown answers an empty list (not 404), so the student console stays clean.
 - Demo: two synthetic chalkboard scenes on each class's latest class day and one on the class day before (with synthetic EXIF, so the stripping runs in every demo).
 
+## F5: the proposal's leftovers (2026-11-03)
+- `daybook class cancel <class> <date> [--reason 휴강] [--undo]`: schema v5 adds `sessions.cancelled` (the reason). A cancelled day is removed from the class days (streak, ritual, parent "수업일" counts) and from `remaining_sessions` for a goal that is not frozen yet (a frozen goal stays as it is). The profile shows it as a grey hatched tile with the reason.
+- QR: `daybook qr <class> --set <id> [--out f.svg|f.png]` and `daybook qr sheet <class>` (A4 HTML, one card per set id of the class, labels from assignments.json, else "M/D 과제") with `segno` (new pure-Python dependency). The URL is always `{pages_url}/go/?set=<id>`; the code refuses anything that is not a plain set id. Output in `qr/` (gitignored).
+- Class band on the parent trend: the class's middle 50 % (p25–p75) per round, for 확보 효율 and 도전 도달, as a faint polygon; only when every shown round has ≥ 5 active students in the class, so no single student's value can be read back. Never another student's point.
+- `daybook export report <slug>`: one A4 page (print → PDF in the browser): current and longest streak in the term, submission rate on class days, attitude total, the trend (with the band), every teacher note, the number of class moments. Written to `reports/` (gitignored); display name only.
+- `daybook note suggest <class> [--date]`: prints a ready `daybook note …` command per student without a note this week, e.g. "이번 주 수업일 2일 모두 제출, 태도 5/6, 확보 효율 상승"; the teacher edits and runs it. Nothing is written by itself.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
-- deferred (local agent will add after the clone, before 수능 week): `daybook class cancel <class> <date>` so a closed day does not break streaks.
-- deferred: `export pdf` (the command is a stub that exits 2 with a message).
-- deferred: class median band on the parent trend.
-- deferred: cancelling a scheduled class day (holidays); a cancelled weekday still counts as a class day for the streak.
+- deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).
 - deferred: several reward cycles per term (the class total counts the whole term).
-- deferred: QR image generation; `session start --set` prints the `/go/?set=` URL for the teacher's existing QR tool.
 - deferred: service worker / offline mode.
 - deferred: a real-device install test on iPhone Safari and Android Chrome (manifest, icons, apple meta tags and standalone mode are in place; only Chromium was tested here).
 - deferred: the Cloudflare deploy itself (needs the teacher's account: README "Teacher deploy steps").

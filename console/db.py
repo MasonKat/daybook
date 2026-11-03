@@ -12,7 +12,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 KST = timezone(timedelta(hours=9))  # Asia/Seoul has no DST
 
 SCHEMA = """
@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     note     TEXT,
     start_time TEXT,                      -- HH:MM (F2)
     code     TEXT,                        -- 4-digit check-in code (F2)
+    cancelled TEXT,                       -- F5: a reason (e.g. 휴강) = not a class day for streaks and goals
     UNIQUE (class_id, date)
 );
 
@@ -173,7 +174,7 @@ def migrate(conn: sqlite3.Connection) -> None:
     """Additive migrations for databases created by an older version (never drops data)."""
     if not is_initialized(conn):
         return
-    for table, new_cols in (("sessions", ("start_time", "code")), ("submissions", ("reflection", "chip"))):
+    for table, new_cols in (("sessions", ("start_time", "code", "cancelled")), ("submissions", ("reflection", "chip"))):
         cols = _columns(conn, table)
         if not cols:          # the table does not exist yet: SCHEMA below creates it with every column
             continue

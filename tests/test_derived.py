@@ -118,3 +118,33 @@ def test_weekday_mask_and_week():
     assert M.week_bounds(D("2026-11-06")) == (D("2026-11-02"), D("2026-11-08"))
     with pytest.raises(ValueError):
         M.mask_from_days("xyz")
+
+
+def test_cancelled_day_stops_counting(conn, klass, tmp_path):
+    from datetime import datetime
+    from console import generate
+    from console.config import Config
+    from console.db import KST
+    cls, studs = klass
+    s = studs[0]
+    # Tue 11-03 class, Wed, Thu, Fri 11-06 class: submissions on Wed and Thu only
+    for d in ("2026-11-04", "2026-11-05"):
+        ops.teacher_submit(conn, s["id"], D(d))
+    cd = M.class_days(conn, cls, D("2026-11-06"))
+    subs = days("2026-11-04", "2026-11-05")
+    assert M.streak(subs, cd, D("2026-11-06")) == 2                     # Tue was a class day (before the gap)
+    assert M.streak(subs, cd, D("2026-11-07"), today_open=False) == 0   # Fri missed breaks it
+    ops.cancel_class(conn, cls, D("2026-11-06"))
+    cd = M.class_days(conn, cls, D("2026-11-07"))
+    assert D("2026-11-06") not in cd
+    assert M.streak(subs, cd, D("2026-11-07"), today_open=False) == 2   # 휴강 no longer breaks the streak
+    assert M.remaining_sessions(cls, D("2026-11-06"), set(M.cancelled_days(conn, cls["id"]))) == \
+        M.remaining_sessions(cls, D("2026-11-06")) - 1
+    conn.commit()
+    res = generate.publish(conn, Config(worker_url="https://w.example"), tmp_path / "dist", today=D("2026-11-07"),
+                           now=datetime(2026, 11, 7, 10, 0, tzinfo=KST))
+    assert res.ok
+    html = (tmp_path / "dist" / "s" / s["student_token"] / "index.html").read_text(encoding="utf-8")
+    assert '<li class="tile cancel" data-date="2026-11-06"><span class="tl tnum">11/6</span><span class="tw">휴강</span>' in html
+    ops.cancel_class(conn, cls, D("2026-11-06"), None)                  # --undo
+    assert D("2026-11-06") in M.class_days(conn, cls, D("2026-11-07"))

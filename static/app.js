@@ -99,7 +99,7 @@
       LS.set(LKEY, JSON.stringify(keep));
     }
     function isClassDay(day) {
-      if (!D.mask) return false;
+      if (!D.mask || (D.cancelled || []).indexOf(day) >= 0) return false;
       if (D.termStart && day < D.termStart) return false;
       if (D.termEnd && day > D.termEnd) return false;
       return !!(D.mask & (1 << weekday(day)));
@@ -150,7 +150,7 @@
       var lis = tiles.querySelectorAll('.tile');
       for (var i = 0; i < lis.length; i++) {
         var day = lis[i].getAttribute('data-date'), cl = lis[i].classList;
-        if (cl.contains('hl')) continue;                       /* a 3-point day stays the highlight */
+        if (cl.contains('hl') || (cl.contains('cancel') && !known[day])) continue;   /* the highlight / 휴강 stay */
         var wasMiss = cl.contains('miss');
         cl.remove('sub', 'open', 'miss', 'off');
         cl.add(known[day] ? 'sub' : day === today ? 'open' : (wasMiss || (isClassDay(day) && day < today)) ? 'miss' : 'off');

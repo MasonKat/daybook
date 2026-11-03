@@ -212,6 +212,8 @@ body[data-page="student"] .lchip { color: #93c5fd; }
 .tile.sub { background: var(--grad-soft); color: var(--tile-sub-fg); }
 .tile.hl { background: var(--grad); color: #fff; }
 .tile.miss { background: var(--bg); box-shadow: inset 0 0 0 1.5px var(--heart); color: var(--fg); }
+.tile.cancel { background: repeating-linear-gradient(135deg, var(--tile-off) 0 6px, var(--line) 6px 8px); color: var(--muted); }
+.lg-sw.cancel { background: repeating-linear-gradient(135deg, var(--tile-off) 0 3px, var(--line) 3px 4px); border: 1px solid var(--line); }
 .tile.open { background: var(--bg); box-shadow: inset 0 0 0 2px var(--accent); color: var(--fg); }
 .tile .hrt { position: absolute; top: 6px; right: 8px; font-size: 13px; color: #fff; }
 .mdot { position: absolute; top: 8px; right: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--heart); }
@@ -311,6 +313,9 @@ body[data-page="parent"] { font-size: 14px; }
 .trend .ln.eff, .trend .pt.eff { stroke: var(--eff); }
 .trend .ln.reach, .trend .pt.reach { stroke: var(--reach); }
 .trend .pt { fill: var(--card); stroke-width: 2; }
+.trend .band { stroke: none; opacity: .14; }
+.trend .band.eff { fill: var(--eff); } .trend .band.reach { fill: var(--reach); }
+.band-note { font-size: 11px; }
 .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: 0; }
 .sw.eff { background: var(--eff); } .sw.reach { background: var(--reach); }
 .dir { margin-left: 2px; }

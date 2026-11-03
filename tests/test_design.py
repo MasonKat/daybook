@@ -124,3 +124,24 @@ def test_lint_thumbnail_size(tmp_path):
 def test_korean_messenger_words_are_allowed(tmp_path):
     (tmp_path / "a.html").write_text("<title>AMP 학습 기록</title><p>답장·문의는 카카오톡으로</p>", encoding="utf-8")
     assert not lint.errors(lint.lint_dir(tmp_path, [], "AMP 학습 기록"))
+
+
+def test_class_band_only_with_5_students_and_no_points(conn, cfg, klass, tmp_path):
+    from console import importers
+    from pathlib import Path
+    cls, studs = klass
+    importers.import_screeners(conn, Path(__file__).resolve().parent.parent / "demo" / "screeners")
+    conn.commit()
+    assert generate.publish(conn, cfg, tmp_path / "d1", today=TODAY, now=NOW).ok
+    html = (tmp_path / "d1" / "p" / studs[0]["parent_token"] / "index.html").read_text(encoding="utf-8")
+    assert 'class="band' not in html                                  # 3 students: no band
+    for i, name in enumerate(("가나다", "라마바", "사아자")):
+        sid = importers.add_student(conn, cls["id"], name)["id"]
+        for r in conn.execute("SELECT DISTINCT test_name, date FROM tests").fetchall():
+            importers.upsert_test(conn, sid, r["date"], r["test_name"], 12, 6 + i, 4, 2, 0.5 + 0.05 * i, None, None, None, "t")
+    conn.commit()
+    assert generate.publish(conn, cfg, tmp_path / "d2", today=TODAY, now=NOW).ok
+    html = (tmp_path / "d2" / "p" / studs[0]["parent_token"] / "index.html").read_text(encoding="utf-8")
+    newest = html.split('<div class="msg newest">')[1]
+    assert newest.count('<polygon class="band') == 2 and "가운데 50%" in newest
+    assert newest.count('<circle class="pt eff"') == 3                 # still only this student's own points

@@ -3,7 +3,7 @@
 **Status (2026-11-03, cloud build + design pass v1):**
 1. P1 complete and tested: schema + `students_public`, `init`, `demo`, `roster add/list/import`, Worker `/submit` + `/submissions`, student 오늘 tab, `pull`, parent page, `publish` + no-PII lint, `import screeners`, deploy steps.
 2. P2 complete: board + attitude buttons, `score`, class reward bar, `note`, `weekly`, Playwright checks. P3: manifest/icons/standalone, `rotate-tokens`, `export pdf` stub, Worker node tests.
-3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 92 pytest + 22 Worker node tests + 136 Playwright checks (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
+3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 97 pytest + 22 Worker node tests + 136 Playwright checks (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
    Design v2: shorts reels + 강의 cards, story rings with content, status-coloured profile tiles, one weekly report per parent message.
 4. Not done here (needs the teacher): the Cloudflare deploy, and a real-phone install test on iPhone Safari / Android Chrome. Deferred items are listed in `DECISIONS.md`.
 5. Real data is attached by the local agents: see `HANDOFF.md`. This repo holds synthetic data only.
@@ -71,7 +71,10 @@ Then follow `HANDOFF.md` (classes, roster import, links).
 | Saturday | `make deploy-pages` | `daybook publish` (renders `dist/`, runs the no-PII lint, stops on any finding), then `wrangler pages deploy ./dist` |
 | Saturday, optional | `daybook weekly 고1A` | paste-ready Korean message per student |
 
-Other commands: `daybook score <class> <date> <slug> <0-3>`, `daybook submit <slug> [--source paper]`,
+Other commands: `daybook class cancel <class> <date>` (휴강), `daybook qr <class> --set <id>` / `daybook qr sheet <class>`
+(handout QR, never a token), `daybook note suggest <class>` (draft notes), `daybook export report <slug>` (one-page
+상담 자료, print to PDF), `daybook lines <class>`, `daybook checkin <slug>`, `daybook moment add|list`,
+`daybook score <class> <date> <slug> <0-3>`, `daybook submit <slug> [--source paper]`,
 `daybook roster edit <slug> --display <name>`, `daybook roster rotate-tokens <class> [--student slug]`,
 `daybook import tests <csv>`, `daybook pull --photos photos/`, `daybook class list|edit`, `daybook export pdf` (stub).
 Every command has `--help`.

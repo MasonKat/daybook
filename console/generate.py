@@ -144,7 +144,22 @@ class TrendLine:
     dots: list[tuple[float, float]] = field(default_factory=list)
 
 
-def _trend(rows: list[sqlite3.Row]) -> dict | None:
+BAND_MIN_STUDENTS = 5   # the class band is drawn only when a round has at least this many students
+
+
+def _quartiles(vals: list[float]) -> tuple[float, float]:
+    v = sorted(vals)
+
+    def q(p):
+        k = (len(v) - 1) * p
+        lo, hi = int(k), min(int(k) + 1, len(v) - 1)
+        return v[lo] + (v[hi] - v[lo]) * (k - lo)
+    return q(0.25), q(0.75)
+
+
+def _trend(rows: list[sqlite3.Row], class_rounds: dict | None = None) -> dict | None:
+    """The student's last rounds; `class_rounds[(test_name, date)] = {"eff": [...], "reach": [...]}` adds the
+    class's middle-50 % band (never another student's point) when every shown round has >= BAND_MIN_STUDENTS."""
     rows = rows[-M.TREND_ROUNDS:]
     if not rows:
         return None
@@ -165,8 +180,19 @@ def _trend(rows: list[sqlite3.Row]) -> dict | None:
                "middle" if n == 1 else "start" if i == 0 else "end" if i == n - 1 else "middle")
               for i, r in enumerate(rows)]
     grid = [(PAD_T + (SVG_H - PAD_T - PAD_B) * (1 - g), f"{int(g * 100)}") for g in (0, 0.5, 1)]
+    bands = []
+    if class_rounds is not None and n >= 2:
+        stats = [class_rounds.get((r["test_name"], r["date"])) for r in rows]
+        if all(st and len(st["eff"]) >= BAND_MIN_STUDENTS for st in stats):
+            for key in ("eff", "reach"):
+                qs = [_quartiles([x for x in st[key] if x is not None]) if any(x is not None for x in st[key]) else None
+                      for st in stats]
+                if all(qs):
+                    top = [f"{round(xs[i], 1)},{round(y(qs[i][1]), 1)}" for i in range(n)]
+                    bot = [f"{round(xs[i], 1)},{round(y(qs[i][0]), 1)}" for i in reversed(range(n))]
+                    bands.append({"key": key, "points": " ".join(top + bot)})
     return {"lines": lines, "labels": labels, "grid": grid, "w": SVG_W, "h": SVG_H, "x0": PAD_L,
-            "x1": SVG_W - PAD_R, "ylab": SVG_H - 8}
+            "x1": SVG_W - PAD_R, "ylab": SVG_H - 8, "bands": bands}
 
 
 def parse_short(d: str) -> str:
@@ -266,6 +292,12 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         lst.append({"date": r["date"], "n": n, "k": f"{ck}:{r['date']}:{n}", "text": r["text"] or "",
                     "src": f"/m/{ck}/{r['date']}_{n}.jpg", "image_key": r["image_key"],
                     "label": f"{d0.month}/{d0.day} ({wk[d0.weekday()]})"})
+    class_rounds: dict[int, dict] = {}
+    for r in conn.execute("""SELECT s.class_id, t.test_name, t.date, t.efficiency, t.reach FROM tests t
+                             JOIN students_public s ON s.id = t.student_id WHERE s.active = 1"""):
+        st = class_rounds.setdefault(r["class_id"], {}).setdefault((r["test_name"], r["date"]), {"eff": [], "reach": []})
+        st["eff"].append(r["efficiency"])
+        st["reach"].append(r["reach"])
     new_videos = [v for v in videos if v["added"] and v["added"] >= (today - timedelta(days=6)).isoformat()]
     shorts = [v for v in videos if v["kind"] == "short"]
     longs = [v for v in videos if v["kind"] == "long"]
@@ -292,6 +324,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                               "chip": S["chip_" + r["chip"]] if r["chip"] in CHIP_KEYS else ""})
         sub_days = {date.fromisoformat(d) for d in subs if date.fromisoformat(d) <= today}
         cd = cdays.get(s["class_id"], set())
+        cancelled = M.cancelled_days(conn, s["class_id"]) if s["class_id"] is not None else {}
         days_upto_today = {d for d in cd if d <= today}
         week = _week_days(mon, subs, cd, today, wk)
         att = [(date.fromisoformat(r["date"]), r["points"]) for r in conn.execute(
@@ -324,11 +357,12 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                                "n": 0})
                 tiles.append({"month": months[-1]["label"], "key": months[-1]["key"]})
             st = ("hl" if d in three_days else "sub" if d in sub_days else "open" if d == today
-                  else "miss" if d in cd else "off")
+                  else "miss" if d in cd else "cancel" if d in cancelled else "off")
             if d in sub_days:
                 months[-1]["n"] += 1
             tiles.append({"date": d.isoformat(), "label": f"{d.month}/{d.day}", "wd": wk[d.weekday()],
-                          "st": st, "sub": d in sub_days, "heart": d in three_days})
+                          "st": st, "sub": d in sub_days, "heart": d in three_days,
+                          "note": (cancelled.get(d) or "") if st == "cancel" else ""})
             d -= timedelta(days=1)
         week_k = sum(1 for x in week if x["done"])
 
@@ -368,7 +402,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             current = wm == mon
             wdays = _week_days(wm, subs, cd, today, wk)
             rows = [r for r in tests if r["date"] <= cut.isoformat()]
-            trend = _trend(rows)
+            trend = _trend(rows, class_rounds.get(s["class_id"], {}))
             last = rows[-1] if rows else None
             wk_notes = [n for n in notes if n["week"] == M.iso_week(wm)]
             total_then = _sum_upto(class_att.get(s["class_id"], []), None, cut)
@@ -439,6 +473,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "sets": set_labels(conn, cfg, s["class_id"]),
             "todayTime": _fmt_time(today_sub["ts"]) if today_sub else "",
             "classDays": sorted(x.isoformat() for x in cd if x >= today),
+            "cancelled": sorted(x.isoformat() for x in cancelled if x >= today - timedelta(days=30)),
             "checkinTime": _fmt_time(checkins[today.isoformat()]["ts"]) if today.isoformat() in checkins else "",
             "taste": taste,
             "S": {k: S[k] for k in JS_STRINGS},

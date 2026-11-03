@@ -146,5 +146,14 @@
   "board_moment_gate": "학생 얼굴·이름·문제집 원문 전체가 보이지 않나요?",
   "board_moment_need": "확인란에 체크해야 올라가요",
   "board_moment_ok": "장면을 올렸어요",
-  "board_reactions": "지난 장면 반응"
+  "board_reactions": "지난 장면 반응",
+  "tile_cancel": "휴강",
+  "band_note": "옅은 띠: 같은 반의 가운데 50% (5명 이상일 때만, 다른 학생 점수는 보이지 않아요)",
+  "report_made": "{d} 작성",
+  "report_streak": "지금 연속 (최장 {best}일)",
+  "report_rate": "수업일 제출 {d}/{c} · 전체 {n}일",
+  "report_attitude": "태도 누적",
+  "report_moments": "함께한 수업 장면",
+  "report_footer": "AMP 학습 기록 · 상담용 (브라우저에서 인쇄 → PDF로 저장)",
+  "term_title": "{name} · 학기 학습 기록"
 }

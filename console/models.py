@@ -92,20 +92,29 @@ def scheduled_days(mask: int, start: date, end: date) -> set[date]:
     return out
 
 
+def cancelled_days(conn: sqlite3.Connection, class_id: int) -> dict[date, str]:
+    """F5: days the teacher cancelled (`daybook class cancel`), with the reason."""
+    return {parse_day(r["date"]): r["cancelled"] for r in conn.execute(
+        "SELECT date, cancelled FROM sessions WHERE class_id = ? AND cancelled IS NOT NULL", (class_id,))}
+
+
 def class_days(conn: sqlite3.Connection, cls: sqlite3.Row, upto: date) -> set[date]:
-    """Days that count as a class day: explicit `sessions` rows plus the weekly schedule inside the term."""
-    days = {parse_day(r["date"]) for r in conn.execute("SELECT date FROM sessions WHERE class_id = ?", (cls["id"],))}
+    """Days that count as a class day: explicit `sessions` rows plus the weekly schedule inside the term,
+    minus cancelled days."""
+    days = {parse_day(r["date"]) for r in conn.execute(
+        "SELECT date FROM sessions WHERE class_id = ? AND cancelled IS NULL", (cls["id"],))}
     t_start, t_end = parse_term(cls["term"])
     if t_start and cls["weekday_mask"]:
         days |= scheduled_days(cls["weekday_mask"], t_start, min(t_end, upto))
+    days -= set(cancelled_days(conn, cls["id"]))
     return {d for d in days if d <= upto}
 
 
-def remaining_sessions(cls: sqlite3.Row, today: date) -> int:
+def remaining_sessions(cls: sqlite3.Row, today: date, cancelled: set[date] | None = None) -> int:
     _, t_end = parse_term(cls["term"])
     if not t_end or not cls["weekday_mask"]:
         return 0
-    return len(scheduled_days(cls["weekday_mask"], today, t_end))
+    return len(scheduled_days(cls["weekday_mask"], today, t_end) - (cancelled or set()))
 
 
 # ---------------------------------------------------------------- streak
@@ -189,7 +198,8 @@ def reward_for(conn: sqlite3.Connection, cls: sqlite3.Row, today: date, freeze: 
     """Class reward bar. The goal is computed once and frozen into reward_goal_points (see DECISIONS)."""
     goal = cls["reward_goal_points"]
     if goal is None:
-        goal = compute_goal(active_count(conn, cls["id"]), remaining_sessions(cls, today), cls["goal_coef"])
+        goal = compute_goal(active_count(conn, cls["id"]),
+                            remaining_sessions(cls, today, set(cancelled_days(conn, cls["id"]))), cls["goal_coef"])
         if freeze and goal > 0:
             conn.execute("UPDATE classes SET reward_goal_points = ? WHERE id = ?", (goal, cls["id"]))
             from .db import log_event

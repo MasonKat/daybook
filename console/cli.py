@@ -183,6 +183,22 @@ def class_edit(obj: Ctx, name, term, days, reward_label, goal, coef):
     click.echo("ok")
 
 
+@class_.command("cancel")
+@click.argument("class_name")
+@click.argument("d", metavar="DATE")
+@click.option("--reason", default="휴강", show_default=True)
+@click.option("--undo", is_flag=True, help="Make it a class day again")
+@click.pass_obj
+def class_cancel(obj: Ctx, class_name, d, reason, undo):
+    """A cancelled day no longer counts as a class day (streaks, goal); it shows as a grey "휴강" tile."""
+    conn = obj.conn
+    cls = ops.get_class(conn, class_name)
+    day = parse_date(d)
+    ops.cancel_class(conn, cls, day, None if undo else reason)
+    conn.commit()
+    click.echo(f"{cls['name']} {day.isoformat()}: " + ("class day again" if undo else f"cancelled ({reason})"))
+
+
 @class_.command("list")
 @click.pass_obj
 def class_list(obj: Ctx):
@@ -394,6 +410,46 @@ def moment_list(obj: Ctx, class_name):
         click.echo(f"{r['date']}  {r['image_key']}\t{r['text'] or ''}")
 
 
+@cli.command()
+@click.argument("first")
+@click.argument("second", required=False)
+@click.option("--set", "set_id", default=None, help="The set id the handout is for")
+@click.option("--out", default=None, help="qr/<set>.svg (or qr/<class>-sheet.html) by default; .png also works")
+@click.pass_obj
+def qr(obj: Ctx, first, second, set_id, out):
+    """Handout QR codes: {pages_url}/go/?set=<id>, never a token.
+
+    \b
+    daybook qr <class> --set <set_id> [--out f.svg|f.png]
+    daybook qr sheet <class> [--out sheet.html]      (print-ready A4, one card per set id)
+    """
+    import json as _json
+    from . import qr as qrmod
+    conn = obj.conn
+    try:
+        if first == "sheet":
+            if not second:
+                fail("usage: daybook qr sheet <class>")
+            cls = ops.get_class(conn, second)
+            labels = {}
+            p = Path(obj.cfg.assignments_path)
+            if p.exists():
+                labels = {k: v for k, v in _json.loads(p.read_text(encoding="utf-8")).items() if not k.startswith("_")}
+            path = Path(out or f"qr/{cls['name']}-sheet.html")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(qrmod.sheet(conn, obj.cfg, cls, labels), encoding="utf-8")
+            click.echo(f"{path}  (open it in a browser and print)")
+            return
+        ops.get_class(conn, first)
+        if not set_id:
+            fail("usage: daybook qr <class> --set <set_id>")
+        url = qrmod.go_url(obj.cfg, set_id)
+        path = qrmod.save(url, Path(out or f"qr/{set_id}.svg"))
+        click.echo(f"{path}  →  {url}")
+    except qrmod.QRError as e:
+        fail(str(e))
+
+
 @cli.command("lines")
 @click.argument("class_name")
 @click.option("--date", "d", default=None, help="Day (default today); --days for more")
@@ -525,14 +581,33 @@ def import_tests(obj: Ctx, csv_path):
         click.echo(f"  {u}")
 
 
-@cli.command()
+@cli.command(context_settings={"ignore_unknown_options": True})
 @click.argument("slug")
-@click.argument("week")
-@click.argument("text")
+@click.argument("week", required=False)
+@click.argument("text", required=False)
+@click.option("--date", "d", default=None, help="note suggest: any day of the week (default today)")
 @click.pass_obj
-def note(obj: Ctx, slug, week, text):
-    """The teacher's one-line note for a week (YYYY-Www). The parent page shows the latest."""
+def note(obj: Ctx, slug, week, text, d):
+    """The teacher's one-line note for a week (YYYY-Www). The parent page shows the latest.
+
+    \b
+    daybook note <slug> <YYYY-Www> "<text>"
+    daybook note suggest <class>     data-based drafts to edit (skips students who already have this week's note)
+    """
     conn = obj.conn
+    if slug == "suggest":
+        from .report import suggest_notes
+        if not week:
+            fail("usage: daybook note suggest <class>")
+        cls = ops.get_class(conn, week)
+        drafts = suggest_notes(conn, obj.cfg, cls, parse_date(d))
+        for sl, wk, draft in drafts:
+            click.echo(f'daybook note {sl} {wk} "{draft}"')
+        if not drafts:
+            click.echo("every student already has a note this week")
+        return
+    if not week or text is None:
+        fail('usage: daybook note <slug> <YYYY-Www> "<text>"')
     s = ops.get_student(conn, slug)
     ops.add_note(conn, s["id"], week, text)
     conn.commit()
@@ -585,6 +660,26 @@ def publish(obj: Ctx, out, d, taste):
 @cli.group()
 def export():
     """Exports."""
+
+
+@export.command("report")
+@click.argument("slug")
+@click.option("--out", default=None, help="reports/<slug>.html by default (gitignored)")
+@click.option("--date", "d", default=None)
+@click.pass_obj
+def export_report(obj: Ctx, slug, out, d):
+    """End-of-term 1-page 상담 자료 as print-ready HTML (open it and print to PDF in the browser)."""
+    from .report import term_report
+    conn = obj.conn
+    s = ops.get_student(conn, slug)
+    try:
+        html = term_report(conn, obj.cfg, s["id"], parse_date(d))
+    except ValueError as e:
+        fail(str(e))
+    path = Path(out or f"reports/{slug}.html")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(html, encoding="utf-8")
+    click.echo(f"{path}  (open it in a browser → print → save as PDF)")
 
 
 @export.command("pdf")

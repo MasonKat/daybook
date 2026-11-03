@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
+<title>{{ S.page_title }}</title>
+<style>
+@page { size: A4; margin: 14mm; }
+body { font: 10.5pt/1.5 -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; color: #111; margin: 0; }
+h1 { font-size: 17pt; margin: 0; }
+.sub { color: #555; margin: 1mm 0 6mm; }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4mm; margin-bottom: 6mm; }
+.kpi { border: 1px solid #ddd; border-radius: 3mm; padding: 3mm 4mm; }
+.kpi b { display: block; font-size: 17pt; font-variant-numeric: tabular-nums; }
+.kpi span { color: #555; font-size: 9pt; }
+h2 { font-size: 11.5pt; margin: 5mm 0 2mm; border-bottom: 1px solid #ddd; padding-bottom: 1mm; }
+.trend { width: 120mm; height: auto; }
+.trend .grid { stroke: #e5e7eb; } .trend .axis { fill: #6b7280; font-size: 11px; }
+.trend .ln { fill: none; stroke-width: 2.5; } .trend .ln.eff, .trend .pt.eff { stroke: #2563eb; } .trend .ln.reach, .trend .pt.reach { stroke: #d97706; }
+.trend .pt { fill: #fff; stroke-width: 2; } .trend .band { opacity: .14; } .trend .band.eff { fill: #2563eb; } .trend .band.reach { fill: #d97706; }
+ul.notes { margin: 0; padding-left: 5mm; } ul.notes li { margin: 1mm 0; }
+.muted { color: #6b7280; font-size: 9pt; }
+</style>
+</head>
+<body>
+<h1>{{ S.term_title | fmt(name=me.display_name) }}</h1>
+<p class="sub">{{ me.class_name }} · {{ term }} · {{ S.report_made | fmt(d=today) }}</p>
+<div class="kpis">
+  <div class="kpi"><b>{{ me.streak }}일</b><span>{{ S.report_streak | fmt(best=best) }}</span></div>
+  <div class="kpi"><b>{{ rate }}%</b><span>{{ S.report_rate | fmt(d=done_c, c=class_c, n=me.n_sub) }}</span></div>
+  <div class="kpi"><b>{{ me.cumulative }}점</b><span>{{ S.report_attitude }}</span></div>
+  <div class="kpi"><b>{{ moments }}</b><span>{{ S.report_moments }}</span></div>
+</div>
+<h2>{{ S.parent_tests }}</h2>
+{% set t = trend %}
+{% if t %}
+<svg class="trend" viewBox="0 0 {{ t.w }} {{ t.h }}" role="img" aria-label="{{ S.parent_tests }}">
+  {% for b in t.bands %}<polygon class="band {{ b.key }}" points="{{ b.points }}"/>{% endfor %}
+  {% for gy, gl in t.grid %}<line class="grid" x1="{{ t.x0 }}" x2="{{ t.x1 }}" y1="{{ gy }}" y2="{{ gy }}"/><text class="axis" x="{{ t.x0 - 6 }}" y="{{ gy + 4 }}" text-anchor="end">{{ gl }}</text>{% endfor %}
+  {% for lx, ll, anchor in t.labels %}<text class="axis" x="{{ lx }}" y="{{ t.ylab }}" text-anchor="{{ anchor }}">{{ ll }}</text>{% endfor %}
+  {% for key in ("eff", "reach") %}{% set ln = t.lines[key] %}{% if ln.dots|length > 1 %}<polyline class="ln {{ key }}" points="{{ ln.points }}"/>{% endif %}{% for cx, cy in ln.dots %}<circle class="pt {{ key }}" cx="{{ cx }}" cy="{{ cy }}" r="3.5"/>{% endfor %}{% endfor %}
+</svg>
+<p>{{ S.parent_eff }} <b>{{ S['dir_' ~ t.lines.eff.dir] }}</b> · {{ S.parent_reach }} <b>{{ S['dir_' ~ t.lines.reach.dir] }}</b>{% if t.bands %} <span class="muted">({{ S.band_note }})</span>{% endif %}</p>
+{% else %}<p class="muted">{{ S.tests_empty }}</p>{% endif %}
+<h2>{{ S.parent_note }}</h2>
+<ul class="notes">{% for n in me.notes %}<li><span class="muted">{{ n.week }}</span> {{ n.text }}</li>{% else %}<li class="muted">–</li>{% endfor %}</ul>
+<p class="muted" style="margin-top:8mm">{{ S.report_footer }}</p>
+</body>
+</html>

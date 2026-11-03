@@ -157,3 +157,11 @@ def record_checkin(conn: sqlite3.Connection, student_id: int, session_id: int, t
     if cur.rowcount:
         log_event(conn, "checkin", {"student_id": student_id, "session_id": session_id, "source": source}, ts)
     return bool(cur.rowcount)
+
+
+def cancel_class(conn: sqlite3.Connection, cls: sqlite3.Row, day: date, reason: str | None = "휴강") -> None:
+    """F5: mark a class day as cancelled (reason) or undo it (reason None)."""
+    sid = ensure_session(conn, cls["id"], day)
+    conn.execute("UPDATE sessions SET cancelled = ? WHERE id = ?", ((reason or "").strip() or None if reason is not None else None, sid))
+    log_event(conn, "class_cancel" if reason is not None else "class_uncancel",
+              {"class_id": cls["id"], "date": day.isoformat(), "reason": reason})

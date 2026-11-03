@@ -224,6 +224,10 @@ or on the board. Parents do not see them unless `"parent_shows_reflection": true
 (after the Worker redeploy) and react 🔥 👏 🤯; Saturday's publish bakes it into the pages and the parent report.
 Never post faces, names or a whole book page.
 
+F5 tools: `daybook class cancel 고1A 2026-11-12 --reason 휴강` (before 수능 week, so closed days do not break
+streaks), `daybook qr sheet 고1A` (print the handout QR cards), `daybook note suggest 고1A` (edit, then run the
+printed commands), `daybook export report <slug>` (상담 자료; open and print to PDF).
+
 In class (P2, from the week after the pilot): `daybook board 고1A` → http://127.0.0.1:8787 (attitude 1·2·3, live ✓,
 "대신 제출"). Without the board: `daybook score 고1A <date> <slug> <0-3>` and `daybook submit <slug> --source paper`.
 

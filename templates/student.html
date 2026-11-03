@@ -159,9 +159,9 @@
   </div>
   {% endif %}
   <ol class="tiles" id="tiles">
-    {% for t in me.tiles %}{% if t.month %}<li class="mhead" id="m-{{ t.key }}">{{ t.month }}</li>{% else %}<li class="tile {{ t.st }}" data-date="{{ t.date }}"><span class="tl tnum">{{ t.label }}</span><span class="tw">{{ t.wd }}</span>{% if t.heart %}<span class="hrt" title="{{ S.tile_heart }}">♥</span>{% endif %}{% if t.st == 'miss' %}<span class="mdot" aria-hidden="true"></span>{% endif %}</li>{% endif %}{% endfor %}
+    {% for t in me.tiles %}{% if t.month %}<li class="mhead" id="m-{{ t.key }}">{{ t.month }}</li>{% else %}<li class="tile {{ t.st }}" data-date="{{ t.date }}"><span class="tl tnum">{{ t.label }}</span><span class="tw">{{ t.note or t.wd }}</span>{% if t.heart %}<span class="hrt" title="{{ S.tile_heart }}">♥</span>{% endif %}{% if t.st == 'miss' %}<span class="mdot" aria-hidden="true"></span>{% endif %}</li>{% endif %}{% endfor %}
   </ol>
-  <p class="legend"><span class="lg-sw sub"></span>{{ S.tile_sub }}<span class="lg-sw hl"></span>{{ S.tile_heart }}<span class="lg-sw miss"></span>{{ S.tile_miss }}<span class="lg-sw off"></span>{{ S.tile_off }}</p>
+  <p class="legend"><span class="lg-sw sub"></span>{{ S.tile_sub }}<span class="lg-sw hl"></span>{{ S.tile_heart }}<span class="lg-sw miss"></span>{{ S.tile_miss }}<span class="lg-sw off"></span>{{ S.tile_off }}<span class="lg-sw cancel"></span>{{ S.tile_cancel }}</p>
 
   <h2 class="sec-h">{{ S.my_lines }}</h2>
   <ul class="mylines" id="mylines">

@@ -27,6 +27,7 @@
       {% if w.trend %}
       {% set t = w.trend %}
       <svg class="trend" viewBox="0 0 {{ t.w }} {{ t.h }}" role="img" aria-label="{{ S.parent_tests }}">
+        {% for b in t.bands %}<polygon class="band {{ b.key }}" points="{{ b.points }}"/>{% endfor %}
         {% for gy, gl in t.grid %}
         <line class="grid" x1="{{ t.x0 }}" x2="{{ t.x1 }}" y1="{{ gy }}" y2="{{ gy }}"/>
         <text class="axis" x="{{ t.x0 - 6 }}" y="{{ gy + 4 }}" text-anchor="end">{{ gl }}</text>
@@ -40,6 +41,7 @@
         {% for cx, cy in ln.dots %}<circle class="pt {{ key }}" cx="{{ cx }}" cy="{{ cy }}" r="3.5"/>{% endfor %}
         {% endfor %}
       </svg>
+      {% if t.bands %}<p class="rline muted band-note">{{ S.band_note }}</p>{% endif %}
       {% endif %}
       {% else %}
       <p class="rline muted">{{ S.tests_empty }}</p>
