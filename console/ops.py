@@ -153,13 +153,18 @@ def tokmap(conn: sqlite3.Connection) -> dict[str, str]:
         "SELECT student_token, class_id FROM students_public WHERE active = 1 AND class_id IS NOT NULL")}
 
 
-def board_window(day: date, start: str | None) -> tuple[datetime, datetime] | None:
-    """H1: the board polls the Worker only from 30 min before the start until 2 h after it."""
+def board_window(day: date, start: str | None, until: str | None = None) -> tuple[datetime, datetime] | None:
+    """H1: the board polls the Worker only from 30 min before the start until 2 h after it
+    (F13.5: or until the end of the class's self-study block, when that is later, so 과제 끝 is pulled during it)."""
     if not start or not TIME_RE.match(start):
         return None
     t0, _ = session_window(day, start)
     h, m = map(int, start.split(":"))
-    return t0, datetime(day.year, day.month, day.day, h, m, tzinfo=KST) + timedelta(hours=2)
+    end = datetime(day.year, day.month, day.day, h, m, tzinfo=KST) + timedelta(hours=2)
+    if until and TIME_RE.match(until):
+        uh, um = map(int, until.split(":"))
+        end = max(end, datetime(day.year, day.month, day.day, uh, um, tzinfo=KST))
+    return t0, end
 
 
 def record_checkin(conn: sqlite3.Connection, student_id: int, session_id: int, ts: str, source: str) -> bool:

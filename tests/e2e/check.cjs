@@ -259,6 +259,11 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
       '오늘 한 줄 (0–40 chars) and three chips before 올리기');
     await page.fill('#line', LINE);
     await page.click('#chips .cbtn[data-chip="ok"]');
+    await page.fill('#solved', '75');
+    check((await page.inputValue('#solved')) === '60', '오늘 푼 문제 수 is capped at 60');
+    await page.fill('#solved', '12');
+    await page.click('.sv-b[data-d="1"]');
+    check((await page.inputValue('#solved')) === '13', 'the + key adds one (12 -> 13)');
     await page.click('#post');
     await page.waitForSelector('#st-done:not([hidden])', { timeout: 15000 });
     check((await page.textContent('.done-title')) === '오늘 완료', '"오늘 완료" shown');
@@ -450,6 +455,10 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
       const atBottom = await pp.evaluate(() => window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2);
       check(atBottom, `parent page (${cs}) loads scrolled to the bottom`);
       if (cs === 'light') {
+        const solvedTxt = await pp.locator('.msg.newest #solved').innerText().catch(() => '');
+        const nSolved = Number((solvedTxt.match(/이번 주 (\d+)문제/) || [])[1] || -1);
+        check(nSolved >= 13 && /스스로 기록/.test(solvedTxt), `parent card: this week's 푼 문제 sum includes today's 13 ("${solvedTxt}")`);
+        check(/^수업 \d\d:\d\d–\d\d:\d\d/.test(await pp.textContent('#hours')), `parent card shows the class hours ("${await pp.textContent('#hours')}")`);
         const room = await pp.evaluate(() => ({
           weeks: document.querySelectorAll('.msg').length, past: document.querySelectorAll('details.past').length,
           openPast: document.querySelectorAll('details.past[open]').length, newest: document.querySelectorAll('.msg.newest .report').length,

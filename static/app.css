@@ -469,3 +469,10 @@ body[data-page="student"][data-taste] .app { height: calc(100dvh - 24px); }
 .tv[aria-pressed=true] { border-color: var(--err); color: var(--err); }
 .tvflags .tvf { border-left: 3px solid var(--adjust); padding: 2px 8px; margin: 6px 0; font-size: 13px; }
 .tvflags .tvf.need { border-left-color: var(--err); }
+
+/* F13.5: 오늘 푼 문제 수 (student) */
+.solved-in { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.solved-in .rl { flex-basis: 100%; }
+.solved-in input { width: 4.2em; min-height: 44px; text-align: center; font: 600 18px var(--font); border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+.sv-b { min-width: 44px; min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: 600 20px var(--font); }
+.solved-me { margin: 4px 0 0; text-align: center; }

@@ -19,7 +19,7 @@ const num = (v, d) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) :
 
 export const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS subs (token TEXT NOT NULL, day TEXT NOT NULL, set_id TEXT, ts TEXT NOT NULL, updated TEXT NOT NULL,
-     key TEXT, n INTEGER NOT NULL DEFAULT 1, line TEXT, chip TEXT, PRIMARY KEY (token, day))`,
+     key TEXT, n INTEGER NOT NULL DEFAULT 1, line TEXT, chip TEXT, solved INTEGER, PRIMARY KEY (token, day))`,
   'CREATE INDEX IF NOT EXISTS subs_updated ON subs (updated)',
   `CREATE TABLE IF NOT EXISTS checkins (token TEXT NOT NULL, day TEXT NOT NULL, class TEXT NOT NULL, ts TEXT NOT NULL,
      PRIMARY KEY (token, day))`,
@@ -44,7 +44,10 @@ const ready = new WeakMap();   // per database binding: create the tables once (
 function init(env) {
   let p = ready.get(env.DB);
   if (!p) {
-    p = env.DB.batch(SCHEMA.map((s) => env.DB.prepare(s))).catch((e) => { ready.delete(env.DB); throw e; });
+    p = env.DB.batch(SCHEMA.map((s) => env.DB.prepare(s)))
+      // F13.5: a database created before `solved` existed gets the column; on a new one this fails harmlessly
+      .then(() => env.DB.prepare('ALTER TABLE subs ADD COLUMN solved INTEGER').run().catch(() => null))
+      .catch((e) => { ready.delete(env.DB); throw e; });
     ready.set(env.DB, p);
   }
   return p;
@@ -129,13 +132,17 @@ async function submit(req, env, h) {
   const line = rawLine === null ? null : String(rawLine).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 40);
   const chipIn = form.get('chip');
   const chip = chipIn === null ? null : (CHIPS.has(String(chipIn)) ? String(chipIn) : '');
-  // one row per token per day; a replacement keeps the first ts (and the earlier line/chip when none is sent)
-  await run(env, `INSERT INTO subs (token, day, set_id, ts, updated, key, n, line, chip) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+  // F13.5: 오늘 푼 문제 수 (optional, self-reported, a whole number 0-60; anything else is ignored)
+  const cntIn = String(form.get('count') ?? '').trim();
+  const solved = /^\d{1,2}$/.test(cntIn) && Number(cntIn) <= 60 ? Number(cntIn) : null;
+  // one row per token per day; a replacement keeps the first ts (and the earlier line/chip/count when none is sent)
+  await run(env, `INSERT INTO subs (token, day, set_id, ts, updated, key, n, line, chip, solved) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
     ON CONFLICT (token, day) DO UPDATE SET updated = excluded.updated, key = excluded.key, n = subs.n + 1,
       set_id = COALESCE(NULLIF(excluded.set_id, ''), subs.set_id),
       line = CASE WHEN ? IS NULL THEN subs.line ELSE excluded.line END,
-      chip = CASE WHEN ? IS NULL THEN subs.chip ELSE excluded.chip END`,
-  token, day, set, iso, iso, key, line ?? '', chip ?? '', line, chip);
+      chip = CASE WHEN ? IS NULL THEN subs.chip ELSE excluded.chip END,
+      solved = COALESCE(excluded.solved, subs.solved)`,
+  token, day, set, iso, iso, key, line ?? '', chip ?? '', solved, line, chip);
   const days = await recentDays(env, token, day);
   return json({ ok: true, ts: prev ? prev.ts : iso, day, already: !!prev, days }, 200, h);
 }
@@ -397,7 +404,7 @@ async function getPhoto(url, env) {
   return new Response(obj.body, { headers: { 'Content-Type': obj.httpMetadata?.contentType || 'image/jpeg', 'Cache-Control': 'no-store' } });
 }
 
-const SUB_COLS = 'token, day, set_id AS "set", ts, updated, key, n, line, chip';
+const SUB_COLS = 'token, day, set_id AS "set", ts, updated, key, n, line, chip, solved';
 
 async function route(req, env, url, h) {
   const p = url.pathname;

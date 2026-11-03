@@ -28,12 +28,13 @@ export async function allow(env, map) { return teacherPut(env, '/tokmap', { tokm
 export const ALL = { [TOK]: 'c1', [A]: 'c1', [A2]: 'c1', [B]: 'c2', [OTHER]: 'c1', aaaaaaaaaaaaaaaaaaaaaaaaab: 'c1',
   bbbbbbbbbbbbbbbbbbbbbbbbbc: 'c1', cccccccccccccccccccccccccd: 'c1' };
 
-export function submitReq({ t = TOK, set = 'Adaptive_Screeners_3S_June19_G11', bytes = 1000, type = 'image/jpeg', origin = ORIGIN, line, chip } = {}) {
+export function submitReq({ t = TOK, set = 'Adaptive_Screeners_3S_June19_G11', bytes = 1000, type = 'image/jpeg', origin = ORIGIN, line, chip, count } = {}) {
   const fd = new FormData();
   if (t !== null) fd.append('t', t);
   if (set) fd.append('set', set);
   if (line !== undefined) fd.append('line', line);
   if (chip !== undefined) fd.append('chip', chip);
+  if (count !== undefined) fd.append('count', count);
   if (bytes !== null) fd.append('photo', new File([new Uint8Array(bytes).fill(7)], 'p.jpg', { type }));
   return new Request('https://w.example/submit', { method: 'POST', body: fd, headers: origin ? { Origin: origin } : {} });
 }

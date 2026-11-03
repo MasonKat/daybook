@@ -263,6 +263,20 @@ TASTE_PATH = "kong"   # fixed paths /s/kong/ and /p/kong/
 CHIP_KEYS = ("ok", "confused", "rewatch")
 
 
+def _solved(subs: dict, start: date, end: date) -> int | None:
+    """F13.5: the week's self-reported 푼 문제 수 (None when the student never entered one that week)."""
+    vals = [r["solved"] for d, r in subs.items() if start.isoformat() <= d <= end.isoformat() and r["solved"] is not None]
+    return sum(vals) if vals else None
+
+
+def class_hours(cls, S: dict) -> str:
+    """F13.5: "수업 17:30–20:00 · 자습 ~21:00" for the parent card (empty when the class has no hours set)."""
+    if not cls or not cls["start_time"]:
+        return ""
+    out = S["hours_class"].format(s=cls["start_time"], e=cls["end_time"] or "")
+    return out + (" · " + S["hours_self"].format(t=cls["self_study_until"]) if cls["self_study_until"] else "")
+
+
 def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datetime, taste: bool = False,
                   scrub=None) -> dict:
     """`scrub` (from lint.text_scrubber) filters text students wrote; without it student lines are left out."""
@@ -315,7 +329,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                           (TASTE_SLUG,) if taste else ()):
         cls = classes.get(s["class_id"])
         subs = {r["day"]: r for r in conn.execute(
-            "SELECT day, ts, source, reflection, chip FROM submissions WHERE student_id = ? AND status != 'deleted'",
+            "SELECT day, ts, source, reflection, chip, solved FROM submissions WHERE student_id = ? AND status != 'deleted'",
             (s["id"],))}
         lines = []
         for dd in sorted(subs, reverse=True):
@@ -432,6 +446,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                         line = scrub(sub_row["reflection"]) or (S["chip_" + sub_row["chip"]] if sub_row["chip"] in CHIP_KEYS else "")
                     ritual.append({"wd": x["wd"], "in": t_in, "out": x["time"], "late": late, "line": line})
             wsum = _sum_upto(att, wm, cut)
+            solved = _solved(subs, wm, cut)
             dir_eff = S["dir_" + trend["lines"]["eff"].dir] if trend else ""
             rng = f"{_md(wm)}–{_md(we)}"
             room.append({
@@ -445,7 +460,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                 "reach": round(100 * last["reach"]) if last and last["reach"] is not None else None,
                 "dir_eff": trend["lines"]["eff"].dir if trend else "",
                 "dir_reach": trend["lines"]["reach"].dir if trend else "",
-                "week_sum": wsum, "cumulative": _sum_upto(att, None, cut),
+                "week_sum": wsum, "cumulative": _sum_upto(att, None, cut), "solved": solved,
                 "bar_pct": (min(100.0, 100.0 * total_then / rw.goal) if rw and rw.goal > 0 and current else None),
                 "to_go": max(0, rw.goal - total_then) if rw else 0,
                 "note": wk_notes[-1]["text"] if wk_notes else "",
@@ -504,6 +519,8 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "months": months,
             "lines": lines[:30],
             "bio": S["bio"].format(cls=cls["name"] if cls else "", n=len(sub_days)),
+            "solved_week": _solved(subs, mon, today),
+            "hours": class_hours(cls, S),
             "js": json_script(js),
         })
     return {

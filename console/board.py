@@ -211,7 +211,9 @@ class Board:
         fetch = http_fetch(self.cfg)
         with self.conn() as conn:
             start = conn.execute("SELECT start_time FROM sessions WHERE id = ?", (self.session_id,)).fetchone()[0]
-        window = ops.board_window(self.day, start)
+            until = conn.execute("SELECT COALESCE(self_study_until, end_time) FROM classes WHERE id = ?",
+                                 (self.class_id,)).fetchone()[0]
+        window = ops.board_window(self.day, start, until)
         first = True
         while first or not stop.wait(self.cfg.board_poll_seconds):
             first = False

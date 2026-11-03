@@ -4,17 +4,20 @@ The cloud build used synthetic data only. Real students, phones, scores and note
 in `daybook.sqlite` (gitignored), and on the deployed pages behind unguessable links. Never commit `daybook.sqlite`,
 `daybook.json`, `dist/`, a real roster CSV or real screener snapshots. Never deploy to GitHub Pages.
 
-## 0. State at handoff (2026-11-04, after F6–F9)
+## 0. State at handoff (2026-11-04, after F6–F9 and F13)
 
-- `main` is green from a clean clone: 120 pytest, 32 Worker node tests (incl. the class-day budget with an AMP Live
+- `main` is green from a clean clone: 137 pytest, 34 Worker node tests (incl. the class-day budget with an AMP Live
   round), the full Playwright check. A normal check run leaves `git status` clean (F0); `make screenshots` /
   `scripts\check.ps1 -Screenshots` refresh the committed screenshots on purpose.
-- Built: P0, design v2, F1–F9, hotfix H1–H6. See `DECISIONS.md` for every choice; F8 (answer cards) is a spike only.
+- Built: P0, design v2, F1–F9, hotfix H1–H6, F13 (the parent-contact desk). **F10–F12 were never received** by the cloud
+  session; F13 sits directly on F9. See `DECISIONS.md` for every choice; F8 (answer cards) is a spike only.
 - Deploy order for the real Worker: `wrangler d1 create daybook` (paste the id), `wrangler deploy` (also creates the
   AMP Live Durable Object), then `daybook publish` once (sends the student links).
 - Re-check Cloudflare's Durable Objects free-plan page once before the first Live class (the cloud build could not
   reach developers.cloudflare.com; DECISIONS, F7).
-- Console schema is v6 (adds `class_bonus`); an existing `daybook.sqlite` is migrated automatically.
+- Console schema is v7 (F13: `parent_profiles`, `contacts`, `snoozes`, class hours and 지각 policy, `submissions.solved`);
+  an existing `daybook.sqlite` is migrated automatically. The Worker adds `subs.solved` by itself on first use
+  (redeploy it once: `cd worker && npx wrangler deploy`).
 - Not done here: the Cloudflare deploys, a real-phone install test, Live over WebSockets (polling is used),
   a webcam capture on the board.
 
@@ -244,6 +247,16 @@ Students tap "AMP Live" on the 오늘 tab and type the code. Re-check Cloudflare
 
 Offline (F9): the student page keeps working on bad Wi-Fi; a photo taken offline waits on the phone and is sent the
 next time the page opens with a connection. Answer cards (F8) are a spike only: `daybook omr --spike --eval 200`.
+
+Parent contact (F13, laptop only, nothing is sent): first set each class's hours and 지각 rule once,
+e.g. `daybook class edit 기초B --start 20:00 --end 22:00 --late-min 30 --late-avg-min 30` and
+`daybook class edit 케어D --start 17:30 --end 20:00 --self-study 21:00` (or the Teacher tab, 반 규칙), and each
+parent's profile in 연락 현황 (전화/카톡/둘 다, 매주/필요할 때만, 어머님/아버님/보호자님). On Saturday open the Teacher tab:
+연락 필요 (reasons with dates and times, a 3-line call script, a 카톡 draft) → call → 통화함 with one line; 이번 주 할 일
+(about 100 minutes, red and 연락 필요 items never move); in the last week of the month 이달의 좋은 소식. In class, the
+board's "선생님 보기" shows the class's flags; switch it off before projecting. Every parent draft lives in
+`strings.ko.json` → `parent_msg` (rewrite the voice there once; keep it formal and emoji-free, a test checks it).
+The contact log, profiles and summaries are personal data: they stay in `daybook.sqlite`, never in `dist/`.
 
 In class (P2, from the week after the pilot): `daybook board 고1A` → http://127.0.0.1:8787 (attitude 1·2·3, live ✓,
 "대신 제출"). Without the board: `daybook score 고1A <date> <slug> <0-3>` and `daybook submit <slug> --source paper`.

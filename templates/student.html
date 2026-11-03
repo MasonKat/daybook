@@ -119,6 +119,12 @@
       <div class="chips" id="chips">
         {% for k in ("ok", "confused", "rewatch") %}<button type="button" class="cbtn" data-chip="{{ k }}" aria-pressed="false">{{ S['chip_' ~ k] }}</button>{% endfor %}
       </div>
+      <div class="solved-in">
+        <label class="rl" for="solved">{{ S.solved_label }}</label>
+        <button type="button" class="sv-b" data-d="-1" aria-label="{{ S.solved_minus }}">−</button>
+        <input id="solved" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2" autocomplete="off" placeholder="0–60">
+        <button type="button" class="sv-b" data-d="1" aria-label="{{ S.solved_plus }}">+</button>
+      </div>
     </div>
     <div class="pv-actions">
       <label class="btn ghost" for="photo" id="pv-retake">{{ S.retake_photo }}</label>
@@ -164,6 +170,7 @@
     <li><b class="tnum" id="c-sub">{{ me.n_sub }}</b><span>{{ S.count_sub }}</span></li>
     <li><b class="tnum">{{ me.cumulative }}</b><span>{{ S.count_points }}</span></li>
   </ul>
+  {% if me.solved_week is not none %}<p class="muted solved-me tnum" id="solved-me">{{ S.solved_me | fmt(n=me.solved_week) }}</p>{% endif %}
   {% if me.months|length > 1 %}
   <div class="highlights" id="highlights">
     {% for m in me.months %}<button type="button" class="hl-b" data-month="{{ m.key }}"><span class="ring"><span class="hl-in tnum">{{ m.n }}</span></span><span class="hl-l">{{ m.label }}</span></button>{% endfor %}

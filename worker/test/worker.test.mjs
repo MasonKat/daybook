@@ -100,7 +100,7 @@ test('/submissions and /photo need the teacher token; since filters', async () =
   const ok = await teacherGet(env, '/submissions');
   assert.equal(ok.status, 200);
   assert.equal(ok.body.items.length, 3);
-  assert.deepEqual(Object.keys(ok.body.items[0]).sort(), ['chip', 'day', 'key', 'line', 'n', 'set', 'token', 'ts', 'updated']);
+  assert.deepEqual(Object.keys(ok.body.items[0]).sort(), ['chip', 'day', 'key', 'line', 'n', 'set', 'solved', 'token', 'ts', 'updated']);
   const later = await teacherGet(env, `/submissions?since=${encodeURIComponent(ok.body.now)}`);
   assert.equal(later.body.items.length, 0);
   const key = ok.body.items[0].key;
@@ -135,6 +135,32 @@ test('F3: one-line review (<= 40 chars) and a known chip ride along; a replaceme
   assert.equal(rec2.chip, 'ok'); assert.equal(rec2.line, rec.line);
   await call(env, submitReq({ chip: 'hacker' }));
   assert.equal(row(env, a.body.day).chip, '');
+});
+
+test('F13.5: 오늘 푼 문제 수 (0-60) rides along; a replacement without it keeps it; the console pulls it', async () => {
+  const env = await ready();
+  const a = await call(env, submitReq({ count: '12' }));
+  assert.equal(row(env, a.body.day).solved, 12);
+  await call(env, submitReq());
+  assert.equal(row(env, a.body.day).solved, 12);
+  await call(env, submitReq({ count: '0' }));
+  assert.equal(row(env, a.body.day).solved, 0);
+  for (const bad of ['61', '-3', '2.5', 'abc', '']) {
+    await call(env, submitReq({ count: bad }));
+    assert.equal(row(env, a.body.day).solved, 0, bad);
+  }
+  const list = await teacherGet(env, '/submissions');
+  assert.equal(list.body.items[0].solved, 0);
+});
+
+test('F13.5: a database from before the count gets the column on first use', async () => {
+  const env = mkEnv();
+  env.DB.db.exec(`CREATE TABLE subs (token TEXT NOT NULL, day TEXT NOT NULL, set_id TEXT, ts TEXT NOT NULL, updated TEXT NOT NULL,
+     key TEXT, n INTEGER NOT NULL DEFAULT 1, line TEXT, chip TEXT, PRIMARY KEY (token, day))`);
+  await allow(env, ALL);
+  const a = await call(env, submitReq({ count: '7' }));
+  assert.equal(a.body.ok, true);
+  assert.equal(row(env, a.body.day).solved, 7);
 });
 
 test('H2: storage trouble is an answer (200, ok:false), never a 500 for a student', async () => {

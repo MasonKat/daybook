@@ -645,6 +645,18 @@
       for (var i = 0; i < all.length; i++) all[i].setAttribute('aria-pressed', all[i].getAttribute('data-chip') === chip ? 'true' : 'false');
     });
     function lineNow() { return ($('line').value || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 40); }
+    /* F13.5: 오늘 푼 문제 수 (optional, 0-60): the phone's number pad plus -/+ for one hand */
+    function solvedNow() {
+      var v = ($('solved').value || '').replace(/\D/g, '');
+      return v === '' ? '' : String(Math.min(60, parseInt(v, 10)));
+    }
+    $('solved').addEventListener('input', function () { var v = solvedNow(); if ($('solved').value !== v) $('solved').value = v; });
+    Array.prototype.forEach.call(document.querySelectorAll('.sv-b'), function (b) {
+      b.addEventListener('click', function () {
+        var v = solvedNow() === '' ? 0 : parseInt(solvedNow(), 10);
+        $('solved').value = String(Math.max(0, Math.min(60, v + Number(b.getAttribute('data-d')))));
+      });
+    });
     function addMyLine(text, chipKey) {
       if (!text && !chipKey) return;
       var ul = $('mylines'), li = ul.querySelector('li[data-date="' + today + '"]');
@@ -675,6 +687,7 @@
       if (rec.set) fd.append('set', rec.set);
       if (rec.line) fd.append('line', rec.line);   /* empty = keep what an earlier upload today sent */
       if (rec.chip) fd.append('chip', rec.chip);
+      if (rec.count) fd.append('count', rec.count);
       var ext = rec.blob.type === 'image/png' ? 'png' : (/hei[cf]/.test(rec.blob.type) ? 'heic' : 'jpg');
       fd.append('photo', rec.blob, 'photo.' + ext);
       return fetch(D.worker + '/submit', { method: 'POST', body: fd }).then(function (r) {
@@ -789,7 +802,7 @@
       var rec = null;
       shrink(picked)
         .then(function (blob) {
-          rec = { key: tok + ':' + today, day: today, blob: blob, set: set, line: lineNow(), chip: chip, at: Date.now() };
+          rec = { key: tok + ':' + today, day: today, blob: blob, set: set, line: lineNow(), chip: chip, count: solvedNow(), at: Date.now() };
           return sendRec(rec);
         })
         .then(onResult)

@@ -97,6 +97,11 @@ def _token_map(conn: sqlite3.Connection) -> dict[str, int]:
     return m
 
 
+def _teacher_fixed(conn: sqlite3.Connection, student_id: int, day: str) -> bool:
+    return bool(conn.execute("""SELECT 1 FROM events WHERE type = 'solved_fix' AND json_extract(payload_json, '$.student_id') = ?
+                                AND json_extract(payload_json, '$.day') = ? LIMIT 1""", (student_id, day)).fetchone())
+
+
 def apply_items(conn: sqlite3.Connection, items: list[dict]) -> PullReport:
     rep = PullReport(fetched=len(items))
     tokens = _token_map(conn)
@@ -113,20 +118,23 @@ def apply_items(conn: sqlite3.Connection, items: list[dict]) -> PullReport:
         payload = {"student_id": sid, "day": day, "ts": ts, "set": it.get("set", ""), "n": it.get("n", 1)}
         line = str(it.get("line") or "")[:40] or None
         chip = it.get("chip") if it.get("chip") in CHIPS else None
+        solved = it.get("solved") if isinstance(it.get("solved"), int) and 0 <= it["solved"] <= 60 else None
+        if cur is not None and (solved is None or _teacher_fixed(conn, sid, day)):
+            solved = cur["solved"]          # F13.5: no new count, or the teacher corrected it: keep what is there
         if cur is None:
             conn.execute(
-                """INSERT INTO submissions (student_id, session_id, day, ts, photo_key, source, status, reflection, chip)
-                   VALUES (?, ?, ?, ?, ?, 'phone', 'received', ?, ?)""",
-                (sid, sess["id"] if sess else None, day, ts, key, line, chip),
+                """INSERT INTO submissions (student_id, session_id, day, ts, photo_key, source, status, reflection, chip, solved)
+                   VALUES (?, ?, ?, ?, ?, 'phone', 'received', ?, ?, ?)""",
+                (sid, sess["id"] if sess else None, day, ts, key, line, chip, solved),
             )
             log_event(conn, "submission", payload)
             rep.new += 1
         elif (cur["photo_key"] != key or cur["source"] != "phone" or cur["status"] == "deleted"
-              or (cur["reflection"] or None) != line or (cur["chip"] or None) != chip):
+              or (cur["reflection"] or None) != line or (cur["chip"] or None) != chip or cur["solved"] != solved):
             conn.execute(
                 "UPDATE submissions SET photo_key = ?, source = 'phone', status = 'received', ts = MIN(ts, ?), "
-                "session_id = COALESCE(session_id, ?), reflection = ?, chip = ? WHERE id = ?",
-                (key, ts, sess["id"] if sess else None, line, chip, cur["id"]),
+                "session_id = COALESCE(session_id, ?), reflection = ?, chip = ?, solved = ? WHERE id = ?",
+                (key, ts, sess["id"] if sess else None, line, chip, solved, cur["id"]),
             )
             log_event(conn, "submission_update", payload)
             rep.updated += 1
