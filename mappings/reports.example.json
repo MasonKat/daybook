@@ -1,0 +1,58 @@
+{
+ "_note": "F14 synthetic example of `daybook export reports --round <id> --format notion-json` (names invented). The CSV has the same columns, lists comma-joined.",
+ "round": "Adaptive_Screeners_1S_Nov06_G10",
+ "columns": [
+  "Student ID",
+  "Name",
+  "Grade",
+  "Round ID",
+  "Screening Date",
+  "Incorrect Quiz #",
+  "Missed Quiz #",
+  "Most Challenging Quiz",
+  "Reasoning",
+  "Wishlist",
+  "metaphor"
+ ],
+ "rows": [
+  {
+   "Student ID": "S901",
+   "Name": "한가람",
+   "Grade": "1학년",
+   "Round ID": "Adaptive_Screeners_1S_Nov06_G10",
+   "Screening Date": "2026-11-06",
+   "Incorrect Quiz #": [
+    3,
+    7
+   ],
+   "Missed Quiz #": [
+    12
+   ],
+   "Most Challenging Quiz": [
+    7,
+    12
+   ],
+   "Reasoning": [
+    "계산실수",
+    "시간부족"
+   ],
+   "Wishlist": "풀이 영상을 더 보고 싶어요",
+   "metaphor": "마라톤"
+  },
+  {
+   "Student ID": "S902",
+   "Name": "윤도담",
+   "Grade": "1학년",
+   "Round ID": "Adaptive_Screeners_1S_Nov06_G10",
+   "Screening Date": "2026-11-06",
+   "Incorrect Quiz #": [],
+   "Missed Quiz #": [],
+   "Most Challenging Quiz": [
+    18
+   ],
+   "Reasoning": [],
+   "Wishlist": "",
+   "metaphor": "산책"
+  }
+ ]
+}

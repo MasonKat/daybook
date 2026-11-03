@@ -476,3 +476,25 @@ body[data-page="student"][data-taste] .app { height: calc(100dvh - 24px); }
 .solved-in input { width: 4.2em; min-height: 44px; text-align: center; font: 600 18px var(--font); border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
 .sv-b { min-width: 44px; min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: 600 20px var(--font); }
 .solved-me { margin: 4px 0 0; text-align: center; }
+
+/* F14: 주간 테스트 (student) */
+.wtcard { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0; padding: 12px; }
+.wt-row { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wt { position: fixed; inset: 0; z-index: 12; background: var(--bg); color: var(--fg); display: flex; flex-direction: column;
+  padding: calc(10px + env(safe-area-inset-top)) 16px 0; }
+.wt-top { display: flex; justify-content: space-between; align-items: center; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.wt-top .live-x { color: var(--fg); }
+.wt-body { overflow-y: auto; padding: 4px 0 calc(24px + env(safe-area-inset-bottom)); }
+.wt-q { display: block; font-weight: 600; margin: 14px 0 6px; }
+.wt-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.wq { min-height: 52px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--fg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; font: 600 13px var(--font); }
+.wq .wm { font-size: 18px; line-height: 1; margin-top: 2px; }
+.wq.x { background: rgba(239, 68, 68, .14); border-color: var(--err); }
+.wq.m { background: rgba(107, 114, 128, .16); border-color: var(--muted); }
+.wt-hard { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+.wh { min-height: 36px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: 600 12px var(--font); padding: 0; }
+.wh[aria-pressed=true] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.wt input[type=text] { width: 100%; box-sizing: border-box; min-height: 44px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--fg); font: 15px var(--font); padding: 0 10px; }
+.wt .wide { margin-top: 12px; }

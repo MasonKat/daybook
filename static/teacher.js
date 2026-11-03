@@ -308,5 +308,67 @@
 
   loadContacts(); loadSolved();
 
+  /* ------------------------------------------------------------ F14: weekly-test rounds */
+  var R = S.r, editing = null;
+  function dtLocal(v) { return (v || '').replace(' ', 'T'); }
+  function loadRounds() {
+    api('/api/teacher/rounds').then(function (j) {
+      var box = $('rf-classes'); box.innerHTML = '';
+      j.classes.forEach(function (c) {
+        var lab = el('label'); var cb = el('input', { type: 'checkbox', value: c, 'class': 'rf-cls' });
+        lab.appendChild(cb); lab.appendChild(document.createTextNode(' ' + c)); box.appendChild(lab);
+      });
+      var ul = $('round-rows'); ul.innerHTML = '';
+      j.rounds.forEach(function (r) {
+        var li = el('li', { 'class': 'rrow2', 'data-id': r.id });
+        var st = r.open ? R.open : (r.close_at < new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 16).replace('T', ' ') ? R.closed : R.upcoming);
+        li.appendChild(el('b', {}, r.label + ' '));
+        li.appendChild(el('span', { 'class': 'muted' }, r.id + ' · ' + r.classes.join(', ') + ' · N=' + r.n + ' · ' + r.open_at + ' ~ ' + r.close_at + ' · ' + st + ' · '));
+        li.appendChild(el('span', { 'class': 'rprog' }, fmt(R.progress, { d: r.done, t: r.total })));
+        var bd = btn('✓'), be = btn(R.edit), bx = btn(R.export), bc = btn(R.close);
+        bd.onclick = function () { showProgress(r.id); };
+        be.onclick = function () {
+          editing = r.id; $('rf-h').textContent = R.edit + ' · ' + r.id;
+          $('rf-id').value = r.id; $('rf-id').disabled = true; $('rf-grade').value = r.grade; $('rf-n').value = r.n;
+          $('rf-open').value = dtLocal(r.open_at); $('rf-close').value = dtLocal(r.close_at); $('rf-label').value = r.label;
+          Array.prototype.forEach.call(document.querySelectorAll('.rf-cls'), function (c) { c.checked = r.classes.indexOf(c.value) >= 0; });
+        };
+        bx.onclick = function () { api('/api/teacher/round', { action: 'export', id: r.id }).then(function (k) { $('rf-msg').textContent = k.ok ? k.message : (k.error || ''); }); };
+        bc.onclick = function () {
+          if (!window.confirm(R.confirm_close)) return;
+          api('/api/teacher/round', { action: 'close', id: r.id }).then(function (k) { $('rf-msg').textContent = k.ok ? (k.message || S.saved) : (k.error || ''); loadRounds(); });
+        };
+        [bd, be, bx].forEach(function (b) { li.appendChild(b); });
+        if (r.open) li.appendChild(bc);
+        ul.appendChild(li);
+      });
+    });
+  }
+  function showProgress(id) {
+    api('/api/teacher/round?id=' + encodeURIComponent(id)).then(function (p) {
+      var box = $('round-detail'); box.innerHTML = '';
+      box.appendChild(el('p', {}, p.label + ' · ' + fmt(R.progress, { d: p.done, t: p.total })));
+      var ul = el('ul', { 'class': 'tlist rdone' });
+      p.students.forEach(function (x) { ul.appendChild(el('li', { 'class': x.done ? 'ok' : '' }, (x.done ? '✓ ' : '· ') + x.class_name + ' ' + x.display_name + (x.at ? ' · ' + x.at : ''))); });
+      box.appendChild(ul);
+    });
+  }
+  function resetRoundForm() {
+    editing = null; $('rf-h').textContent = R.add; $('rf-id').disabled = false;
+    ['rf-id', 'rf-open', 'rf-close', 'rf-label'].forEach(function (k) { $(k).value = ''; });
+    Array.prototype.forEach.call(document.querySelectorAll('.rf-cls'), function (c) { c.checked = false; });
+  }
+  $('rf-new').onclick = resetRoundForm;
+  $('rf-save').onclick = function () {
+    var cls = Array.prototype.filter.call(document.querySelectorAll('.rf-cls'), function (c) { return c.checked; }).map(function (c) { return c.value; });
+    var body = { action: editing ? 'edit' : 'add', id: editing || $('rf-id').value.trim(), grade: $('rf-grade').value, n: Number($('rf-n').value),
+      classes: cls, open_at: $('rf-open').value.replace('T', ' '), close_at: $('rf-close').value.replace('T', ' '), label: $('rf-label').value.trim() };
+    api('/api/teacher/round', body).then(function (j) {
+      $('rf-msg').textContent = j.ok ? (S.saved + (j.message ? ' · ' + j.message : '')) : (j.error || '');
+      if (j.ok) { resetRoundForm(); loadRounds(); }
+    });
+  };
+  loadRounds();
+
   loadRoster(); loadNotes(); loadMoments(); loadWeekly();
 })();

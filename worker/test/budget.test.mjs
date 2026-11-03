@@ -1,6 +1,7 @@
 // H1: one full class day on the free plan must stay under 30 % of every daily limit.
 // 20 students, a 3-hour board polling every 60 s, 3 moments with 20 reactions each, every student opening the page 5x,
-// and one AMP Live round (20 students x 10 questions, everyone polling every 2 s for ~20 minutes).
+// one AMP Live round (20 students x 10 questions, everyone polling every 2 s for ~20 minutes), and (F14) an open
+// weekly-test round: every student sends the report and edits it once.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { seoulDay } from '../src/index.js';
@@ -22,6 +23,8 @@ test('a full class day stays under 30 % of every free daily limit', async () => 
   const tokmap = Object.fromEntries(toks.map((t) => [t, 'c1']));
 
   await teacher('/tokmap', 'PUT', { tokmap });                                  // publish
+  await teacher('/rounds', 'PUT', { rounds: [{ rid: '0123456789abcdef', classes: ['c1'], n: 20, label: '주간 테스트',
+    open_from: new Date(Date.now() - 3600e3).toISOString(), open_until: new Date(Date.now() + 86400e3).toISOString() }] });
   await teacher('/session', 'PUT', { class: 'c1', date: day, code: '1234', start: '18:00', tokmap,
     open_from: new Date(Date.now() - 30 * 60e3).toISOString(), open_until: new Date(Date.now() + 60 * 60e3).toISOString() });
   for (let n = 1; n <= 3; n++) await teacher('/moment-put', 'PUT', { class: 'c1', date: day, n, text: `장면 ${n}`, image: JPEG });
@@ -35,6 +38,12 @@ test('a full class day stays under 30 % of every free daily limit', async () => 
       await student(`/moment?t=${t}&k=c1:${day}:${n}`);
       const rf = new FormData(); rf.append('t', t); rf.append('k', `c1:${day}:${n}`); rf.append('r', ['fire', 'clap', 'mind'][n - 1]);
       await student('/react', rf);
+    }
+    for (let edit = 0; edit < 2; edit++) {                                      // F14: the report + one edit
+      const rf = new FormData(); rf.append('t', t); rf.append('round', '0123456789abcdef');
+      rf.append('incorrect', edit ? '3,7,12' : '3,7'); rf.append('missed', '19,20'); rf.append('hardest', '7');
+      rf.append('reasons', '계산실수,시간부족'); rf.append('wishlist', '풀이 영상'); rf.append('metaphor', '마라톤');
+      assert.equal((await student('/report', rf)).ok, true);
     }
     for (let up = 0; up < (t.endsWith('cz') ? 2 : 1); up++) {
       const sf = new FormData(); sf.append('t', t); sf.append('line', '오늘 한 줄'); sf.append('chip', 'ok');
@@ -64,7 +73,7 @@ test('a full class day stays under 30 % of every free daily limit', async () => 
     await tpost('/live/reveal', { room });
   }
   await tpost('/live/close', { room });
-  await teacher('/submissions'); await teacher('/checkins'); await teacher('/live/results');   // Saturday-style pull
+  await teacher('/submissions'); await teacher('/checkins'); await teacher('/live/results'); await teacher('/reports');   // Saturday-style pull
 
   const kv = env.SUBMISSIONS.ops, d1 = env.DB.usage;
   const dO = env.LIVE.usage;

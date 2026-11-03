@@ -1,14 +1,16 @@
 # DAYBOOK (P0)
 
-**Status (2026-11-04: P0, design v2, F1–F9, hotfix H1–H6, F13 parent-contact desk; F10–F12 never arrived):**
+**Status (2026-11-04: P0, design v2, F1–F9, hotfix H1–H6, F13 parent-contact desk, F14 weekly-test report):**
 1. P1 complete and tested: schema + `students_public`, `init`, `demo`, `roster add/list/import`, Worker `/submit` + `/submissions`, student 오늘 tab, `pull`, parent page, `publish` + no-PII lint, `import screeners`, deploy steps.
 2. P2 complete: board + attitude buttons, `score`, class reward bar, `note`, `weekly`, Playwright checks. P3: manifest/icons/standalone, `rotate-tokens`, `export pdf` stub, Worker node tests.
-3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 141 pytest + 34 Worker node tests (incl. the class-day budget with a Live round) + the Playwright end-to-end check (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
+3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 149 pytest + 39 Worker node tests (incl. the class-day budget with a Live round) + the Playwright end-to-end check (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
    Design v2: shorts reels + 강의 cards, story rings with content, status-coloured profile tiles, one weekly report per parent message.
 4. Features: taste build (콩, `make deploy-taste`), 출석 with a 4-digit code, 오늘 한 줄, 오늘의 장면 + reactions, 휴강, QR sheet, class band, term report, note drafts,
    the Teacher tab (no terminal on Saturdays), AMP Live (cooperative in-class rounds), the answer-card spike, an offline-capable student page.
    F13: the parent-contact desk on the laptop (연락 필요 with reasons, call scripts and formal 카톡 drafts; 연락 현황;
    the weekly 100-minute planner; monthly good news; per-class 지각 rules; 오늘 푼 문제 수; the self-study block). Nothing is ever sent.
+   F14: 주간 테스트 inside DAYBOOK: the teacher opens a round, students report it on their own page (✕/– per quiz, the
+   hardest, reasons, a wish, one word), `daybook pull` brings it home and `daybook export reports` writes the Notion columns.
    Not done here (needs the teacher): the Cloudflare deploys (redeploy the Worker for 출석/장면), a real-phone install test. Deferred items: `DECISIONS.md`.
 5. Real data is attached by the local agents: see `HANDOFF.md`. This repo holds synthetic data only.
 
@@ -76,6 +78,8 @@ Then follow `HANDOFF.md` (classes, roster import, links).
 | Saturday | `daybook note <slug> 2026-W45 "한 줄"` | the parent page shows the latest note |
 | Saturday | `make deploy-pages` | `daybook publish` (renders `dist/`, runs the no-PII lint, stops on any finding), then `wrangler pages deploy ./dist` |
 | Saturday, optional | `daybook weekly 고1A` | paste-ready Korean message per student |
+| before a weekly test (F14) | `daybook round add Adaptive_Screeners_1S_Nov06_G10 --grade 1학년 --classes 고1A --quizzes 20 --open "2026-11-06 20:00" --close "2026-11-08 23:59"` (or Teacher tab → 주간 테스트) | students see a 주간 테스트 card on 오늘 until it closes; the round id never goes online |
+| after the round (F14) | `daybook pull`, then `daybook export reports --round <id> [--format notion-json]` (or 내보내기) | `reports/<round>.csv` with Student ID, Name, Grade, Round ID, Screening Date, Incorrect/Missed Quiz #, Most Challenging Quiz, Reasoning, Wishlist, metaphor |
 | Saturday (F13) | Teacher tab → 연락 필요 / 이번 주 할 일, or `daybook contact needed --script` / `daybook contact plan` | who to call and why (dates, times), a 3-line call script and a formal 카톡 draft; the 100-minute plan with a 4-week rotation; you call, then press 통화함 (or `daybook contact log <slug> --summary "…"`) |
 | last week of the month (F13) | Teacher tab → 이달의 좋은 소식, or `daybook contact goodnews` | positive-only drafts for every parent; edit, send yourself, press 메시지 보냄 |
 | once per class (F13) | `daybook class edit 기초B --start 20:00 --end 22:00 --late-min 30 [--self-study 21:00]` | class hours and the 지각 rule (defaults: 10 min, 3 of the last 6, or an average of 15 min) |

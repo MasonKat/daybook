@@ -279,6 +279,13 @@ def make_handler(board: Board):
                     return self._json(T.class_flags(conn, board.cfg, board.class_id, day))
                 if path == "/api/teacher/solved":
                     return self._json({"rows": T.solved_rows(conn, board.class_id, day)})
+                if path == "/api/teacher/rounds":             # F14
+                    return self._json(T.rounds_view(conn))
+                if path == "/api/teacher/round":
+                    try:
+                        return self._json(T.round_progress(conn, (q.get("id") or [""])[0]))
+                    except T.TeacherError as e:
+                        return self._json({"ok": False, "error": str(e)}, 404)
             return self._send(404, b"not found", "text/plain")
 
         def _teacher_post(self, body: dict):
@@ -312,6 +319,8 @@ def make_handler(board: Board):
                         return self._json(T.policy_save(conn, cls, body))
                     if self.path == "/api/teacher/solved":
                         return self._json(T.solved_fix(conn, body))
+                    if self.path == "/api/teacher/round":
+                        return self._json(T.round_action(conn, board.cfg, body))
                 except (ops.OpError, T.TeacherError, MomentError, ValueError) as e:
                     conn.rollback()
                     return self._json({"ok": False, "error": str(e)}, 400)

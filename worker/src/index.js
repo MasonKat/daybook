@@ -9,6 +9,8 @@ const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MKEY_RE = /^[a-z0-9]{1,12}:\d{4}-\d{2}-\d{2}:[1-3]$/;
 const TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/heic': 'heic', 'image/heif': 'heic' };
 const CHIPS = new Set(['ok', 'confused', 'rewatch']);
+const RID_RE = /^[a-f0-9]{16}$/;
+const REASONS = ['개념탈락', '계산실수', '정보이해부족', '시간부족'];   // F14: the teacher's Notion "Reasoning" options
 const REACTIONS = ['fire', 'clap', 'mind'];
 const MAX_BYTES = 8 * 1024 * 1024;
 const DAY = 86400;
@@ -39,6 +41,14 @@ export const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS live_results (room TEXT NOT NULL, date TEXT NOT NULL, class TEXT NOT NULL, token TEXT NOT NULL,
      answered INTEGER NOT NULL, correct INTEGER NOT NULL, ts TEXT NOT NULL, PRIMARY KEY (room, date, token))`,
   'CREATE INDEX IF NOT EXISTS live_results_ts ON live_results (ts)',
+  // F14 weekly-test rounds: a hash of the teacher's round id (the id itself never leaves the laptop), the class keys
+  // (comma-separated), the number of quizzes, the open window and the student-facing label
+  `CREATE TABLE IF NOT EXISTS rounds (rid TEXT PRIMARY KEY, classes TEXT NOT NULL, n INTEGER NOT NULL,
+     open_from TEXT NOT NULL, open_until TEXT NOT NULL, label TEXT)`,
+  `CREATE TABLE IF NOT EXISTS reports (rid TEXT NOT NULL, token TEXT NOT NULL, class TEXT NOT NULL, incorrect TEXT, missed TEXT,
+     hardest TEXT, reasons TEXT, wishlist TEXT, metaphor TEXT, ts TEXT NOT NULL, updated TEXT NOT NULL,
+     n INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (rid, token))`,
+  'CREATE INDEX IF NOT EXISTS reports_updated ON reports (updated)',
 ];
 const ready = new WeakMap();   // per database binding: create the tables once (no-op afterwards)
 function init(env) {
@@ -145,6 +155,89 @@ async function submit(req, env, h) {
   token, day, set, iso, iso, key, line ?? '', chip ?? '', solved, line, chip);
   const days = await recentDays(env, token, day);
   return json({ ok: true, ts: prev ? prev.ts : iso, day, already: !!prev, days }, 200, h);
+}
+
+// ---------------------------------------------------------------- 주간 테스트 report (F14)
+const clean = (v) => String(v ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+// "3,7,12" -> [3, 7, 12]: whole numbers 1..n, no repeats; null when anything is off
+function numList(v, n) {
+  const s = clean(v);
+  if (!s) return [];
+  const out = [];
+  for (const part of s.split(',')) {
+    const p = part.trim();
+    if (!/^\d{1,3}$/.test(p)) return null;
+    const k = Number(p);
+    if (k < 1 || k > n || out.includes(k)) return null;
+    out.push(k);
+  }
+  return out.sort((a, b) => a - b);
+}
+
+async function report(req, env, h) {
+  const now = Date.now(), day = seoulDay(now), iso = new Date(now).toISOString();
+  let form;
+  try { form = await req.formData(); } catch { return json({ ok: false, error: 'bad_form' }, 400, h); }
+  const token = String(form.get('t') || '').toLowerCase(), rid = String(form.get('round') || '').toLowerCase();
+  if (!TOKEN_RE.test(token)) return json({ ok: false, error: 'bad_token' }, 400, h);
+  if (!RID_RE.test(rid)) return json({ ok: false, error: 'bad_round' }, 200, h);
+  const rl = `rr:${token}:${Math.floor(now / 3600e3)}`;
+  if ((await peek(env, rl)) >= num(env.REPORTS_PER_HOUR, 30)) return json({ ok: false, error: 'rate_limited' }, 200, h);
+  await bump(env, rl, day);
+  const round = await one(env, 'SELECT * FROM rounds WHERE rid = ?', rid);
+  if (!round) return json({ ok: false, error: 'unknown_round' }, 200, h);
+  const cls = await classOf(env, token);
+  if (!cls) return json({ ok: false, error: 'unknown_token' }, 200, h);
+  if (!round.classes.split(',').includes(cls)) return json({ ok: false, error: 'not_your_round' }, 200, h);
+  if (now < Date.parse(round.open_from) || now > Date.parse(round.open_until)) return json({ ok: false, error: 'closed' }, 200, h);
+  const incorrect = numList(form.get('incorrect'), round.n), missed = numList(form.get('missed'), round.n);
+  const hardest = numList(form.get('hardest'), round.n);
+  if (!incorrect || !missed || !hardest || hardest.length > 3 || incorrect.some((k) => missed.includes(k))) {
+    return json({ ok: false, error: 'bad_numbers' }, 200, h);
+  }
+  const rs = clean(form.get('reasons'));
+  const reasons = rs ? rs.split(',').map((x) => x.trim()) : [];
+  if (reasons.some((r) => !REASONS.includes(r)) || new Set(reasons).size !== reasons.length) return json({ ok: false, error: 'bad_reason' }, 200, h);
+  if ((incorrect.length || missed.length) && !reasons.length) return json({ ok: false, error: 'need_reason' }, 200, h);
+  const wishlist = clean(form.get('wishlist')), metaphor = clean(form.get('metaphor'));
+  if ([...wishlist].length > 100 || [...metaphor].length > 30) return json({ ok: false, error: 'too_long' }, 200, h);
+  // one row per round and student: an edit replaces the earlier report (the first time is kept)
+  await run(env, `INSERT INTO reports (rid, token, class, incorrect, missed, hardest, reasons, wishlist, metaphor, ts, updated, n)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    ON CONFLICT (rid, token) DO UPDATE SET incorrect = excluded.incorrect, missed = excluded.missed, hardest = excluded.hardest,
+      reasons = excluded.reasons, wishlist = excluded.wishlist, metaphor = excluded.metaphor, updated = excluded.updated,
+      n = reports.n + 1, class = excluded.class`,
+  rid, token, cls, incorrect.join(','), missed.join(','), hardest.join(','), reasons.join(','), wishlist, metaphor, iso, iso);
+  return json({ ok: true, updated: iso, until: round.open_until }, 200, h);
+}
+
+async function putRounds(req, env) {
+  let b;
+  try { b = await req.json(); } catch { return json({ ok: false, error: 'bad_json' }, 400, {}); }
+  if (!b || !Array.isArray(b.rounds)) return json({ ok: false, error: 'bad_rounds' }, 400, {});
+  const rows = b.rounds.filter((r) => r && RID_RE.test(r.rid || '') && Array.isArray(r.classes) && r.classes.length
+    && r.classes.every((c) => CLASS_RE.test(String(c))) && Number.isInteger(r.n) && r.n >= 1 && r.n <= 60
+    && !Number.isNaN(Date.parse(r.open_from)) && !Number.isNaN(Date.parse(r.open_until)));
+  const stmts = [env.DB.prepare('DELETE FROM rounds')];
+  for (const r of rows) {
+    stmts.push(env.DB.prepare('INSERT INTO rounds (rid, classes, n, open_from, open_until, label) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(r.rid, r.classes.join(','), r.n, new Date(r.open_from).toISOString(), new Date(r.open_until).toISOString(), clean(r.label).slice(0, 40)));
+  }
+  await env.DB.batch(stmts);
+  return json({ ok: true, n: rows.length }, 200, {});
+}
+
+// the open rounds of this token's class, with this student's own report (to edit it) - never anyone else's
+async function openRounds(env, token, now) {
+  const iso = new Date(now).toISOString();
+  const rows = await all(env, `SELECT r.rid, r.n, r.label, r.open_until, p.incorrect, p.missed, p.hardest, p.reasons, p.wishlist,
+      p.metaphor, p.updated FROM rounds r JOIN tokmap t ON t.token = ? AND instr(',' || r.classes || ',', ',' || t.class || ',') > 0
+    LEFT JOIN reports p ON p.rid = r.rid AND p.token = t.token
+    WHERE r.open_from <= ? AND r.open_until >= ? ORDER BY r.open_until`, token, iso, iso);
+  const split = (v) => (v ? String(v).split(',').filter(Boolean) : []);
+  return rows.map((r) => ({ r: r.rid, n: r.n, label: r.label || '', until: r.open_until,
+    mine: r.updated ? { incorrect: split(r.incorrect).map(Number), missed: split(r.missed).map(Number), hardest: split(r.hardest).map(Number),
+      reasons: split(r.reasons), wishlist: r.wishlist || '', metaphor: r.metaphor || '', updated: r.updated } : null }));
 }
 
 // ---------------------------------------------------------------- 출석 (F2)
@@ -411,6 +504,7 @@ async function route(req, env, url, h) {
   if (p === '/submit' && req.method === 'POST') return submit(req, env, h);
   if (p === '/checkin' && req.method === 'POST') return checkin(req, env, h);
   if (p === '/react' && req.method === 'POST') return react(req, env, h);
+  if (p === '/report' && req.method === 'POST') return report(req, env, h);
   if (p === '/live/join' && req.method === 'POST') return liveStudent(req, env, url, h, 'join');
   if (p === '/live/answer' && req.method === 'POST') return liveStudent(req, env, url, h, 'answer');
   if (p === '/live/state' && req.method === 'GET' && url.searchParams.get('t')) return liveStudent(req, env, url, h, 'state');
@@ -418,12 +512,13 @@ async function route(req, env, url, h) {
     const token = (url.searchParams.get('t') || '').toLowerCase();
     if (!TOKEN_RE.test(token)) return json({ ok: false, error: 'bad_token' }, 400, h);
     const day = seoulDay(Date.now());
-    const [days, ck, sess] = await Promise.all([
+    const [days, ck, sess, rounds] = await Promise.all([
       recentDays(env, token, day),
       one(env, 'SELECT ts FROM checkins WHERE token = ? AND day = ?', token, day),
       one(env, 'SELECT s.start FROM sessions s JOIN tokmap t ON t.class = s.class WHERE t.token = ? AND s.date = ?', token, day),
+      openRounds(env, token, Date.now()),
     ]);
-    return json({ ok: true, day, days, checkin_ts: ck ? ck.ts : null, class_today: !!sess, start: sess ? sess.start : null }, 200, h);
+    return json({ ok: true, day, days, checkin_ts: ck ? ck.ts : null, class_today: !!sess, start: sess ? sess.start : null, rounds }, 200, h);
   }
   if ((p === '/moments' || p === '/moment') && req.method === 'GET') {
     const token = (url.searchParams.get('t') || '').toLowerCase();
@@ -442,7 +537,7 @@ async function route(req, env, url, h) {
     return new Response(img, { headers: { ...h, 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=600' } });
   }
   const teacherPaths = ['/submissions', '/photo', '/checkins', '/session', '/moment-put', '/tokmap',
-    '/live/open', '/live/next', '/live/reveal', '/live/close', '/live/state', '/live/results'];
+    '/live/open', '/live/next', '/live/reveal', '/live/close', '/live/state', '/live/results', '/rounds', '/reports'];
   if (teacherPaths.includes(p)) {
     if (!teacherOk(req, env)) return json({ ok: false, error: 'unauthorized' }, 401, {});
     const since = url.searchParams.get('since') || '';
@@ -462,6 +557,12 @@ async function route(req, env, url, h) {
       const items = await all(env, 'SELECT room, date, class, token, answered, correct, ts FROM live_results WHERE ts > ? ORDER BY ts', since);
       return json({ now: new Date().toISOString(), items }, 200, {});
     }
+    if (p === '/reports' && req.method === 'GET') {
+      const items = await all(env, `SELECT rid, token, incorrect, missed, hardest, reasons, wishlist, metaphor, ts, updated, n
+        FROM reports WHERE updated > ? ORDER BY updated`, since);
+      return json({ now: new Date().toISOString(), items }, 200, {});
+    }
+    if (p === '/rounds' && req.method === 'PUT') return putRounds(req, env);
     if (p === '/session' && req.method === 'PUT') return putSession(req, env);
     if (p === '/moment-put' && req.method === 'PUT') return putMoment(req, env);
     if (p === '/tokmap' && req.method === 'PUT') {
@@ -481,7 +582,7 @@ export default {
     const url = new URL(req.url);
     const h = corsHeaders(req, env);
     const origin = req.headers.get('Origin');
-    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react', '/live/join', '/live/answer'].includes(url.pathname)
+    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react', '/report', '/live/join', '/live/answer'].includes(url.pathname)
       || (url.pathname === '/live/state' && url.searchParams.has('t'));
     // CORS: browsers may only call the student endpoints from the Pages origin.
     if (isStudent && origin && origin !== env.ALLOWED_ORIGIN) return json({ ok: false, error: 'origin' }, 403, h);
@@ -508,6 +609,7 @@ export default {
       env.DB.prepare('DELETE FROM counters WHERE day < ?').bind(addDays(day, -2)),
       env.DB.prepare('DELETE FROM live_rooms WHERE date < ?').bind(keep),
       env.DB.prepare('DELETE FROM live_results WHERE date < ?').bind(keep),
+      env.DB.prepare('DELETE FROM reports WHERE updated < ?').bind(keep + 'T00:00:00.000Z'),
     ]);
   },
 };

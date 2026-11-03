@@ -7,7 +7,7 @@
 <main class="teacher">
 <nav class="tnav">
   <a href="#t-need">{{ S.c_need }}</a><a href="#t-plan">{{ S.c_plan }}</a><a href="#t-status">{{ S.c_status }}</a>
-  <a href="#t-good">{{ S.c_good }}</a>
+  <a href="#t-good">{{ S.c_good }}</a><a href="#t-rounds">{{ S.r_title }}</a>
   <a href="#t-roster">{{ S.t_roster }}</a><a href="#t-notes">{{ S.t_notes }}</a><a href="#t-import">{{ S.t_import }}</a>
   <a href="#t-moments">{{ S.t_moments }}</a><a href="#t-publish">{{ S.t_publish }}</a><a href="#t-weekly">{{ S.t_weekly }}</a>
 </nav>
@@ -35,6 +35,27 @@
   <h2>{{ S.c_good }}</h2>
   <p class="muted" id="good-hint"></p>
   <div id="good-rows"></div>
+</section>
+
+<section class="card" id="t-rounds">
+  <h2>{{ S.r_title }}</h2>
+  <p class="muted">{{ S.r_hint }}</p>
+  <ul class="tlist rlist" id="round-rows"></ul>
+  <div id="round-detail"></div>
+  <h3 id="rf-h">{{ S.r_add }}</h3>
+  <div class="trow pol">
+    <label>{{ S.r_id }} <input type="text" id="rf-id" maxlength="80" placeholder="Adaptive_Screeners_1S_Nov06_G10"></label>
+    <label>{{ S.r_grade }} <select id="rf-grade"><option value="">–</option><option>1학년</option><option>2학년</option><option>3학년</option></select></label>
+    <label>{{ S.r_n }} <input type="number" id="rf-n" min="1" max="60" value="20"></label>
+  </div>
+  <div class="trow pol" id="rf-classes"></div>
+  <div class="trow pol">
+    <label>{{ S.r_open }} <input type="datetime-local" id="rf-open"></label>
+    <label>{{ S.r_close }} <input type="datetime-local" id="rf-close"></label>
+    <label>{{ S.r_label }} <input type="text" id="rf-label" maxlength="40" placeholder="11/6 주간 테스트"></label>
+  </div>
+  <div class="trow"><button type="button" class="btn primary sm" id="rf-save">{{ S.t_save }}</button>
+    <button type="button" class="btn ghost sm" id="rf-new">{{ S.r_add }}</button> <span class="muted" id="rf-msg"></span></div>
 </section>
 
 <section class="card" id="t-policy">
@@ -107,7 +128,8 @@
   <div id="weekly-rows"></div>
 </section>
 </main>
-<script type="application/json" id="data">{{ {"S": {"saved": S.t_saved, "copy": S.t_copy, "copied": S.t_copied, "student": S.t_student_link, "parent": S.t_parent_link, "save": S.t_save, "need": S.board_moment_need, "running": S.t_running, "confirm_deploy": S.t_confirm_deploy, "c": {
+<script type="application/json" id="data">{{ {"S": {"saved": S.t_saved, "copy": S.t_copy, "copied": S.t_copied, "student": S.t_student_link, "parent": S.t_parent_link, "save": S.t_save, "need": S.board_moment_need, "running": S.t_running, "confirm_deploy": S.t_confirm_deploy, "r": {"open": S.r_open_now, "closed": S.r_closed, "upcoming": S.r_upcoming, "edit": S.r_edit,
+  "close": S.r_close_now, "export": S.r_export, "confirm_close": S.r_confirm_close, "add": S.r_add, "progress": S.r_progress}, "c": {
   "called": S.c_called, "messaged": S.c_messaged, "hold": S.c_hold, "script": S.c_script, "kakao": S.c_kakao,
   "summary_ph": S.c_summary_ph, "follow": S.c_follow, "none": S.c_none, "notice": S.c_notice, "need": S.c_need,
   "days": S.c_days, "never": S.c_never, "channel": {"call": S.c_channel_call, "kakao": S.c_channel_kakao, "both": S.c_channel_both},

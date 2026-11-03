@@ -231,3 +231,52 @@ def solved_fix(conn: sqlite3.Connection, body: dict) -> dict:
     ops.set_solved(conn, s["id"], str(body.get("day", "")), body.get("solved"))
     conn.commit()
     return {"ok": True}
+
+
+# ---------------------------------------------------------------- F14: weekly-test rounds
+
+def rounds_view(conn: sqlite3.Connection) -> dict:
+    from . import rounds as R
+    names = {r["id"]: r["name"] for r in conn.execute("SELECT id, name FROM classes")}
+    out = []
+    for r in conn.execute("SELECT * FROM rounds ORDER BY open_at DESC"):
+        p = R.progress(conn, r["id"])
+        out.append({"id": r["id"], "label": r["label"], "grade": r["grade"] or "", "n": r["n"], "open_at": r["open_at"],
+                    "close_at": r["close_at"], "open": R.is_open(r), "classes": [names.get(c, "?") for c in R.class_ids(r)],
+                    "done": p["done"], "total": p["total"]})
+    return {"rounds": out, "classes": [names[k] for k in sorted(names)], "grades": list(R.GRADES)}
+
+
+def round_progress(conn: sqlite3.Connection, round_id: str) -> dict:
+    from . import rounds as R
+    try:
+        return R.progress(conn, round_id)
+    except R.RoundError as e:
+        raise TeacherError(str(e)) from e
+
+
+def round_action(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
+    """add | edit | close | export, then the rounds go to the Worker (same functions as `daybook round …`)."""
+    from . import rounds as R
+    act, rid_ = str(body.get("action", "")), str(body.get("id", "")).strip()
+    try:
+        if act == "add":
+            R.add(conn, rid_, body.get("grade") or None, body.get("classes") or [], int(body.get("n") or 0),
+                  str(body.get("open_at", "")), str(body.get("close_at", "")), body.get("label") or None)
+        elif act == "edit":
+            R.edit(conn, rid_, grade=body.get("grade") or None, classes=body.get("classes") or None, n=body.get("n"),
+                   open_at=body.get("open_at") or None, close_at=body.get("close_at") or None, label=body.get("label") or None)
+        elif act == "close":
+            R.close_now(conn, rid_)
+        elif act == "export":
+            fmt = body.get("format") or "csv"
+            path = R.export(conn, rid_, fmt)
+            conn.commit()
+            return {"ok": True, "message": str(path), "path": str(path)}
+        else:
+            raise TeacherError("unknown action")
+    except (R.RoundError, ValueError) as e:
+        conn.rollback()
+        raise TeacherError(str(e)) from e
+    conn.commit()
+    return {"ok": True, "message": R.push(conn, cfg)}

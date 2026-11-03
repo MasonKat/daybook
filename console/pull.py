@@ -50,9 +50,13 @@ def push_tokmap(conn: sqlite3.Connection, cfg: Config) -> str:
         return ""
     try:
         r = http_put_json(cfg, "/tokmap", {"tokmap": tokmap(conn)})
-        return f"Worker: {r.get('n', '?')} student links accepted"
+        msg = f"Worker: {r.get('n', '?')} student links accepted"
     except PullError as e:
         return f"warning: student links not sent to the Worker ({e}); uploads from new links wait until it is"
+    from . import rounds as R                     # F14: the weekly-test rounds travel with the token map
+    if R.worker_payload(conn):
+        msg += "\n" + R.push(conn, cfg)
+    return msg
 
 
 def http_fetch(cfg: Config) -> Fetch:
@@ -83,6 +87,7 @@ class PullReport:
     photos: list[str] = field(default_factory=list)
     checkins: int = 0
     live: int = 0
+    reports: int = 0
 
 
 def _token_map(conn: sqlite3.Connection) -> dict[str, int]:
@@ -192,6 +197,13 @@ def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None =
         apply_live(conn, lv.get("items", []), rep)
     except PullError:
         pass  # an older Worker without AMP Live
+    try:
+        from . import rounds as R
+        rp = json.loads(fetch("/reports" + (f"?since={urllib.parse.quote(since)}" if since else "")))
+        n_new, n_upd = R.apply_reports(conn, rp.get("items", []))
+        rep.reports = n_new + n_upd
+    except PullError:
+        pass  # an older Worker without weekly-test reports
     now = datetime.fromisoformat(body.get("now", datetime.now(timezone.utc).isoformat()).replace("Z", "+00:00"))
     next_since = (now - MARGIN).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     if photos_dir:
@@ -209,6 +221,6 @@ def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None =
                 pass  # expired (7-day retention) or missing
     log_event(conn, "pull", {"since": since, "next_since": next_since, "fetched": rep.fetched, "new": rep.new,
                              "updated": rep.updated, "unknown_tokens": rep.unknown_tokens,
-                             "checkins": rep.checkins, "live": rep.live})
+                             "checkins": rep.checkins, "live": rep.live, "reports": rep.reports})
     conn.commit()
     return rep

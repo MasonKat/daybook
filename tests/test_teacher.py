@@ -160,3 +160,32 @@ def test_weekly_messages(tserver, klass):
     url, _, _ = tserver
     code, j = call(url + "/api/teacher/weekly")
     assert code == 200 and len(j["messages"]) == 3 and all(m.startswith("[AMP 주간 기록]") for m in j["messages"])
+
+
+def test_rounds_add_progress_export_close(tserver, conn, klass, tmp_path):
+    """F14: the Teacher tab's 주간 테스트 section, through the HTTP layer (same functions as `daybook round`)."""
+    url, b, sent = tserver
+    _, studs = klass
+    body = {"action": "add", "id": "Adaptive_Screeners_1S_Nov06_G10", "grade": "1학년", "n": 20, "classes": ["고1A"],
+            "open_at": "2026-11-06 20:00", "close_at": "2026-11-08 23:59", "label": ""}
+    code, j = call(url + "/api/teacher/round", body)
+    assert code == 200 and j["ok"] and sent[-1][0] == "/rounds" and sent[-1][1]["rounds"][0]["n"] == 20
+    assert "Adaptive" not in json.dumps(sent[-1][1])
+    assert call(url + "/api/teacher/round", body)[0] == 400                       # exists
+    code, j = call(url + "/api/teacher/rounds")
+    assert j["rounds"][0]["label"] == "11/6 주간 테스트" and (j["rounds"][0]["done"], j["rounds"][0]["total"]) == (0, 3)
+    from console import rounds as R
+    R.apply_reports(conn, [{"rid": R.rid(body["id"]), "token": studs[0]["student_token"], "incorrect": "1", "missed": "",
+                            "hardest": "", "reasons": "시간부족", "wishlist": "", "metaphor": "", "ts": "2026-11-06T12:00:00.000Z",
+                            "updated": "2026-11-06T12:00:00.000Z"}])
+    conn.commit()
+    code, p = call(url + "/api/teacher/round?id=" + body["id"])
+    assert p["done"] == 1 and [x["done"] for x in p["students"]] == [True, False, False] and "incorrect" not in json.dumps(p)
+    code, j = call(url + "/api/teacher/round", {"action": "export", "id": body["id"]})
+    assert j["ok"] and (tmp_path / "reports" / (body["id"] + ".csv")).exists()
+    code, j = call(url + "/api/teacher/round", {"action": "edit", "id": body["id"], "n": 22})
+    assert j["ok"] and sent[-1][1]["rounds"][0]["n"] == 22
+    code, j = call(url + "/api/teacher/round", {"action": "close", "id": body["id"]})
+    assert j["ok"]
+    assert call(url + "/api/teacher/round", {"action": "add", "id": "R2", "n": 99, "classes": ["고1A"],
+                                             "open_at": "2026-11-06 20:00", "close_at": "2026-11-08 23:59"})[0] == 400

@@ -589,7 +589,7 @@ def pull(obj: Ctx, photos_dir):
     except PullError as e:
         fail(str(e))
     click.echo(f"fetched {rep.fetched}: new {rep.new}, updated {rep.updated}, check-ins {rep.checkins}, "
-               f"unknown tokens {rep.unknown_tokens}")
+               f"weekly-test reports {rep.reports}, unknown tokens {rep.unknown_tokens}")
     if rep.photos:
         click.echo(f"photos saved: {len(rep.photos)}")
 
@@ -733,6 +733,27 @@ def export_report(obj: Ctx, slug, out, d):
     click.echo(f"{path}  (open it in a browser → print → save as PDF)")
 
 
+@export.command("reports")
+@click.option("--round", "round_id", required=True, help="The round id, e.g. Adaptive_Screeners_1S_Nov06_G10")
+@click.option("--format", "fmt", type=click.Choice(["csv", "notion-json"]), default="csv", show_default=True)
+@click.option("--out", "out_dir", default="reports", show_default=True, help="Folder (gitignored)")
+@click.pass_obj
+def export_reports(obj: Ctx, round_id, fmt, out_dir):
+    """F14: the round's 주간 테스트 reports with the Notion columns (Student ID, Name, Grade, …). Local only."""
+    from . import rounds as R
+    conn = obj.conn
+    try:
+        path = R.export(conn, round_id, fmt, out_dir)
+        prog = R.progress(conn, round_id)
+    except R.RoundError as e:
+        fail(str(e))
+    conn.commit()
+    click.echo(f"{path}  ({prog['done']}/{prog['total']} students reported)")
+    missing = [f"{x['class_name']} {x['display_name']}" for x in prog["students"] if not x["done"]]
+    if missing:
+        click.echo("not reported yet: " + ", ".join(missing))
+
+
 @export.command("pdf")
 @click.argument("slug")
 def export_pdf(slug):
@@ -861,6 +882,105 @@ def contact_goodnews(obj: Ctx, d):
         click.echo("(not the last week of the month yet; drafts are shown anyway)")
     for g in C.good_news(obj.conn, obj.cfg, day):
         click.echo(f"--- {g['class_name']} {g['display_name']}\n{g['text']}")
+
+
+# ---------------------------------------------------------------- F14: weekly-test rounds
+
+@cli.group("round")
+def round_():
+    """주간 테스트 rounds: students report on their page while a round is open."""
+
+
+def _round_line(r) -> str:
+    from . import rounds as R
+    return (f"{r['id']}\t{r['label']}\t{r['grade'] or '-'}\tN={r['n']}\t{r['open_at']} ~ {r['close_at']}"
+            f"{'  (open)' if R.is_open(r) else ''}")
+
+
+@round_.command("add")
+@click.argument("round_id")
+@click.option("--grade", default=None, help="1학년 | 2학년 | 3학년")
+@click.option("--classes", required=True, help="Comma-separated class names, e.g. 고1A,심화C")
+@click.option("--quizzes", "n", type=int, required=True, help="Number of quizzes (1-60)")
+@click.option("--open", "open_at", required=True, help='KST, e.g. "2026-11-06 20:00"')
+@click.option("--close", "close_at", required=True, help='KST, e.g. "2026-11-08 23:59"')
+@click.option("--label", default=None, help="What students see (default: 11/6 주간 테스트)")
+@click.pass_obj
+def round_add(obj: Ctx, round_id, grade, classes, n, open_at, close_at, label):
+    from . import rounds as R
+    conn = obj.conn
+    try:
+        r = R.add(conn, round_id, grade, classes, n, open_at, close_at, label)
+    except R.RoundError as e:
+        fail(str(e))
+    conn.commit()
+    click.echo(_round_line(r))
+    msg = R.push(conn, obj.cfg)
+    if msg:
+        click.echo(msg)
+
+
+@round_.command("edit")
+@click.argument("round_id")
+@click.option("--grade", default=None)
+@click.option("--classes", default=None)
+@click.option("--quizzes", "n", type=int, default=None)
+@click.option("--open", "open_at", default=None)
+@click.option("--close", "close_at", default=None)
+@click.option("--label", default=None)
+@click.pass_obj
+def round_edit(obj: Ctx, round_id, **kw):
+    from . import rounds as R
+    conn = obj.conn
+    try:
+        r = R.edit(conn, round_id, **kw)
+    except R.RoundError as e:
+        fail(str(e))
+    conn.commit()
+    click.echo(_round_line(r))
+    msg = R.push(conn, obj.cfg)
+    if msg:
+        click.echo(msg)
+
+
+@round_.command("close")
+@click.argument("round_id")
+@click.pass_obj
+def round_close(obj: Ctx, round_id):
+    """Close a round now (students can no longer send or edit)."""
+    from . import rounds as R
+    conn = obj.conn
+    try:
+        r = R.close_now(conn, round_id)
+    except R.RoundError as e:
+        fail(str(e))
+    conn.commit()
+    click.echo(_round_line(r))
+    msg = R.push(conn, obj.cfg)
+    if msg:
+        click.echo(msg)
+
+
+@round_.command("list")
+@click.pass_obj
+def round_list(obj: Ctx):
+    for r in obj.conn.execute("SELECT * FROM rounds ORDER BY open_at DESC"):
+        click.echo(_round_line(r))
+
+
+@round_.command("status")
+@click.argument("round_id")
+@click.pass_obj
+def round_status(obj: Ctx, round_id):
+    """Who has reported (✓); run `daybook pull` first."""
+    from . import rounds as R
+    try:
+        p = R.progress(obj.conn, round_id)
+    except R.RoundError as e:
+        fail(str(e))
+    click.echo(f"{p['label']}: {p['done']}/{p['total']} 제출")
+    for x in p["students"]:
+        click.echo(f"  {'✓' if x['done'] else '·'} {x['class_name']} {x['display_name']} {x['at']}")
 
 
 if __name__ == "__main__":

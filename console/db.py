@@ -12,7 +12,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 KST = timezone(timedelta(hours=9))  # Asia/Seoul has no DST
 
 SCHEMA = """
@@ -93,6 +93,31 @@ CREATE TABLE IF NOT EXISTS snoozes (        -- F13.2: "이번 주는 보류" (7 
     rule       TEXT NOT NULL,
     until      TEXT NOT NULL,
     ts         TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS rounds (         -- F14: weekly-test rounds (the teacher's own round ids; never online)
+    id         TEXT PRIMARY KEY,               -- e.g. Adaptive_Screeners_1S_Nov06_G10
+    rid        TEXT NOT NULL UNIQUE,           -- the hash the Worker and the pages use
+    grade      TEXT,                           -- 1학년 | 2학년 (the teacher's Notion "Grade")
+    classes    TEXT NOT NULL,                  -- class ids, comma-separated
+    n          INTEGER NOT NULL,               -- number of quizzes
+    open_at    TEXT NOT NULL,                  -- KST 'YYYY-MM-DD HH:MM'
+    close_at   TEXT NOT NULL,
+    label      TEXT NOT NULL                   -- what students see, e.g. 11/6 주간 테스트
+);
+
+CREATE TABLE IF NOT EXISTS test_reports (   -- F14: what each student reported for a round (pulled from the Worker)
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    round_id   TEXT NOT NULL REFERENCES rounds(id),
+    incorrect  TEXT,                           -- JSON lists of quiz numbers / reasons
+    missed     TEXT,
+    hardest    TEXT,
+    reasons    TEXT,
+    wishlist   TEXT,
+    metaphor   TEXT,
+    ts         TEXT NOT NULL,                  -- first submission (UTC)
+    updated    TEXT NOT NULL,                  -- last edit (UTC)
+    PRIMARY KEY (student_id, round_id)
 );
 
 CREATE TABLE IF NOT EXISTS class_bonus (  -- F7: class-wide points (AMP Live: >= 80 % of the class correct)

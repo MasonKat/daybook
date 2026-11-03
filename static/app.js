@@ -628,6 +628,7 @@
           remember(j.days);
           if (j.class_today) classToday = true;
           if (j.checkin_ts) { ckTime = hhmm(j.checkin_ts); LS.set(CKEY + today, ckTime); }
+          if (j.rounds) wtSave(j.rounds);
           renderLive();
           renderRitual();
           if (!known[today] && $('st-preview').hidden && $('st-err').hidden) show(idleState());
@@ -682,6 +683,7 @@
       show('preview');
     });
     function sendRec(rec) {
+      if (rec.kind === 'report') return wtSendRec(rec);
       var fd = new FormData();
       fd.append('t', tok);
       if (rec.set) fd.append('set', rec.set);
@@ -747,7 +749,7 @@
         return recs.reduce(function (p, rec) {
           return p.then(function () {
             return sendRec(rec).then(function (j) {
-              if (j.ok) return qDel(rec.key).then(function () { onResult(j); });
+              if (j.ok) return qDel(rec.key).then(function () { if (rec.kind === 'report') wtSent(rec, j); else onResult(j); });
               if (!j.status || j.status >= 500 || j.status === 429) return qRelease(rec);   /* try again later */
               return qDel(rec.key);                                                           /* refused for good */
             }, function () { return qRelease(rec); });                                       /* still offline */
@@ -763,6 +765,138 @@
     qAll().then(function (recs) {
       if ((recs || []).some(function (r) { return r.key === tok + ':' + today; }) && !known[today]) show('queued');
     }).catch(function () {});
+
+    /* ---- F14: 주간 테스트. The round id never reaches the page: only its hash (r), N, the label and the deadline.
+       No score or ranking is ever shown back; the student sees only that it is in and until when it can be edited. */
+    var WKEY = 'daybook.rounds.' + tok, wtRounds = [], wtCur = null, wtState = [], wtHard = [], wtReasons = [];
+    function kstParts(iso) { var x = new Date(Date.parse(iso) + 9 * 3600e3).toISOString(); return { day: x.slice(0, 10), hm: x.slice(11, 16) }; }
+    function untilText(iso) { var k = kstParts(iso); return WD[weekday(k.day)] + ' ' + k.hm; }
+    function wtSave(rounds) { wtRounds = rounds || []; LS.set(WKEY, JSON.stringify(wtRounds)); renderWT(); }
+    function wtOpenRound() {
+      var now = Date.now();
+      return wtRounds.filter(function (r) { return Date.parse(r.until) > now; })[0] || null;
+    }
+    function renderWT() {
+      var r = wtOpenRound();
+      $('wt-card').hidden = !r;
+      if (!r) return;
+      $('wt-label').textContent = r.label || S.wt_title;
+      $('wt-state').textContent = fmt(r.mine ? S.wt_done : S.wt_todo, { until: untilText(r.until) });
+      qAll().then(function (recs) {   /* a report still waiting on this phone says so */
+        if ((recs || []).some(function (x) { return x.key === tok + ':report:' + r.r; })) $('wt-state').textContent = S.wt_queued;
+      }, function () {});
+      $('wt-open').textContent = r.mine ? S.wt_edit : S.wt_open;
+    }
+    var MARK = { c: '○', x: '✕', m: '–' };
+    function wtDraw() {
+      var g = $('wt-grid'), hd = $('wt-hard');
+      g.innerHTML = ''; hd.innerHTML = '';
+      for (var i = 1; i <= wtCur.n; i++) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'wq ' + wtState[i]; b.setAttribute('data-k', String(i));
+        b.innerHTML = '<span class="wn"></span><span class="wm"></span>';
+        b.firstChild.textContent = i; b.lastChild.textContent = MARK[wtState[i]];
+        g.appendChild(b);
+        var h = document.createElement('button');
+        h.type = 'button'; h.className = 'wh'; h.textContent = i; h.setAttribute('data-k', String(i));
+        h.setAttribute('aria-pressed', wtHard.indexOf(i) >= 0 ? 'true' : 'false');
+        hd.appendChild(h);
+      }
+      Array.prototype.forEach.call($('wt-reasons').children, function (c) {
+        c.setAttribute('aria-pressed', wtReasons.indexOf(c.getAttribute('data-r')) >= 0 ? 'true' : 'false');
+      });
+      var any = wtState.some(function (v) { return v === 'x' || v === 'm'; });
+      $('wt-reason-need').hidden = !any || wtReasons.length > 0;
+    }
+    function wtShow() {
+      var r = wtOpenRound();
+      if (!r) return;
+      wtCur = r;
+      var mine = r.mine || {};
+      wtState = []; for (var i = 1; i <= r.n; i++) wtState[i] = 'c';
+      (mine.incorrect || []).forEach(function (k) { wtState[k] = 'x'; });
+      (mine.missed || []).forEach(function (k) { wtState[k] = 'm'; });
+      wtHard = (mine.hardest || []).slice(); wtReasons = (mine.reasons || []).slice();
+      $('wt-wish').value = mine.wishlist || ''; $('wt-meta').value = mine.metaphor || '';
+      $('wt-h').textContent = r.label || S.wt_title;
+      $('wt-err').textContent = '';
+      wtDraw();
+      $('wt').hidden = false;
+    }
+    $('wt-open').addEventListener('click', wtShow);
+    $('wt-x').addEventListener('click', function () { $('wt').hidden = true; });
+    $('wt-grid').addEventListener('click', function (e) {
+      var b = e.target.closest('.wq'); if (!b) return;
+      var k = Number(b.getAttribute('data-k'));
+      wtState[k] = { c: 'x', x: 'm', m: 'c' }[wtState[k]];
+      b.className = 'wq ' + wtState[k]; b.lastChild.textContent = MARK[wtState[k]];
+      var any = wtState.some(function (v) { return v === 'x' || v === 'm'; });
+      $('wt-reason-need').hidden = !any || wtReasons.length > 0;
+    });
+    $('wt-hard').addEventListener('click', function (e) {
+      var b = e.target.closest('.wh'); if (!b) return;
+      var k = Number(b.getAttribute('data-k')), at = wtHard.indexOf(k);
+      if (at >= 0) wtHard.splice(at, 1);
+      else if (wtHard.length >= 3) { $('wt-err').textContent = S.wt_hard_max; return; }
+      else wtHard.push(k);
+      $('wt-err').textContent = '';
+      b.setAttribute('aria-pressed', at >= 0 ? 'false' : 'true');
+    });
+    $('wt-reasons').addEventListener('click', function (e) {
+      var b = e.target.closest('.cbtn'); if (!b) return;
+      var r = b.getAttribute('data-r'), at = wtReasons.indexOf(r);
+      if (at >= 0) wtReasons.splice(at, 1); else wtReasons.push(r);
+      b.setAttribute('aria-pressed', at >= 0 ? 'false' : 'true');
+      var any = wtState.some(function (v) { return v === 'x' || v === 'm'; });
+      $('wt-reason-need').hidden = !any || wtReasons.length > 0;
+    });
+    function wtRecord() {
+      var inc = [], mis = [];
+      for (var i = 1; i <= wtCur.n; i++) { if (wtState[i] === 'x') inc.push(i); if (wtState[i] === 'm') mis.push(i); }
+      var clip = function (v, n) { return (v || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, n); };
+      return { key: tok + ':report:' + wtCur.r, kind: 'report', r: wtCur.r, incorrect: inc, missed: mis,
+        hardest: wtHard.slice().sort(function (a, b) { return a - b; }), reasons: wtReasons.slice(),
+        wishlist: clip($('wt-wish').value, 100), metaphor: clip($('wt-meta').value, 30), at: Date.now() };
+    }
+    function wtSendRec(rec) {
+      var fd = new FormData();
+      fd.append('t', tok); fd.append('round', rec.r);
+      fd.append('incorrect', rec.incorrect.join(',')); fd.append('missed', rec.missed.join(','));
+      fd.append('hardest', rec.hardest.join(',')); fd.append('reasons', rec.reasons.join(','));
+      fd.append('wishlist', rec.wishlist); fd.append('metaphor', rec.metaphor);
+      return fetch(D.worker + '/report', { method: 'POST', body: fd }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) { j.status = r.status; return j; });
+      });
+    }
+    function wtSent(rec) {
+      wtRounds.forEach(function (r) {
+        if (r.r === rec.r) r.mine = { incorrect: rec.incorrect, missed: rec.missed, hardest: rec.hardest, reasons: rec.reasons,
+          wishlist: rec.wishlist, metaphor: rec.metaphor };
+      });
+      if (!TASTE) LS.set(WKEY, JSON.stringify(wtRounds));
+      renderWT();
+    }
+    $('wt-send').addEventListener('click', function () {
+      var rec = wtRecord();
+      if ((rec.incorrect.length || rec.missed.length) && !rec.reasons.length) { $('wt-reason-need').hidden = false; $('wt-err').textContent = $('wt-reason-need').textContent; return; }
+      if (TASTE) { wtSent(rec); $('wt').hidden = true; return; }       /* taste: nothing leaves the phone */
+      $('wt-send').disabled = true;
+      wtSendRec(rec).then(function (j) {
+        $('wt-send').disabled = false;
+        if (j.ok) { wtSent(rec); $('wt').hidden = true; return; }
+        $('wt-err').textContent = j.error === 'closed' ? S.wt_closed : S.wt_err;
+      }, function () {
+        /* offline: keep it on the phone (the F9 queue) and send it once there is a connection */
+        $('wt-send').disabled = false;
+        qPut(rec).then(function () { $('wt').hidden = true; renderWT(); }, function () { $('wt-err').textContent = S.wt_err; });
+      });
+    });
+    try { wtRounds = JSON.parse(LS.get(WKEY) || '[]') || []; } catch (e) { wtRounds = []; }
+    if (TASTE) {   /* 콩 can try it: a fake open round with 20 quizzes, kept in memory only */
+      var tEnd = new Date(Date.parse(today + 'T23:59:00+09:00') + 2 * 86400e3).toISOString();
+      wtRounds = [{ r: 'taste', n: 20, label: Number(today.slice(5, 7)) + '/' + Number(today.slice(8, 10)) + ' ' + S.wt_title, until: tEnd, mine: null }];
+    }
+    renderWT();
 
     /* ---- F9: "홈 화면에 추가" hint, shown once, never inside the installed app */
     var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone;

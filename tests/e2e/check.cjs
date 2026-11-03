@@ -194,6 +194,12 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     const started = daybook('session', 'start', CLASS_ON, '--at', nowHM);
     const CODE = (started.match(/오늘의 코드: (\d{4})/) || [])[1];
     check(!!CODE && /sent to the Worker/.test(started), `daybook session start ${CLASS_ON} --at ${nowHM}: code drawn and sent to the Worker`);
+    // F14: a weekly-test round open now for both demo classes driven here (the round id never reaches a page)
+    const RID = 'Adaptive_Screeners_1S_E2E_G10';
+    const kst = (ms) => new Date(Date.now() + ms + 9 * 3600e3).toISOString().slice(0, 16).replace('T', ' ');
+    const radd = daybook('round', 'add', RID, '--grade', '1학년', '--classes', `${CLASS_ON},${CLASS_OFF}`, '--quizzes', '20',
+      '--open', kst(-3600e3), '--close', kst(2 * 86400e3));
+    check(/주간 테스트/.test(radd) && /round\(s\) accepted/.test(radd), `daybook round add: the round is open and sent to the Worker as a hash`);
     const MTEXT = '다 같이 찾은 꼭짓점';
     const mAdd = (answer) => { try { return execFileSync(DAYBOOK, ['moment', 'add', CLASS_ON, '--photo', path.join(cfgCopy.moments_dir, '_demo_src', 'm3.jpg'), '--text', MTEXT],
       { env: { ...env, PYTHONIOENCODING: 'utf-8' }, cwd: ROOT, input: answer, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }); } catch (e) { return 'EXIT ' + e.status + ' ' + e.stdout; } };
@@ -299,6 +305,50 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     check((await off.textContent('#r-title')) === '오늘 공부 인증' && await off.isHidden('#steps') && await off.isHidden('#st-checkin') && await off.isVisible('#st-idle'),
       `no class today (${CLASS_OFF}): 출석 hides, the tab is "오늘 공부 인증" (photo only)`);
     await offCtx.close();
+
+    console.log('\n[2c] 주간 테스트 (F14): the report card on 오늘, edit until it closes, no score shown back');
+    {
+      const wc = await browser.newContext({ viewport: PHONE });
+      const wp = await wc.newPage();
+      const werrs = [];
+      wp.on('console', (m) => { if (m.type() === 'error') werrs.push(m.text()); });
+      await wp.goto(`${PAGES}/s/${pick.student_token}/#today`, { waitUntil: 'networkidle' });
+      await wp.waitForSelector('#wt-card:not([hidden])', { timeout: 5000 }).catch(() => {});
+      check(await wp.isVisible('#wt-card') && /주간 테스트/.test(await wp.textContent('#wt-label')) && /까지 입력해요/.test(await wp.textContent('#wt-state')),
+        `the open round shows as a card ("${await wp.textContent('#wt-label')}" · ${await wp.textContent('#wt-state')})`);
+      check(!(await wp.content()).includes(RID), 'the round id is not on the page');
+      await wp.click('#wt-open');
+      check((await wp.locator('#wt-grid .wq').count()) === 20 && (await wp.locator('#wt-grid .wq.c').count()) === 20, '20 quiz tiles, all ○ 맞음 by default');
+      await wp.click('#wt-grid .wq[data-k="3"]');
+      await wp.click('#wt-grid .wq[data-k="7"]');
+      await wp.click('#wt-grid .wq[data-k="12"]'); await wp.click('#wt-grid .wq[data-k="12"]');
+      check((await wp.textContent('#wt-grid .wq[data-k="3"] .wm')) === '✕' && (await wp.textContent('#wt-grid .wq[data-k="12"] .wm')) === '–', 'a tap cycles ○ → ✕ → –');
+      for (const k of ['7', '12', '3', '5']) await wp.click(`#wt-hard .wh[data-k="${k}"]`);
+      check((await wp.locator('#wt-hard .wh[aria-pressed="true"]').count()) === 3 && /3개까지/.test(await wp.textContent('#wt-err')), '가장 어려웠던 문제: at most 3');
+      await wp.click('#wt-send');
+      check(await wp.isVisible('#wt') && /하나 이상/.test(await wp.textContent('#wt-err')), '✕ or – without a reason: asks for one, nothing sent');
+      await wp.click('#wt-reasons .cbtn[data-r="계산실수"]');
+      await wp.click('#wt-reasons .cbtn[data-r="시간부족"]');
+      await wp.fill('#wt-wish', '풀이 영상을 더 보고 싶어요');
+      await wp.fill('#wt-meta', '마라톤');
+      await shot(wp, 'weekly-test.png');
+      await wp.click('#wt-send');
+      await wp.waitForSelector('#wt', { state: 'hidden', timeout: 6000 }).catch(() => {});
+      const doneTxt = await wp.textContent('#wt-state');
+      check(/^제출 완료 · 수정 가능 \(. \d\d:\d\d까지\)$/.test(doneTxt) && (await wp.textContent('#wt-open')) === '수정하기', `제출 → "${doneTxt}"`);
+      await wp.reload({ waitUntil: 'networkidle' });
+      await wp.click('#wt-open');
+      check((await wp.locator('#wt-grid .wq.x').count()) === 2 && (await wp.locator('#wt-grid .wq.m').count()) === 1
+        && (await wp.inputValue('#wt-meta')) === '마라톤', 'reopening shows the student\'s own report to edit');
+      await wp.click('#wt-grid .wq[data-k="3"]'); await wp.click('#wt-grid .wq[data-k="3"]');     // ✕ → – → ○
+      await wp.click('#wt-send');
+      await wp.waitForSelector('#wt', { state: 'hidden', timeout: 6000 }).catch(() => {});
+      const mine = (await workerGet('/reports')).items.filter((i) => i.token === pick.student_token);
+      check(mine.length === 1 && mine[0].n === 2 && mine[0].incorrect === '7' && mine[0].missed === '12', `an edit replaces the report (records ${mine.length}, edits ${mine[0] && mine[0].n}, ✕ ${mine[0] && mine[0].incorrect})`);
+      check(!/점수|등수|순위|\d+점/.test(await wp.textContent('#tab-today')), 'no score or ranking is shown back');
+      check(werrs.length === 0, `0 console errors (${werrs.slice(0, 2).join(' | ')})`);
+      await wc.close();
+    }
 
     console.log('\n[2b] stories, reels, profile');
     const nStories = await page.locator('.story').count();
@@ -435,6 +485,26 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
       const recs = (await workerGet('/submissions')).items.filter((i) => i.token === offPick.student_token);
       const left = await op.evaluate(() => new Promise((res) => { const r = indexedDB.open('daybook', 1); r.onsuccess = () => { const q = r.result.transaction('queue').objectStore('queue').getAll(); q.onsuccess = () => res(q.result.length); }; }));
       check(await op.isVisible('#st-done') && recs.length === 1 && recs[0].n === 1 && left === 0, `back online: sent exactly once (records ${recs.length}, uploads ${recs[0] && recs[0].n}, queue ${left})`);
+      // F14: a weekly-test report made offline waits in the same queue and is sent once
+      await op.waitForSelector('#wt-card:not([hidden])', { timeout: 5000 }).catch(() => {});
+      await oc.setOffline(true);
+      await op.reload({ waitUntil: 'domcontentloaded' });
+      await op.waitForSelector('#wt-card:not([hidden])', { timeout: 5000 }).catch(() => {});
+      check(await op.isVisible('#wt-card'), 'offline: the open round is still shown (cached from the last visit)');
+      await op.click('#wt-open');
+      await op.click('#wt-grid .wq[data-k="1"]');
+      await op.click('#wt-reasons .cbtn[data-r="개념탈락"]');
+      await op.click('#wt-send');
+      await op.waitForFunction(() => /보낼 준비/.test(document.getElementById('wt-state').textContent), null, { timeout: 6000 }).catch(() => {});
+      check(/보낼 준비 완료/.test(await op.textContent('#wt-state')), 'an offline report waits on the phone');
+      await oc.setOffline(false);
+      await op.waitForFunction(() => /제출 완료/.test(document.getElementById('wt-state').textContent), null, { timeout: 8000 }).catch(() => {});
+      await op.reload({ waitUntil: 'networkidle' });
+      await op.waitForTimeout(500);
+      const reps = (await workerGet('/reports')).items.filter((i) => i.token === offPick.student_token);
+      const left2 = await op.evaluate(() => new Promise((res) => { const r = indexedDB.open('daybook', 1); r.onsuccess = () => { const q = r.result.transaction('queue').objectStore('queue').getAll(); q.onsuccess = () => res(q.result.length); }; }));
+      check(reps.length === 1 && reps[0].n === 1 && reps[0].incorrect === '1' && left2 === 0 && /제출 완료/.test(await op.textContent('#wt-state')),
+        `back online: the report was sent exactly once (records ${reps.length}, sends ${reps[0] && reps[0].n}, queue ${left2})`);
       await oc.close();
     }
 
@@ -446,6 +516,14 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
 
     console.log('\n[5] daybook pull -> publish -> parent page ✓ + time');
     console.log('      ' + daybook('pull').trim());
+    {
+      const outDir = path.join(TMP, 'reports');
+      console.log('      ' + daybook('export', 'reports', '--round', RID, '--out', outDir).trim().split('\n')[0]);
+      const lines = fs.readFileSync(path.join(outDir, RID + '.csv'), 'utf-8').replace(/^\uFEFF/, '').trim().split('\n');
+      check(lines[0] === 'Student ID,Name,Grade,Round ID,Screening Date,Incorrect Quiz #,Missed Quiz #,Most Challenging Quiz,Reasoning,Wishlist,metaphor'
+        && lines.length === 3 && lines.some((l) => l.includes('"3,7,12"') && l.includes('"계산실수,시간부족"') && l.includes('마라톤')),
+        `pull → export reports: the Notion columns, one row per reporting student (${lines.length - 1} rows)`);
+    }
     console.log('      ' + daybook('publish').trim().split('\n').pop());
     for (const cs of SCHEMES) {
       const pctx = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: cs });
@@ -663,6 +741,13 @@ print(c.execute("SELECT COUNT(*), SUM(correct) FROM effort WHERE source = 'live'
       await tp.waitForFunction(() => /정답|아쉬워요/.test(document.getElementById('lv-status').textContent), null, { timeout: 12000 }).catch(() => {});
       check(/정답|아쉬워요/.test(await tp.textContent('#lv-status')) && /반 정답 \d\/8/.test(await tp.textContent('#lv-class')), `taste: the 8-student practice room plays itself (${await tp.textContent('#lv-class')})`);
       await tp.click('#lv-x');
+      check(await tp.isVisible('#wt-card'), 'taste: a practice 주간 테스트 round is open for 콩');
+      await tp.click('#wt-open');
+      check((await tp.locator('#wt-grid .wq').count()) === 20, 'taste: 20 quiz tiles');
+      await tp.click('#wt-send');
+      await tp.waitForSelector('#wt', { state: 'hidden', timeout: 3000 }).catch(() => {});
+      await tp.waitForFunction(() => /제출 완료/.test(document.getElementById('wt-state').textContent), null, { timeout: 3000 }).catch(() => {});
+      check(/제출 완료/.test(await tp.textContent('#wt-state')), 'taste: 제출 is simulated on the phone (nothing sent)');
       await tp.goto(TASTE + '/p/kong/', { waitUntil: 'networkidle' });
       check(await tp.isVisible('.taste-bar') && /AMP 수학 · 콩/.test(await tp.textContent('.room-title')), 'parent page /p/kong/ with the banner');
       check(treqs.length === 0, `0 requests outside the taste site during the whole visit (${treqs.slice(0, 2).join(', ')})`);

@@ -4,18 +4,18 @@ The cloud build used synthetic data only. Real students, phones, scores and note
 in `daybook.sqlite` (gitignored), and on the deployed pages behind unguessable links. Never commit `daybook.sqlite`,
 `daybook.json`, `dist/`, a real roster CSV or real screener snapshots. Never deploy to GitHub Pages.
 
-## 0. State at handoff (2026-11-04, after F6–F9 and F13)
+## 0. State at handoff (2026-11-04, after F6–F9, F13 and F14)
 
-- `main` is green from a clean clone: 141 pytest, 34 Worker node tests (incl. the class-day budget with an AMP Live
+- `main` is green from a clean clone: 149 pytest, 39 Worker node tests (incl. the class-day budget with an AMP Live
   round), the full Playwright check. A normal check run leaves `git status` clean (F0); `make screenshots` /
   `scripts\check.ps1 -Screenshots` refresh the committed screenshots on purpose.
-- Built: P0, design v2, F1–F9, hotfix H1–H6, F13 (the parent-contact desk). **F10–F12 were never received** by the cloud
-  session; F13 sits directly on F9. See `DECISIONS.md` for every choice; F8 (answer cards) is a spike only.
+- Built: P0, design v2, F1–F9, hotfix H1–H6, F13 (the parent-contact desk), F14 (the weekly-test report). F10–F12 arrived
+  late (in the combined F14 prompt) and follow F14. See `DECISIONS.md` for every choice; F8 (answer cards) is a spike only.
 - Deploy order for the real Worker: `wrangler d1 create daybook` (paste the id), `wrangler deploy` (also creates the
   AMP Live Durable Object), then `daybook publish` once (sends the student links).
 - Re-check Cloudflare's Durable Objects free-plan page once before the first Live class (the cloud build could not
   reach developers.cloudflare.com; DECISIONS, F7).
-- Console schema is v7 (F13: `parent_profiles`, `contacts`, `snoozes`, class hours and 지각 policy, `submissions.solved`);
+- Console schema is v8 (F14: `rounds`, `test_reports`; F13: `parent_profiles`, `contacts`, `snoozes`, class hours and 지각 policy, `submissions.solved`);
   an existing `daybook.sqlite` is migrated automatically. The Worker adds `subs.solved` by itself on first use
   (redeploy it once: `cd worker && npx wrangler deploy`).
 - Not done here: the Cloudflare deploys, a real-phone install test, Live over WebSockets (polling is used),
@@ -247,6 +247,13 @@ Students tap "AMP Live" on the 오늘 tab and type the code. Re-check Cloudflare
 
 Offline (F9): the student page keeps working on bad Wi-Fi; a photo taken offline waits on the phone and is sent the
 next time the page opens with a connection. Answer cards (F8) are a spike only: `daybook omr --spike --eval 200`.
+
+주간 테스트 (F14): before each weekly test, `daybook round add <round id> --grade 1학년 --classes 고1A --quizzes 20
+--open "2026-11-06 20:00" --close "2026-11-08 23:59"` (or Teacher tab → 주간 테스트; redeploy the Worker once first:
+`cd worker && npx wrangler deploy`). Students see a card on 오늘 and report there; `daybook round status <id>` shows who
+has (after `daybook pull`). `daybook export reports --round <id>` writes `reports/<id>.csv` (or `--format notion-json`)
+with the Notion "Screeners Tracker" columns; the local agent syncs that file to Notion from the laptop (nothing in the
+repo talks to Notion). Example: `mappings/reports.example.json`. Full names are only in that local file.
 
 Parent contact (F13, laptop only, nothing is sent): first set each class's hours and 지각 rule once,
 e.g. `daybook class edit 기초B --start 20:00 --end 22:00 --late-min 30 --late-avg-min 30` and
