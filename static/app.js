@@ -593,7 +593,7 @@
     });
 
     /* ---- 오늘: pick -> preview -> 올리기 -> done */
-    var states = ['checkin', 'idle', 'preview', 'done', 'err'];
+    var states = ['checkin', 'idle', 'preview', 'done', 'err', 'queued'];
     function show(state) { states.forEach(function (s) { $('st-' + s).hidden = s !== state; }); }
     var TKEY = 'daybook.time.' + tok + '.';
     function showDone(replaced) {
@@ -669,6 +669,72 @@
       busy(false);
       show('preview');
     });
+    function sendRec(rec) {
+      var fd = new FormData();
+      fd.append('t', tok);
+      if (rec.set) fd.append('set', rec.set);
+      if (rec.line) fd.append('line', rec.line);   /* empty = keep what an earlier upload today sent */
+      if (rec.chip) fd.append('chip', rec.chip);
+      var ext = rec.blob.type === 'image/png' ? 'png' : (/hei[cf]/.test(rec.blob.type) ? 'heic' : 'jpg');
+      fd.append('photo', rec.blob, 'photo.' + ext);
+      return fetch(D.worker + '/submit', { method: 'POST', body: fd }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) { j.status = r.status; return j; });
+      });
+    }
+    /* ---- F9: the offline queue (one photo per day per phone) */
+    function idb() {
+      return new Promise(function (res, rej) {
+        try {
+          var r = indexedDB.open('daybook', 1);
+          r.onupgradeneeded = function () { r.result.createObjectStore('queue', { keyPath: 'key' }); };
+          r.onsuccess = function () { res(r.result); };
+          r.onerror = function () { rej(r.error); };
+        } catch (e) { rej(e); }
+      });
+    }
+    function qTx(mode, fn) {
+      return idb().then(function (db) {
+        return new Promise(function (res, rej) {
+          var tx = db.transaction('queue', mode), out = fn(tx.objectStore('queue'));
+          tx.oncomplete = function () { res(out && out.result); };
+          tx.onerror = function () { rej(tx.error); };
+        });
+      });
+    }
+    function qPut(rec) { return qTx('readwrite', function (st) { st.put(rec); }); }
+    function qAll() { return qTx('readonly', function (st) { return st.getAll(); }); }
+    function qDel(key) { return qTx('readwrite', function (st) { st.delete(key); }); }
+    var flushing = false;
+    function flushQueue() {
+      if (flushing || TASTE || !D.worker || navigator.onLine === false) return;
+      flushing = true;
+      qAll().then(function (recs) {
+        recs = (recs || []).filter(function (r) { return r.key.indexOf(tok + ':') === 0; });
+        return recs.reduce(function (p, rec) {
+          return p.then(function () {
+            return sendRec(rec).then(function (j) {
+              if (j.ok || (j.status && j.status < 500 && j.status !== 429)) {
+                return qDel(rec.key).then(function () { if (j.ok) onResult(j); });
+              }
+            });
+          });
+        }, Promise.resolve());
+      }).catch(function () { /* still offline: next time */ }).then(function () { flushing = false; });
+    }
+    window.addEventListener('online', flushQueue);
+    window.addEventListener('load', function () {
+      flushQueue();
+      if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js', { scope: '/s/' }).catch(function () {});
+    });
+    qAll().then(function (recs) {
+      if ((recs || []).some(function (r) { return r.key === tok + ':' + today; }) && !known[today]) show('queued');
+    }).catch(function () {});
+
+    /* ---- F9: "홈 화면에 추가" hint, shown once, never inside the installed app */
+    var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone;
+    if (!standalone && !LS.get('daybook.a2hs')) { $('a2hs').hidden = false; LS.set('daybook.a2hs', '1'); }
+    $('a2hs-x').addEventListener('click', function () { $('a2hs').hidden = true; });
+
     function onResult(j) {
       busy(false);
       if (j.ok) {
@@ -699,24 +765,17 @@
         setTimeout(function () { onResult({ ok: true, day: today, ts: first, already: !!known[today], days: [today] }); }, 500);
         return;
       }
+      var rec = null;
       shrink(picked)
         .then(function (blob) {
-          var fd = new FormData();
-          fd.append('t', tok);
-          if (set) fd.append('set', set);
-          if (lineNow()) fd.append('line', lineNow());   /* empty = keep what an earlier upload today sent */
-          if (chip) fd.append('chip', chip);
-          var ext = blob.type === 'image/png' ? 'png' : (/hei[cf]/.test(blob.type) ? 'heic' : 'jpg');
-          fd.append('photo', blob, 'photo.' + ext);
-          return fetch(D.worker + '/submit', { method: 'POST', body: fd });
-        })
-        .then(function (r) {
-          return r.json().catch(function () { return {}; }).then(function (j) { j.status = r.status; return j; });
+          rec = { key: tok + ':' + today, day: today, blob: blob, set: set, line: lineNow(), chip: chip, at: Date.now() };
+          return sendRec(rec);
         })
         .then(onResult)
         .catch(function () {
-          busy(false);
-          showErr(navigator.onLine === false ? S.upload_offline : S.upload_error);
+          /* F9: no network: keep it in this phone (IndexedDB) and send it on the next open / when online */
+          if (!rec) { busy(false); return showErr(S.upload_error); }
+          qPut(rec).then(function () { busy(false); show('queued'); }, function () { busy(false); showErr(S.upload_offline); });
         });
     });
   }

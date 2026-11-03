@@ -439,3 +439,8 @@ body[data-page="student"][data-taste] .app { height: calc(100dvh - 24px); }
 .live-bar .fill { height: 100%; width: 0; background: var(--grad); transition: width .4s; }
 .live-class { text-align: center; font-size: 14px; color: #9aa3b2; margin: 6px 0 0; }
 .live-mine { text-align: center; font-size: 40px; font-weight: 900; min-height: 56px; }
+
+/* ---------- F9: offline queue + install hint */
+.done .check.pend, .check.pend { background: var(--card); color: var(--fg); font-size: 48px; width: 104px; height: 104px; margin: 16px auto 0; border-radius: 50%; line-height: 104px; }
+.a2hs { margin-top: var(--s4); font-size: 14px; }
+.a2hs p { margin: 6px 0; }

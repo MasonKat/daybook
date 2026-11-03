@@ -404,6 +404,33 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     check(new URL(fp.url()).pathname === '/go/' && (await fp.textContent('#go-msg')).includes('먼저 선생님이 준 내 링크를 한 번 열어 주세요'), 'a phone that never opened its link sees the message');
     await fresh.close();
 
+    console.log('\n[3b] offline (F9): the shell opens without network, a submit waits and is sent once');
+    {
+      const oc = await browser.newContext({ viewport: PHONE });
+      const op = await oc.newPage();
+      const url = `${PAGES}/s/${offPick.student_token}/#today`;
+      await op.goto(url, { waitUntil: 'networkidle' });
+      check(await op.isVisible('#a2hs'), '"홈 화면에 추가" hint on the first visit');
+      await op.evaluate(() => navigator.serviceWorker.ready.then(() => true));
+      await op.reload({ waitUntil: 'networkidle' });                       // now controlled: the page is cached
+      check(await op.isHidden('#a2hs'), 'the hint is shown only once');
+      await oc.setOffline(true);
+      await op.reload({ waitUntil: 'domcontentloaded' });
+      await op.waitForSelector('#tab-today', { timeout: 5000 });
+      check(await op.isVisible('#st-idle .plus') && (await op.title()) === TITLE, 'offline reload: the cached shell opens');
+      await op.setInputFiles('#photo', png);
+      await op.click('#post');
+      await op.waitForSelector('#st-queued:not([hidden])', { timeout: 8000 }).catch(() => {});
+      check(await op.isVisible('#st-queued'), 'an offline submit waits on the phone ("보낼 준비 완료")');
+      await oc.setOffline(false);
+      await op.reload({ waitUntil: 'networkidle' });                       // the next open sends it
+      await op.waitForSelector('#st-done:not([hidden])', { timeout: 8000 }).catch(() => {});
+      const recs = (await workerGet('/submissions')).items.filter((i) => i.token === offPick.student_token);
+      const left = await op.evaluate(() => new Promise((res) => { const r = indexedDB.open('daybook', 1); r.onsuccess = () => { const q = r.result.transaction('queue').objectStore('queue').getAll(); q.onsuccess = () => res(q.result.length); }; }));
+      check(await op.isVisible('#st-done') && recs.length === 1 && recs[0].n === 1 && left === 0, `back online: sent exactly once (records ${recs.length}, uploads ${recs[0] && recs[0].n}, queue ${left})`);
+      await oc.close();
+    }
+
     console.log('\n[4] PWA: manifest + icons');
     const man = await (await fetch(`${PAGES}/s/${tok}/manifest.webmanifest`)).json();
     check(man.display === 'standalone' && man.start_url === './#today' && man.theme_color === '#2563eb', 'manifest standalone, start_url = own page, theme #2563eb');

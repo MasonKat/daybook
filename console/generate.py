@@ -30,7 +30,8 @@ JS_STRINGS = ("done_title", "streak_label", "class_plus", "reward_to_go", "uploa
               "recorded_at", "recorded", "ritual_class", "ritual_study", "study_cta", "end_cta", "ck_done", "ck_bad",
               "ck_closed", "ck_none", "ck_rate", "ck_error", "chip_ok", "chip_confused", "chip_rewatch", "day_class",
               "day_study", "day_class_m", "bio", "pad_title", "pad_taste", "live_pad", "live_noroom", "live_wait",
-              "live_sent", "live_right", "live_wrong", "live_closed", "live_class", "live_class_c", "live_taste", "story_moments", "react_fire", "react_clap", "react_mind")
+              "live_sent", "live_right", "live_wrong", "live_closed", "live_class", "live_class_c", "live_taste",
+              "queued_title", "queued_body", "story_moments", "react_fire", "react_clap", "react_mind")
 YT_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 WEEKDAYS_FULL = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
 PARENT_WEEKS = 8      # weeks kept in the parent room
@@ -254,7 +255,7 @@ def _week_days(mon: date, subs: dict, cd: set, today: date, wk: list[str]) -> li
     return out
 
 
-LOCAL_ONLY_STATIC = {"teacher.js", "live.js"}
+LOCAL_ONLY_STATIC = {"teacher.js", "live.js", "sw.js"}
 TASTE_SLUG = "콩"      # the demo student shown in the taste build (F1)
 TASTE_PATH = "kong"   # fixed paths /s/kong/ and /p/kong/
 
@@ -553,6 +554,7 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
     for f in STATIC.iterdir():
         if f.is_file() and f.name not in LOCAL_ONLY_STATIC:      # the Teacher tab's script never goes online
             shutil.copy2(f, out / "static" / f.name)
+    shutil.copy2(STATIC / "sw.js", out / "sw.js")                 # F9: served from the root so it may control /s/
     if any(v["thumb_src"] for v in ctx["videos"]):
         from .thumbs import make_thumb
         (out / "t").mkdir()

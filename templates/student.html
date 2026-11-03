@@ -137,9 +137,20 @@
     </ul>
     <label class="small" for="photo">{{ S.repost }}</label>
   </div>
+  <div id="st-queued" class="state center" hidden>
+    <div class="check pend" aria-hidden="true">⏳</div>
+    <h1 class="done-title">{{ S.queued_title }}</h1>
+    <p class="muted">{{ S.queued_body }}</p>
+  </div>
   <div id="st-err" class="state center" hidden>
     <p class="err" id="err-msg">{{ S.upload_error }}</p>
     <label class="btn primary" for="photo">{{ S.retry }}</label>
+  </div>
+<div class="a2hs card" id="a2hs" hidden>
+    <b>{{ S.a2hs_title }}</b>
+    <p>{{ S.a2hs_ios }}</p>
+    <p>{{ S.a2hs_android }}</p>
+    <button type="button" class="btn ghost" id="a2hs-x">{{ S.a2hs_ok }}</button>
   </div>
 </section>
 
