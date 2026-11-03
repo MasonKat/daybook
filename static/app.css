@@ -510,3 +510,9 @@ body[data-page="student"][data-taste] .app { height: calc(100dvh - 24px); }
 tr.rc.new td:nth-child(2) { color: var(--ok); font-weight: 600; } tr.rc.updated td:nth-child(2) { color: var(--adjust); font-weight: 600; }
 tr.rc.skipped td:nth-child(2) { color: var(--err); }
 .links .btn { margin: 2px; }
+
+/* F12: 이번 주 복습 */
+.s-review span { font-size: 22px; }
+.rchips .chip { margin: 2px; }
+.rvids { list-style: none; padding: 0; margin: 6px 0; } .rvids li { margin: 6px 0; }
+.rline.insight { margin-top: 6px; }

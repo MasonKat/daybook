@@ -186,7 +186,7 @@
   Array.prototype.forEach.call(document.querySelectorAll('[data-import]'), function (b) {
     b.onclick = function () {
       var kind = b.getAttribute('data-import');
-      readFiles($(kind === 'screeners' ? 'imp-screeners' : 'imp-tests')).then(function (files) {
+      readFiles($('imp-' + kind)).then(function (files) {
         return api('/api/teacher/import', { kind: kind, files: files });
       }).then(function (j) {
         $('import-out').textContent = j.ok

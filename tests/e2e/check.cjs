@@ -352,6 +352,13 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
 
     console.log('\n[2b] stories, reels, profile');
     const nStories = await page.locator('.story').count();
+    {   // F12: this week's insight as the "이번 주 복습" ring (focus chips, recommended videos, one line)
+      const ring = page.locator('.story[data-story="review"]');
+      const grp = page.locator('.sv-group[data-story="review"]');
+      check(await ring.count() === 1 && (await ring.innerText()).includes('이번 주 복습')
+        && (await grp.locator('.rchips .chip').count()) >= 2 && (await grp.locator('.rvids a').count()) >= 1
+        && (await grp.locator('blockquote').count()) === 1, '이번 주 복습 ring: focus chips, recommended videos and the student line');
+    }
     check(nStories >= 3, `${nStories} story rings (새 영상, 연속, 반 목표, 선생님)`);
     const rings = await page.evaluate(() => ({
       img: !!document.querySelector('.story[data-story="videos"] .story-in img[src^="/t/"]'),
@@ -537,6 +544,8 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
         const nSolved = Number((solvedTxt.match(/이번 주 (\d+)문제/) || [])[1] || -1);
         check(nSolved >= 13 && /스스로 기록/.test(solvedTxt), `parent card: this week's 푼 문제 sum includes today's 13 ("${solvedTxt}")`);
         check(/^수업 \d\d:\d\d–\d\d:\d\d/.test(await pp.textContent('#hours')), `parent card shows the class hours ("${await pp.textContent('#hours')}")`);
+        check((await pp.locator('.msg.newest .rline.insight').count()) === 1 && (await pp.locator('.msg.newest .report .chip').count()) === 0,
+          `F12: the parent line under 주간 테스트 ("${await pp.locator('.msg.newest .rline.insight').innerText().catch(() => '')}"), no focus chips by default`);
         const room = await pp.evaluate(() => ({
           weeks: document.querySelectorAll('.msg').length, past: document.querySelectorAll('details.past').length,
           openPast: document.querySelectorAll('details.past[open]').length, newest: document.querySelectorAll('.msg.newest .report').length,

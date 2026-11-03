@@ -325,3 +325,27 @@ def write_screeners(out: Path | None = None, rng_seed: int = 7) -> list[Path]:
 if __name__ == "__main__":
     for p in write_screeners():
         print(p)
+
+
+INSIGHT_FOCUS = [["나머지정리 활용", "항등식 계수비교"], ["인수분해 공식", "부호 처리"], ["이차함수 꼭짓점", "그래프 해석", "최댓값 찾기"]]
+INSIGHT_LINES = [("계수비교에서 부호 실수가 두 번 있었어요.", "이번 주는 계수비교 단원 복습을 권해요."),
+                 ("인수분해는 거의 다 맞았어요. 부호만 한 번 더 확인해요.", "인수분해는 안정적이고, 부호 확인 습관을 함께 잡고 있어요."),
+                 ("꼭짓점 구하기는 좋아요. 그래프 읽기를 한 번 더 연습해요.", "그래프 해석을 이번 주 복습 과제로 드렸어요.")]
+
+
+def write_demo_insights(conn: sqlite3.Connection, today: date | None = None, out: Path | None = None) -> Path:
+    """F12: demo/insights.demo.json (gitignored) dated today, for 고1A and 기초B (the classes the e2e drives), in the
+    teacher's format (mappings/insights.example.json). One video is a videos.json entry, one a plain link."""
+    today = today or M.kst_today()
+    out = out or ROOT / "demo" / "insights.demo.json"
+    rows = conn.execute("""SELECT s.ext_id FROM students s JOIN classes c ON c.id = s.class_id
+                           WHERE c.name IN ('고1A', '기초B') AND s.active = 1 AND s.ext_id IS NOT NULL ORDER BY s.id""").fetchall()
+    students = []
+    for i, r in enumerate(rows):
+        st, pa = INSIGHT_LINES[i % len(INSIGHT_LINES)]
+        students.append({"ext_id": r["ext_id"], "focus": INSIGHT_FOCUS[i % len(INSIGHT_FOCUS)],
+                         "videos": ["https://example.com/q/demo/6/", "https://example.com/q/cv/10-2/2/"][: 1 + i % 2],
+                         "student_line": st, "parent_line": pa})
+    data = {"round": "Adaptive_Screeners_3S_Demo_G10", "date": today.isoformat(), "students": students}
+    out.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    return out

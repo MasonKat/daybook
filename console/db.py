@@ -122,6 +122,18 @@ CREATE TABLE IF NOT EXISTS test_reports (   -- F14: what each student reported f
     PRIMARY KEY (student_id, round_id)
 );
 
+CREATE TABLE IF NOT EXISTS insights (       -- F12: a student-safe slice of the teacher's own analysis per round
+    student_id   INTEGER NOT NULL REFERENCES students(id),
+    round        TEXT NOT NULL,                -- the teacher's round id (laptop only, never on a page)
+    date         TEXT NOT NULL,                -- YYYY-MM-DD: the week it belongs to
+    focus        TEXT,                         -- JSON list, at most 3 (e.g. 나머지정리 활용)
+    videos       TEXT,                         -- JSON list of URLs, at most 3
+    student_line TEXT,
+    parent_line  TEXT,
+    ts           TEXT NOT NULL,
+    PRIMARY KEY (student_id, round)
+);
+
 CREATE TABLE IF NOT EXISTS class_bonus (  -- F7: class-wide points (AMP Live: >= 80 % of the class correct)
     id         INTEGER PRIMARY KEY,
     class_id   INTEGER NOT NULL REFERENCES classes(id),

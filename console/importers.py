@@ -256,3 +256,54 @@ def import_tests_csv(conn: sqlite3.Connection, csv_path: str | Path) -> Screener
     log_event(conn, "import_tests", {"rows": rep.rows, "imported": rep.imported, "unmatched": len(rep.unmatched)})
     conn.commit()
     return rep
+
+
+# ---------------------------------------------------------------- F12: the teacher's own analysis (insights)
+
+@dataclass
+class InsightReport:
+    rows: int = 0
+    imported: int = 0
+    unknown: list[str] = field(default_factory=list)     # ext_ids not on the roster (console only)
+    errors: list[str] = field(default_factory=list)
+
+
+def _clip(v, n: int) -> str:
+    return " ".join(str(v or "").split())[:n]
+
+
+def import_insights(conn: sqlite3.Connection, path: str | Path) -> InsightReport:
+    """{"round", "date", "students": [{ext_id, focus[], videos[], student_line, parent_line}]} -> insights, matched by
+    ext_id (an unknown ext_id is reported and skipped). At most 3 focus items and 3 http(s) videos are kept; the
+    lines are scrubbed again at publish (names, phones, raw ids never reach a page)."""
+    rep = InsightReport()
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        rnd, day = str(data["round"]).strip(), str(data["date"]).strip()
+        date.fromisoformat(day)
+        students = data["students"]
+        if not rnd or not isinstance(students, list):
+            raise ValueError
+    except (ValueError, KeyError, TypeError) as e:
+        rep.errors.append(f"{Path(path).name}: needs round, date (YYYY-MM-DD) and a students list ({e})")
+        return rep
+    for st in students:
+        rep.rows += 1
+        ext = str((st or {}).get("ext_id", "")).strip()
+        row = conn.execute("SELECT id FROM students WHERE ext_id = ?", (ext,)).fetchone() if ext else None
+        if row is None:
+            rep.unknown.append(ext or "(no ext_id)")
+            continue
+        focus = [_clip(f, 30) for f in (st.get("focus") or []) if _clip(f, 30)][:3]
+        videos = [str(u).strip() for u in (st.get("videos") or []) if str(u).strip().startswith(("https://", "http://"))][:3]
+        conn.execute("""INSERT INTO insights (student_id, round, date, focus, videos, student_line, parent_line, ts)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT (student_id, round) DO UPDATE SET date = excluded.date, focus = excluded.focus,
+                          videos = excluded.videos, student_line = excluded.student_line, parent_line = excluded.parent_line,
+                          ts = excluded.ts""",
+                     (row["id"], rnd, day, json.dumps(focus, ensure_ascii=False), json.dumps(videos),
+                      _clip(st.get("student_line"), 120) or None, _clip(st.get("parent_line"), 160) or None, now_utc_iso()))
+        rep.imported += 1
+    log_event(conn, "import_insights", {"file": Path(path).name, "imported": rep.imported, "unknown": len(rep.unknown)})
+    conn.commit()
+    return rep

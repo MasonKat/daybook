@@ -24,6 +24,8 @@
     <span class="ring prog" style="--p: {{ st.pct }}"><span class="story-in s-streak"><b class="tnum" data-live="streak">{{ st.streak }}</b></span></span>
     {% elif st.key == 'videos' %}
     <span class="ring"><span class="story-in s-videos">{% if st.thumb %}<img src="{{ st.thumb }}" alt="" decoding="async">{% else %}<span aria-hidden="true">▶</span>{% endif %}</span></span>
+    {% elif st.key == 'review' %}
+    <span class="ring"><span class="story-in s-review"><span aria-hidden="true">✎</span></span></span>
     {% elif st.key == 'goal' %}
     <span class="ring"><span class="story-in s-goal"><svg viewBox="0 0 36 36" class="donut" aria-hidden="true"><circle cx="18" cy="18" r="14" class="d-track"/><circle cx="18" cy="18" r="14" class="d-fill" pathLength="100" stroke-dasharray="{{ st.pct }} 100" transform="rotate(-90 18 18)"/></svg><b class="tnum dpct">{{ st.pct }}</b></span></span>
     {% else %}
@@ -291,6 +293,14 @@
       <ol class="dots" id="sv-dots">
         {% for d in me.week %}<li data-date="{{ d.date }}" class="{{ 'on' if d.done }}{{ ' cls' if d.class_day }}{{ ' fut' if d.future }}"><span class="wd">{{ d.wd }}</span><span class="dot">{{ '✓' if d.done else '·' }}</span></li>{% endfor %}
       </ol>
+    </div>
+    {% elif st.key == 'review' %}
+    <div class="slide s-review">
+      <p class="sv-kicker">{{ S.story_review }}</p>
+      {% if st.line %}<blockquote class="quote">{{ st.line }}</blockquote>{% endif %}
+      {% if st.focus %}<p class="muted">{{ S.review_focus }}</p><p class="rchips">{% for f in st.focus %}<span class="chip">{{ f }}</span>{% endfor %}</p>{% endif %}
+      {% if st['items'] %}<p class="muted">{{ S.review_videos }}</p>
+      <ul class="rvids">{% for v in st['items'] %}<li><a class="btn ghost sv-link" href="{{ v.url }}" target="_blank" rel="noopener noreferrer">▶ {{ v.title }}</a></li>{% endfor %}</ul>{% endif %}
     </div>
     {% elif st.key == 'goal' %}
     {% set r = me.reward %}

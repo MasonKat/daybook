@@ -103,8 +103,14 @@ def import_files(conn: sqlite3.Connection, body: dict) -> dict:
             if len(files) != 1 or not files[0][0].lower().endswith(".csv"):
                 raise TeacherError("choose one .csv file")
             rep = importers.import_tests_csv(conn, tmp / files[0][0])
+        elif kind == "insights":                                     # F12
+            if len(files) != 1 or not files[0][0].lower().endswith(".json"):
+                raise TeacherError("choose one .json file")
+            ir = importers.import_insights(conn, tmp / files[0][0])
+            return {"ok": not ir.errors, "files": 1, "rows": ir.rows, "imported": ir.imported,
+                    "unmatched": [f"unknown ext_id {u}" for u in ir.unknown], "errors": ir.errors}
         else:
-            raise TeacherError("kind must be screeners or tests")
+            raise TeacherError("kind must be screeners, tests or insights")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     return {"ok": True, "files": rep.files, "rows": rep.rows, "imported": rep.imported,

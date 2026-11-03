@@ -110,6 +110,8 @@ def demo(obj: Ctx, out, force, no_publish):
     click.echo(f"screeners: {rep.imported} rows imported from {rep.files} rounds; unmatched: {len(rep.unmatched)}")
     for u in rep.unmatched:
         click.echo(f"  unmatched: {u}")
+    ins = importers.import_insights(conn, demomod.write_demo_insights(conn))
+    click.echo(f"insights (F12): {ins.imported} students")
     if no_publish:
         return
     res = generate.publish(conn, obj.cfg, Path(out))
@@ -604,7 +606,7 @@ def pull(obj: Ctx, photos_dir):
 
 @cli.group("import")
 def import_():
-    """Import screener rounds or a generic tests CSV."""
+    """Import screener rounds, a generic tests CSV, or insights (F12)."""
 
 
 @import_.command("screeners")
@@ -617,6 +619,21 @@ def import_screeners(obj: Ctx, directory):
         click.echo(f"  unmatched (not imported): {u}")
     for e in rep.errors:
         click.echo(f"  error: {e}", err=True)
+
+
+@import_.command("insights")
+@click.argument("path", type=click.Path(exists=True, dir_okay=False))
+@click.pass_obj
+def import_insights_cmd(obj: Ctx, path):
+    """F12: a student-safe slice of your own analysis (focus, videos, one line each) - see mappings/insights.example.json."""
+    rep = importers.import_insights(obj.conn, path)
+    for e in rep.errors:
+        click.echo(f"error: {e}", err=True)
+    click.echo(f"insights: {rep.imported}/{rep.rows} imported; unknown ext_id: {len(rep.unknown)}")
+    for u in rep.unknown:
+        click.echo(f"  unknown: {u}")
+    if rep.errors:
+        sys.exit(1)
 
 
 @import_.command("tests")

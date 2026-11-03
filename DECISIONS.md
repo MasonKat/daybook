@@ -265,6 +265,14 @@ One line each. "deferred" = not built in P0, on purpose.
 - **안내 문구:** the parent text is `parent_msg.link_intro` (formal; the greeting from the parent profile; checked by the tone test), the student text `link_intro_student`. Copy buttons only; nothing is sent.
 - **Roster CSV:** the existing import with `mappings/roster.json`, now with **가져오기 미리보기** first: the same matching inside a SQLite savepoint that is rolled back (nothing written, nothing logged), a table of new / updated (with the changed fields) / unchanged / skipped rows, then "이대로 가져오기".
 
+## F12: the weekly-test bridge (2026-11-04)
+- `daybook import insights <file.json>` (and the Teacher tab's import picker) reads the teacher's own per-round analysis in the format of `mappings/insights.example.json`: round, date, and per student `ext_id`, `focus`, `videos`, `student_line`, `parent_line`. Matched by ext_id only; an unknown ext_id is reported and skipped. At most 3 focus items (30 characters each) and 3 http(s) videos are kept; lines are capped (120 / 160). Stored in `insights` (keyed student + round; a re-import replaces). DAYBOOK does not know how the analysis is made.
+- **Student page:** a story ring "이번 주 복습" for an insight dated in this week (Mon–Sun): the student line, the focus chips and the recommended videos (a `videos.json` entry by URL, with its title, else a plain "추천 영상 보기" link; a URL that looks like a raw id is dropped). No insight this week: no ring.
+- **Parent page:** the 주간 테스트 row of the week the insight belongs to shows `parent_line` under the trend (older weeks keep theirs). Focus chips for parents only with `"parent_shows_focus": true` in daybook.json.
+- Every text passes `text_scrubber` at publish: a line or a focus item with a phone number, a full name, a student ID, a raw id or a brand name is left out (not rewritten). The round id is stored locally and never rendered.
+- Demo: `daybook demo` writes `demo/insights.demo.json` (gitignored) dated today for 고1A and 기초B and imports it.
+- **next (from the combined prompt, not built):** retiring the Google Form → make.com → Notion intake in favour of F14's report; the teacher decides after the trial.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

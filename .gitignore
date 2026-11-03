@@ -19,6 +19,7 @@ worker/.dev.vars
 test-results/
 videos.local.json
 demo/videos.demo.json
+demo/insights.demo.json
 assignments.json
 moments/
 demo/moments-store/

@@ -352,6 +352,11 @@
   "m_status_updated": "바뀜",
   "m_status_unchanged": "그대로",
   "m_status_skipped": "건너뜀",
+  "story_review": "이번 주 복습",
+  "review_focus": "다시 볼 것",
+  "review_videos": "추천 영상",
+  "review_link": "추천 영상 보기",
+  "t_import_insights": "분석 결과 (insights.json)",
   "parent_msg": {
     "_note": "Parent-facing drafts (F13.6): warm and formal, no emoji, never playful. reason_* lines are for the teacher only.",
     "greeting": "안녕하세요, {g}. AMP 수학입니다.",

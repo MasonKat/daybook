@@ -320,6 +320,26 @@ def _solved(subs: dict, start: date, end: date) -> int | None:
     return sum(vals) if vals else None
 
 
+def _review(insights, mon: date, sun: date, scrub, videos: list[dict], S: dict) -> dict | None:
+    """F12 "이번 주 복습" story: this week's latest insight -> <= 3 focus chips, <= 3 videos (matched to videos.json,
+    else plain links) and the student's line. None (no ring) when there is nothing for this week."""
+    week = [r for r in insights if mon.isoformat() <= r["date"] <= sun.isoformat()]
+    if not week:
+        return None
+    r = week[-1]
+    focus = [f for f in (scrub(x) for x in json.loads(r["focus"] or "[]")) if f][:3]
+    by_url = {v["url"]: v for v in videos}
+    items = []
+    for u in json.loads(r["videos"] or "[]")[:3]:
+        if lintmod.RAW_ID_RE.search(u):
+            continue
+        items.append(by_url.get(u) or {"title": S["review_link"], "url": u, "thumb": "", "kind": "long", "group": ""})
+    line = scrub(r["student_line"])
+    if not (focus or items or line):
+        return None
+    return {"key": "review", "label": S["story_review"], "focus": focus, "items": items, "line": line}
+
+
 def class_hours(cls, S: dict) -> str:
     """F13.5: "수업 17:30–20:00 · 자습 ~21:00" for the parent card (empty when the class has no hours set)."""
     if not cls or not cls["start_time"]:
@@ -433,6 +453,8 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             d -= timedelta(days=1)
         week_k = sum(1 for x in week if x["done"])
 
+        # F12: the teacher's own analysis, student-safe slice (scrubbed; the round id never reaches a page)
+        insights = conn.execute("SELECT * FROM insights WHERE student_id = ? ORDER BY date, ts", (s["id"],)).fetchall()
         # F10: this student's videos (untagged + their class / grade), pinned 강의 first
         my_videos = [v for v in videos if video_for(v, cls)]
         my_shorts = [v for v in my_videos if v["kind"] == "short"]
@@ -454,6 +476,9 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             nxt = next((m for m in rw.milestones + [rw.goal] if m > rw.total), None)
             stories.append({"key": "goal", "label": S["story_goal"], "next": (nxt - rw.total) if nxt else 0,
                             "pct": round(rw.pct)})
+        review = _review(insights, mon, sun, scrub, videos, S)
+        if review:
+            stories.append(review)
         if note:
             stories.append({"key": "teacher", "label": S["story_teacher"], "note": note,
                             "week": _date_ko(M.week_monday(notes[-1]["week"]))})
@@ -463,6 +488,8 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                 content = [v["id"] for v in st_["items"]]
             if st_["key"] == "moments":
                 content = [m["k"] for m in st_["items"]]
+            if st_["key"] == "review":
+                content = [st_["focus"], [v["url"] for v in st_["items"]], st_["line"]]
             st_["hash"] = _hash([st_["key"], content, rw.total if st_["key"] == "goal" and rw else 0])
 
         # parent room: one report message per week (last PARENT_WEEKS weeks), newest open, earlier ones one line
@@ -503,6 +530,10 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                     ritual.append({"wd": x["wd"], "in": t_in, "out": x["time"], "late": late, "line": line})
             wsum = _sum_upto(att, wm, cut)
             solved = _solved(subs, wm, cut)
+            wk_ins = [r for r in insights if wm.isoformat() <= r["date"] <= we.isoformat()]
+            ins_line = scrub(wk_ins[-1]["parent_line"]) if wk_ins else ""
+            ins_focus = ([f for f in (scrub(x) for x in json.loads(wk_ins[-1]["focus"] or "[]")) if f]
+                         if wk_ins and cfg.extra.get("parent_shows_focus") else [])
             dir_eff = S["dir_" + trend["lines"]["eff"].dir] if trend else ""
             rng = f"{_md(wm)}–{_md(we)}"
             room.append({
@@ -517,6 +548,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                 "dir_eff": trend["lines"]["eff"].dir if trend else "",
                 "dir_reach": trend["lines"]["reach"].dir if trend else "",
                 "week_sum": wsum, "cumulative": _sum_upto(att, None, cut), "solved": solved,
+                "insight": ins_line, "focus": ins_focus,
                 "bar_pct": (min(100.0, 100.0 * total_then / rw.goal) if rw and rw.goal > 0 and current else None),
                 "to_go": max(0, rw.goal - total_then) if rw else 0,
                 "note": wk_notes[-1]["text"] if wk_notes else "",

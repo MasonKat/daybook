@@ -46,6 +46,8 @@
       {% else %}
       <p class="rline muted">{{ S.tests_empty }}</p>
       {% endif %}
+      {% if w.insight %}<p class="rline insight">{{ w.insight }}</p>{% endif %}
+      {% if w.focus %}<p class="rline">{% for f in w.focus %}<span class="chip">{{ f }}</span> {% endfor %}</p>{% endif %}
     </div>
   </div>
   {% if w.solved is not none %}
