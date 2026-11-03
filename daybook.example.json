@@ -1,0 +1,8 @@
+{
+  "_comment": "Copy to daybook.json (gitignored) on the teacher's laptop. teacher_token = the Worker secret TEACHER_TOKEN.",
+  "worker_url": "https://daybook-worker.<your-subdomain>.workers.dev",
+  "pages_url": "https://daybook.pages.dev",
+  "teacher_token": "<long random string, same as `wrangler secret put TEACHER_TOKEN`>",
+  "videos_path": "videos.json",
+  "board_poll_seconds": 10
+}

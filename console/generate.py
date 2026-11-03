@@ -1,4 +1,4 @@
-"""Static site generator. Reads ONLY `students_public` (never full_name / parent_phone / ext_id).
+"""Static site generator. Reads ONLY `students_public` (never the private student columns).
 
 publish(): compute derived values -> render into a staging dir -> run the no-PII lint ->
 swap into dist/ only if the lint passes. A failing lint leaves the previous dist/ untouched.

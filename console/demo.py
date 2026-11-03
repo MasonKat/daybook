@@ -73,8 +73,11 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
                 # leave today open for the first student of each class so the e2e upload is a fresh one
                 skip_today = d == today and i == 0
                 if not skip_today and rng.random() < (p + (0.05 if d in sess else -0.1)):
-                    t = time(rng.randint(15, 22), rng.randint(0, 59))
-                    ts = datetime.combine(d, t, KST).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+                    at = datetime.combine(d, time(rng.randint(15, 22), rng.randint(0, 59)), KST)
+                    now = M.kst_now()
+                    if at > now:  # never in the future: earlier today instead
+                        at = max(datetime.combine(d, time(0, 5), KST), now - timedelta(minutes=rng.randint(5, 300)))
+                    ts = at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
                     conn.execute(
                         """INSERT INTO submissions (student_id, session_id, day, ts, photo_key, source, status)
                            VALUES (?, ?, ?, ?, ?, ?, 'received')""",

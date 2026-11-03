@@ -1,0 +1,11 @@
+{
+  "_comment": "Roster export -> DAYBOOK. Keys of `columns` are the CSV header names; values are DAYBOOK fields (full_name, ext_id, active, parent_phone). Unlisted columns (Number, School, Archive) are dropped.",
+  "encoding": "utf-8-sig",
+  "columns": {
+    "Name": "full_name",
+    "Student ID": "ext_id",
+    "Status": "active",
+    "Phone Number": "parent_phone"
+  },
+  "active_values": ["재원"]
+}
