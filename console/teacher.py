@@ -59,16 +59,29 @@ def notes(conn: sqlite3.Connection, cfg: Config, cls: sqlite3.Row, day: date) ->
                           (cls["id"],)):
         n = conn.execute("SELECT text FROM notes WHERE student_id = ? AND week = ? ORDER BY ts DESC, id DESC LIMIT 1",
                          (r["id"], week)).fetchone()
+        text = n["text"] if n else drafts.get(r["slug"], "")
         out.append({"slug": r["slug"], "display_name": r["display_name"], "note": n["text"] if n else "",
-                    "suggestion": drafts.get(r["slug"], "")})
+                    "suggestion": drafts.get(r["slug"], ""), "warnings": comment_warnings(conn, cfg, r["id"], text)})
     return {"week": week, "students": out}
 
 
-def note_save(conn: sqlite3.Connection, body: dict) -> dict:
+def comment_warnings(conn: sqlite3.Connection, cfg: Config, student_id: int, text: str) -> list[dict]:
+    """F16.3: warnings only (never blocks a save): privacy in korea mode; + absolutes / comparisons / hedges / jargon
+    in manitoba practice mode."""
+    from . import comments, practice
+    return comments.lint(conn, cfg, text, student_id, practice.mode(conn, cfg))
+
+
+def note_save(conn: sqlite3.Connection, body: dict, cfg: Config | None = None) -> dict:
     s = ops.get_student(conn, str(body.get("slug", "")))
     ops.add_note(conn, s["id"], str(body.get("week", "")), str(body.get("text", "")))
     conn.commit()
-    return {"ok": True}
+    return {"ok": True, "warnings": comment_warnings(conn, cfg or Config(), s["id"], str(body.get("text", "")))}
+
+
+def comment_lint(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
+    s = ops.get_student(conn, str(body.get("slug", "")))
+    return {"ok": True, "warnings": comment_warnings(conn, cfg, s["id"], str(body.get("text", "")))}
 
 
 def _decode_files(files) -> list[tuple[str, bytes]]:

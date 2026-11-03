@@ -30,7 +30,7 @@ def test_export_report_and_note_suggest(conn, klass, tmp_path, monkeypatch):
     r = CliRunner().invoke(cli, ["--db", db, "note", "suggest", "고1A", "--date", "2026-11-06"])
     assert r.exit_code == 0, r.output
     lines = r.output.strip().splitlines()
-    assert any(l.startswith(f'daybook note {s["slug"]} 2026-W45 "이번 주 수업일 2일 모두 제출, 태도 3/') for l in lines)
+    assert any(l.startswith(f'daybook note {s["slug"]} 2026-W45 "이번 주 수업일 2일 모두 과제를 냈어요.') for l in lines)   # F16.3 korea
     assert not any(studs[1]["slug"] in l for l in lines)            # already has a note: skipped
     r = CliRunner().invoke(cli, ["--db", db, "note", s["slug"], "2026-W45", "직접 쓴 메모"])
     assert r.exit_code == 0 and conn.execute("SELECT COUNT(*) FROM notes").fetchone()[0] == 2

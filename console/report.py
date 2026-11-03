@@ -54,6 +54,9 @@ def suggest_notes(conn: sqlite3.Connection, cfg: Config, cls: sqlite3.Row, day: 
                   include_existing: bool = False) -> list[tuple[str, str, str]]:
     """[(slug, week, draft)] for active students of the class without a note for that week yet
     (with include_existing, for every active student: the Teacher tab prefills its fields with them)."""
+    from . import comments as C, practice
+    mode = practice.mode(conn, cfg)
+    lang = "en" if mode == "manitoba" and cfg.extra.get("comment_lang") == "en" else "ko"
     week = M.iso_week(day)
     ctx = generate.build_context(conn, cfg, day, M.kst_now())
     conn.rollback()
@@ -67,18 +70,8 @@ def suggest_notes(conn: sqlite3.Connection, cfg: Config, cls: sqlite3.Row, day: 
         if not s:
             continue
         w = s["room"][-1]
-        parts = []
-        if w["c"] and w["d"] == w["c"]:
-            parts.append(f"이번 주 수업일 {w['c']}일 모두 제출")
-        else:
-            parts.append(f"이번 주 {w['k']}일 제출")
         sessions = conn.execute("SELECT COUNT(*) FROM sessions WHERE class_id = ? AND cancelled IS NULL AND date BETWEEN ? AND ?",
                                 (cls["id"], M.week_bounds(day)[0].isoformat(), day.isoformat())).fetchone()[0]
-        if sessions:
-            parts.append(f"태도 {w['week_sum']}/{3 * sessions}")
-        if w["has_tests"] and w["dir_eff"] == "up":
-            parts.append("확보 효율 상승")
-        if s["streak"] >= 7:
-            parts.append(f"연속 {s['streak']}일")
-        out.append((r["slug"], week, ", ".join(parts)))
+        # F16.3: korea: a warm Korean line; manitoba practice: strength / challenge / next step (English option)
+        out.append((r["slug"], week, C.draft(w, s["streak"], sessions, mode, lang)))
     return out

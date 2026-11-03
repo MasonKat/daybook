@@ -534,3 +534,7 @@ tr.rc.skipped td:nth-child(2) { color: var(--err); }
 /* F15.4: the mascot slot (the academy's own image; nothing without it) */
 .mascot { width: 24px; height: 24px; object-fit: contain; vertical-align: -6px; margin-right: 6px; border-radius: 6px; }
 .room-title .mascot { width: 22px; height: 22px; vertical-align: -5px; }
+
+/* F16.3: comment warnings (never block) */
+.cwarn { flex-basis: 100%; grid-column: 1 / -1; font-size: 12px; color: var(--adjust); margin: 2px 0 6px; }
+.cwarn:empty { display: none; }

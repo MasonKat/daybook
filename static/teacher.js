@@ -163,16 +163,26 @@
       j.students.forEach(function (s) {
         var row = el('div', { 'class': 'nrow', 'data-slug': s.slug });
         var lab = el('label', {}, s.display_name);
-        var ta = el('input', { type: 'text', maxlength: '120' }); ta.value = s.note || s.suggestion;
+        var ta = el('input', { type: 'text', maxlength: '400' }); ta.value = s.note || s.suggestion;
         if (!s.note) ta.classList.add('draft');
         var b = el('button', { type: 'button', 'class': 'btn ghost sm' }, S.save);
         var st = el('span', { 'class': 'muted' }, s.note ? '✓' : '');
+        var wn = el('div', { 'class': 'cwarn' });                /* F16.3: warnings only; saving is never blocked */
+        function showWarn(list) {
+          wn.textContent = (list || []).map(function (w) { return '⚠ ' + (S.cw[w.kind] || w.kind) + ': ' + w.match; }).join('  ');
+        }
+        showWarn(s.warnings);
+        var tmr = null;
+        ta.addEventListener('input', function () {
+          clearTimeout(tmr);
+          tmr = setTimeout(function () { api('/api/teacher/comment-lint', { slug: s.slug, text: ta.value }).then(function (r) { showWarn(r.warnings); }); }, 400);
+        });
         b.onclick = function () {
           api('/api/teacher/note', { slug: s.slug, week: j.week, text: ta.value }).then(function (r) {
-            st.textContent = r.ok ? '✓ ' + S.saved : (r.error || ''); if (r.ok) ta.classList.remove('draft');
+            st.textContent = r.ok ? '✓ ' + S.saved : (r.error || ''); if (r.ok) { ta.classList.remove('draft'); showWarn(r.warnings); }
           });
         };
-        row.appendChild(lab); row.appendChild(ta); row.appendChild(b); row.appendChild(st); box.appendChild(row);
+        row.appendChild(lab); row.appendChild(ta); row.appendChild(b); row.appendChild(st); row.appendChild(wn); box.appendChild(row);
       });
     });
   }

@@ -333,7 +333,9 @@ def make_handler(board: Board):
                     if self.path == "/api/teacher/roster-import":
                         return self._json(T.roster_preview(conn, board.cfg, body))
                     if self.path == "/api/teacher/note":
-                        return self._json(T.note_save(conn, body))
+                        return self._json(T.note_save(conn, body, board.cfg))
+                    if self.path == "/api/teacher/comment-lint":         # F16.3 (warnings only)
+                        return self._json(T.comment_lint(conn, board.cfg, body))
                     if self.path == "/api/teacher/import":
                         return self._json(T.import_files(conn, body))
                     if self.path == "/api/teacher/cancel":

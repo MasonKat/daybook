@@ -89,7 +89,7 @@ def test_notes_prefilled_and_saved(tserver, klass, conn):
     _, studs = klass
     code, j = call(url + "/api/teacher/notes")
     assert code == 200 and j["week"] == "2026-W45" and len(j["students"]) == 3
-    assert all(s["note"] == "" and s["suggestion"].startswith("이번 주") for s in j["students"])
+    assert all(s["note"] == "" and s["suggestion"].endswith("요.") and s["warnings"] == [] for s in j["students"])   # F16.3
     code, r = call(url + "/api/teacher/note", {"slug": studs[0]["slug"], "week": j["week"], "text": "잘했어요"})
     assert code == 200 and r["ok"]
     _, j = call(url + "/api/teacher/notes")
