@@ -96,7 +96,7 @@ def init(obj: Ctx):
 @click.option("--no-publish", is_flag=True, help="Seed only (e.g. before `publish --taste`).")
 @click.pass_obj
 def demo(obj: Ctx, out, force, no_publish):
-    """Seed the synthetic demo tenant (2 classes x 6 students) and publish it."""
+    """Seed the synthetic demo tenant (4 classes, 22 students) and publish it."""
     from . import demo as demomod
     conn = dbmod.connect(obj.db_path)
     dbmod.init(conn)
@@ -158,10 +158,20 @@ def class_add(obj: Ctx, name, term, days, reward_label, goal, coef):
 @click.option("--reward", "reward_label", default=None)
 @click.option("--goal", type=int, default=None, help="Set the goal; 0 = recompute at the next publish")
 @click.option("--coef", type=float, default=None)
+@click.option("--start", "start_time", default=None, help="Class start HH:MM (F13: lateness is measured from it)")
+@click.option("--end", "end_time", default=None, help="Class end HH:MM")
+@click.option("--self-study", "self_study_until", default=None, help="Self-study until HH:MM ('' clears it)")
+@click.option("--late-min", type=int, default=None, help="F13 연락 필요: late = 출석 later than start + N min (default 10)")
+@click.option("--late-count", type=int, default=None, help="... on >= N of the last 6 class days (default 3)")
+@click.option("--late-avg-min", type=int, default=None, help="... or an average lateness >= N min (default 15)")
 @click.pass_obj
-def class_edit(obj: Ctx, name, term, days, reward_label, goal, coef):
+def class_edit(obj: Ctx, name, term, days, reward_label, goal, coef, **policy):
     conn = obj.conn
     cls = ops.get_class(conn, name)
+    try:
+        pol = ops.class_policy(conn, cls, policy)
+    except ops.OpError as e:
+        fail(str(e))
     fields = {}
     if term is not None:
         if M.parse_term(term) == (None, None):
@@ -175,10 +185,11 @@ def class_edit(obj: Ctx, name, term, days, reward_label, goal, coef):
         fields["reward_goal_points"] = goal or None
     if coef is not None:
         fields["goal_coef"] = coef
-    if not fields:
+    if not fields and not pol:
         fail("nothing to change")
-    conn.execute(f"UPDATE classes SET {', '.join(k + ' = ?' for k in fields)} WHERE id = ?", (*fields.values(), cls["id"]))
-    dbmod.log_event(conn, "class_edit", {"class_id": cls["id"], "fields": sorted(fields)})
+    if fields:
+        conn.execute(f"UPDATE classes SET {', '.join(k + ' = ?' for k in fields)} WHERE id = ?", (*fields.values(), cls["id"]))
+        dbmod.log_event(conn, "class_edit", {"class_id": cls["id"], "fields": sorted(fields)})
     conn.commit()
     click.echo("ok")
 
@@ -208,7 +219,10 @@ def class_list(obj: Ctx):
         days = "".join(M.WEEKDAYS_KO[i] for i in M.mask_days(c["weekday_mask"]))
         r = M.reward_for(conn, c, today)
         click.echo(f"{c['name']}\tterm {c['term']}\tdays {days}\tstudents {M.active_count(conn, c['id'])}\t"
-                   f"reward {c['reward_label']!r} {r.total}/{r.goal}")
+                   f"reward {c['reward_label']!r} {r.total}/{r.goal}\t"
+                   f"hours {c['start_time'] or '-'}-{c['end_time'] or '-'}"
+                   f"{(' self-study ~' + c['self_study_until']) if c['self_study_until'] else ''}\t"
+                   f"late {c['late_min']}m x{c['late_count']} / avg {c['late_avg_min']}m")
 
 
 # ---------------------------------------------------------------- roster
@@ -726,6 +740,127 @@ def export_pdf(slug):
     click.echo("export pdf is not implemented yet (deferred, see DECISIONS.md). "
                "Use the parent page link or print it from the browser.", err=True)
     sys.exit(2)
+
+
+# ---------------------------------------------------------------- F13: parent contact (laptop only, never sent)
+
+@cli.group()
+def contact():
+    """Parent contact desk: 연락 필요, 연락 현황, the weekly planner, logging. Nothing is ever sent."""
+
+
+@contact.command("needed")
+@click.option("--class", "class_name", default=None)
+@click.option("--date", "d", default=None)
+@click.option("--script", is_flag=True, help="Also print the 3-line call script and the KakaoTalk draft")
+@click.pass_obj
+def contact_needed(obj: Ctx, class_name, d, script):
+    """연락 필요: rule-based exceptions with reasons, dates and times."""
+    from . import contact as C
+    conn = obj.conn
+    cid = ops.get_class(conn, class_name)["id"] if class_name else None
+    fl = C.flags(conn, obj.cfg, parse_date(d), cid)
+    if not fl:
+        click.echo("연락 필요 없음")
+    for f in fl:
+        click.echo(f"[{'연락 필요' if f['level'] == 'need' else '참고'}] {f['class_name']} {f['display_name']} ({f['slug']})")
+        for r in f["rules"]:
+            click.echo(f"    - {r['reason']}")
+        if script:
+            for i, line in enumerate(f["script"], 1):
+                click.echo(f"    {i}. {line}")
+            click.echo("    카톡 초안:\n      " + f["kakao"].replace("\n", "\n      "))
+
+
+@contact.command("status")
+@click.option("--date", "d", default=None)
+@click.pass_obj
+def contact_status(obj: Ctx, d):
+    """연락 현황: every student, longest without contact first."""
+    from . import contact as C
+    mark = {"red": "!!", "amber": "! ", "ok": "  "}
+    for x in C.status(obj.conn, obj.cfg, parse_date(d)):
+        click.echo(f"{mark[x['level']]} {x['days']:>4}d  {x['class_name']}\t{x['display_name']} ({x['slug']})\t"
+                   f"last {x['last'] or '-'}\t{x['channel']}/{x['style']}")
+
+
+@contact.command("log")
+@click.argument("slug")
+@click.option("--kind", type=click.Choice(["call", "message", "meeting"]), default="call", show_default=True)
+@click.option("--in", "inbound", is_flag=True, help="The parent reached out (direction in)")
+@click.option("--summary", default="", help="One line, <= 120 characters")
+@click.option("--follow-up", default=None, help="YYYY-MM-DD")
+@click.pass_obj
+def contact_log_cmd(obj: Ctx, slug, kind, inbound, summary, follow_up):
+    """Record a call/message/meeting (clears 연락 필요 until new data)."""
+    from . import contact as C
+    conn = obj.conn
+    try:
+        C.log_contact(conn, ops.get_student(conn, slug)["id"], kind, summary, "in" if inbound else "out", follow_up)
+    except (C.ContactError, ops.OpError) as e:
+        fail(str(e))
+    conn.commit()
+    click.echo("logged")
+
+
+@contact.command("snooze")
+@click.argument("slug")
+@click.option("--rule", default="all", show_default=True, help="late|absent|homework|test|stale|all")
+@click.option("--days", type=int, default=7, show_default=True)
+@click.pass_obj
+def contact_snooze_cmd(obj: Ctx, slug, rule, days):
+    """이번 주는 보류: hold a flag for 7 days (logged)."""
+    from . import contact as C
+    conn = obj.conn
+    try:
+        until = C.snooze(conn, ops.get_student(conn, slug)["id"], rule, M.kst_today(), days)
+    except (C.ContactError, ops.OpError) as e:
+        fail(str(e))
+    conn.commit()
+    click.echo(f"held until {until}")
+
+
+@contact.command("profile")
+@click.argument("slug")
+@click.option("--channel", type=click.Choice(["call", "kakao", "both"]), default=None)
+@click.option("--style", type=click.Choice(["weekly", "needed"]), default=None, help="weekly = 매주, needed = 필요할 때만")
+@click.option("--greeting", type=click.Choice(["어머님", "아버님", "보호자님"]), default=None)
+@click.pass_obj
+def contact_profile_cmd(obj: Ctx, slug, channel, style, greeting):
+    from . import contact as C
+    conn = obj.conn
+    new = C.set_profile(conn, ops.get_student(conn, slug)["id"], channel, style, greeting)
+    conn.commit()
+    click.echo(f"{new['channel']} / {new['style']} / {new['greeting']}")
+
+
+@contact.command("plan")
+@click.option("--date", "d", default=None)
+@click.pass_obj
+def contact_plan(obj: Ctx, d):
+    """이번 주 할 일: the 100-minute planner."""
+    from . import contact as C
+    pw = C.plan_week(obj.conn, obj.cfg, parse_date(d))
+    label = {"call": "통화", "message": "메시지", "line": "한 줄"}
+    for it in pw["items"]:
+        click.echo(f"[{'x' if it['done'] else ' '}] {label[it['type']]:<3} {it['minutes']:>2}분  {it['class_name']} "
+                   f"{it['display_name']}{'  (고정)' if it['locked'] else ''}  · {it['why']}")
+    for it in pw["moved"]:
+        click.echo(f"    → 다음 주: {label[it['type']]} {it['class_name']} {it['display_name']}")
+    click.echo(f"{pw['total']}/{pw['budget']}분 · {pw['coverage']['text']}")
+
+
+@contact.command("goodnews")
+@click.option("--date", "d", default=None)
+@click.pass_obj
+def contact_goodnews(obj: Ctx, d):
+    """이달의 좋은 소식: positive-only drafts for every parent (copy, edit, send yourself)."""
+    from . import contact as C
+    day = parse_date(d)
+    if not C.last_week_of_month(day):
+        click.echo("(not the last week of the month yet; drafts are shown anyway)")
+    for g in C.good_news(obj.conn, obj.cfg, day):
+        click.echo(f"--- {g['class_name']} {g['display_name']}\n{g['text']}")
 
 
 if __name__ == "__main__":

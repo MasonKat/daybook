@@ -12,8 +12,8 @@ def test_import_screeners_demo_rounds(conn, klass):
     assert rep.files == 3
     # 3 class students matched in each of 3 rounds (S902 by name, the others by ext_id)
     assert rep.imported == 9
-    # the 10 demo students not in this roster (incl. 콩) + S999 are reported, never invented
-    assert len(rep.unmatched) == 3 * 11
+    # the 19 demo students not in this roster (incl. 콩) + S999 are reported, never invented
+    assert len(rep.unmatched) == 3 * 20
     assert any("S999" in u for u in rep.unmatched)
     assert conn.execute("SELECT COUNT(*) FROM students").fetchone()[0] == 3
     row = conn.execute("SELECT * FROM tests WHERE student_id = ? ORDER BY date LIMIT 1", (studs[1]["id"],)).fetchone()

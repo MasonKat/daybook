@@ -203,3 +203,51 @@ def edit_student(conn: sqlite3.Connection, slug: str, display: str | None = None
     conn.execute(f"UPDATE students SET {', '.join(k + ' = ?' for k in fields)} WHERE id = ?", (*fields.values(), s["id"]))
     log_event(conn, "student_update", {"student_id": s["id"], "fields": sorted(fields)})
     return set(fields)
+
+
+# ---------------------------------------------------------------- F13: class policy + 푼 문제 수
+
+POLICY_FIELDS = ("start_time", "end_time", "self_study_until", "late_min", "late_count", "late_avg_min")
+_HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def class_policy(conn: sqlite3.Connection, cls: sqlite3.Row, values: dict) -> dict:
+    """F13.2/F13.5: per-class 지각 thresholds and class hours. Shared by `daybook class edit` and the Teacher tab.
+    An empty time clears it (e.g. no self-study block)."""
+    fields: dict = {}
+    for k, v in values.items():
+        if k not in POLICY_FIELDS or v is None:
+            continue
+        if k in ("start_time", "end_time", "self_study_until"):
+            v = str(v).strip()
+            if v and not _HHMM.match(v):
+                raise OpError(f"{k} must be HH:MM")
+            fields[k] = v or None
+        else:
+            try:
+                n = int(v)
+            except (TypeError, ValueError) as e:
+                raise OpError(f"{k} must be a whole number") from e
+            if not (1 if k == "late_count" else 0) <= n <= (6 if k == "late_count" else 120):
+                raise OpError(f"{k} is out of range")
+            fields[k] = n
+    if fields:
+        conn.execute(f"UPDATE classes SET {', '.join(k + ' = ?' for k in fields)} WHERE id = ?", (*fields.values(), cls["id"]))
+        log_event(conn, "class_policy", {"class_id": cls["id"], **fields})
+    return fields
+
+
+def set_solved(conn: sqlite3.Connection, student_id: int, day: str, solved) -> None:
+    """F13.5: the teacher corrects a self-reported 오늘 푼 문제 수 (0-60; empty clears it)."""
+    try:
+        date.fromisoformat(day)
+    except ValueError as e:
+        raise OpError("day must be YYYY-MM-DD") from e
+    n = None if solved in (None, "") else int(solved)
+    if n is not None and not 0 <= n <= 60:
+        raise OpError("푼 문제 수 is 0-60")
+    cur = conn.execute("UPDATE submissions SET solved = ? WHERE student_id = ? AND day = ? AND status != 'deleted'",
+                       (n, student_id, day))
+    if not cur.rowcount:
+        raise OpError("no submission on that day")
+    log_event(conn, "solved_fix", {"student_id": student_id, "day": day, "solved": n})

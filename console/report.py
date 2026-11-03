@@ -39,10 +39,15 @@ def term_report(conn: sqlite3.Connection, cfg: Config, student_id: int, today: d
                               WHERE m.class_id = ? AND se.date BETWEEN ? AND ?""",
                            (cls["id"], start.isoformat(), today.isoformat())).fetchone()[0]
     trend = next((w["trend"] for w in reversed(me["room"]) if w["trend"]), None)
+    # F13.1: 연락 기록 (dates, kinds and the one-line summaries; the report is the teacher's print, never published)
+    contacts = [{"date": M.utc_iso_to_kst(r["ts"]).date().isoformat(), "kind": r["kind"], "direction": r["direction"],
+                 "summary": r["summary"] or "", "follow_up": r["follow_up"]}
+                for r in conn.execute("SELECT * FROM contacts WHERE student_id = ? ORDER BY ts", (student_id,))
+                if M.utc_iso_to_kst(r["ts"]).date() >= start]
     tpl = generate.env().get_template("report.html")
     return tpl.render(S=ctx["S"], me=me, today=today.isoformat(), best=best, done_c=done_c, class_c=len(cd),
                       rate=round(100 * done_c / len(cd)) if cd else 0, moments=moments, trend=trend,
-                      term=f"{start.isoformat()} ~ {(t_end or today).isoformat()}")
+                      term=f"{start.isoformat()} ~ {(t_end or today).isoformat()}", contacts=contacts)
 
 
 def suggest_notes(conn: sqlite3.Connection, cfg: Config, cls: sqlite3.Row, day: date,

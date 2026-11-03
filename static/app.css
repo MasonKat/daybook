@@ -444,3 +444,28 @@ body[data-page="student"][data-taste] .app { height: calc(100dvh - 24px); }
 .done .check.pend, .check.pend { background: var(--card); color: var(--fg); font-size: 48px; width: 104px; height: 104px; margin: 16px auto 0; border-radius: 50%; line-height: 104px; }
 .a2hs { margin-top: var(--s4); font-size: 14px; }
 .a2hs p { margin: 6px 0; }
+
+/* F13: the parent-contact desk (Teacher tab) and the board's "선생님 보기" (local only) */
+.need { border: 1px solid var(--line); border-left: 4px solid var(--adjust); border-radius: 10px; padding: 8px 10px; margin: 8px 0; }
+.need.lv-need { border-left-color: var(--err); }
+.need h3 { margin: 0 0 4px; font-size: 15px; }
+.badge { font-size: 11px; padding: 1px 6px; border-radius: 999px; border: 1px solid currentColor; vertical-align: middle; }
+.badge.need { color: var(--err); } .badge.notice { color: var(--muted); }
+.reasons, .script { margin: 4px 0; padding-left: 18px; font-size: 13px; }
+.script li { margin: 2px 0; }
+.need .trow { flex-wrap: wrap; }
+.need .csum { flex: 1; min-width: 12em; }
+.plan .pitem { list-style: none; margin-left: -18px; padding: 3px 0; }
+.plan .pitem.locked label { font-weight: 600; }
+.plan .pitem.done label { color: var(--muted); text-decoration: line-through; }
+.plan .why { display: block; margin-left: 24px; font-size: 12px; }
+.cover { font-weight: 600; margin: 8px 0 0; }
+.st.amber .dd { color: var(--adjust); font-weight: 600; } .st.red .dd { color: var(--err); font-weight: 700; }
+.st select, .wrow select, .pol input { min-height: 32px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: 13px var(--font); margin-right: 2px; }
+.pol { flex-wrap: wrap; gap: 8px; } .pol input[type=number] { width: 4.5em; }
+.gtext { width: 100%; box-sizing: border-box; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: 13px var(--font); padding: 6px; }
+#t-good .wrow { flex-direction: column; align-items: stretch; margin-bottom: 10px; } #t-good h3 { margin: 4px 0; font-size: 14px; }
+.tv { font: inherit; background: none; border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; color: inherit; cursor: pointer; }
+.tv[aria-pressed=true] { border-color: var(--err); color: var(--err); }
+.tvflags .tvf { border-left: 3px solid var(--adjust); padding: 2px 8px; margin: 6px 0; font-size: 13px; }
+.tvflags .tvf.need { border-left-color: var(--err); }

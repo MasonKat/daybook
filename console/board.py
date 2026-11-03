@@ -267,6 +267,12 @@ def make_handler(board: Board):
                                                      for d, r in sorted(M.cancelled_days(conn, board.class_id).items())]})
                 if path == "/api/teacher/weekly":
                     return self._json({"messages": T.weekly(conn, board.cfg, cls, day)})
+                if path == "/api/teacher/contacts":           # F13 (all classes: the teacher's whole desk)
+                    return self._json(T.contacts(conn, board.cfg, cls, day))
+                if path == "/api/teacher/flags":              # F13: the board's "선생님 보기" toggle (this class)
+                    return self._json(T.class_flags(conn, board.cfg, board.class_id, day))
+                if path == "/api/teacher/solved":
+                    return self._json({"rows": T.solved_rows(conn, board.class_id, day)})
             return self._send(404, b"not found", "text/plain")
 
         def _teacher_post(self, body: dict):
@@ -290,6 +296,16 @@ def make_handler(board: Board):
                         return self._json(T.publish(conn, board.cfg))
                     if self.path == "/api/teacher/deploy":
                         return self._json(T.deploy(board.cfg, runner=board.deploy_runner))
+                    if self.path == "/api/teacher/contact":
+                        return self._json(T.contact_log(conn, body))
+                    if self.path == "/api/teacher/snooze":
+                        return self._json(T.contact_snooze(conn, body, board.day))
+                    if self.path == "/api/teacher/profile":
+                        return self._json(T.contact_profile(conn, body))
+                    if self.path == "/api/teacher/policy":
+                        return self._json(T.policy_save(conn, cls, body))
+                    if self.path == "/api/teacher/solved":
+                        return self._json(T.solved_fix(conn, body))
                 except (ops.OpError, T.TeacherError, MomentError, ValueError) as e:
                     conn.rollback()
                     return self._json({"ok": False, "error": str(e)}, 400)

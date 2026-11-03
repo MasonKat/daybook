@@ -18,7 +18,7 @@ def test_schema_creates_tables_and_view(conn):
     view_cols = {r["name"] for r in conn.execute("PRAGMA table_info(students_public)")}
     assert view_cols and not (view_cols & {"full_name", "parent_phone", "ext_id"})
     sub_cols = [r["name"] for r in conn.execute("PRAGMA table_info(submissions)")]
-    assert sub_cols == ["id", "student_id", "session_id", "day", "ts", "photo_key", "source", "status", "reflection", "chip"]
+    assert sub_cols == ["id", "student_id", "session_id", "day", "ts", "photo_key", "source", "status", "reflection", "chip", "solved"]
     cls_cols = {r["name"]: r["dflt_value"] for r in conn.execute("PRAGMA table_info(classes)")}
     assert cls_cols["goal_coef"] == "2.4" and cls_cols["milestone_fracs"] == "'0.33,0.67'"
 

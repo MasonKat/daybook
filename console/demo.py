@@ -14,17 +14,29 @@ from .db import KST, log_event
 from .importers import add_student
 
 CLASSES = [
-    # name, weekdays, reward
-    ("고1A", "화,금", "피자 파티"),
-    ("기초B", "월,수", "간식 데이"),
+    # F13 demo shape (four classes, 22 students): name, weekdays, reward, start, end, self-study, late_min, kind
+    ("고1A", "화,목,토", "피자 파티", "18:00", "20:00", None, 10, "strong"),
+    ("기초B", "월,수,금", "간식 데이", "20:00", "22:00", None, 30, "basic"),
+    ("심화C", "월,수,금", "보드게임 데이", "18:00", "20:00", None, 10, "strong"),
+    ("케어D", "화,목,토", "간식 데이", "17:30", "20:00", "21:00", 10, "care"),
 ]
 # (full_name, ext_id) — invented names, synthetic IDs
 STUDENTS = {
-    "고1A": [("한가람", "S901"), ("윤도담", "S902"), ("서하늘", "S903"), ("임새벽", "S904"), ("차온유", "S905"),
-            ("노별찬", "S906")],
+    "고1A": [("한가람", "S901"), ("윤도담", "S902"), ("서하늘", "S903"), ("임새벽", "S904")],     # + 콩 = 5
     "기초B": [("류이든", "S907"), ("문가온", "S908"), ("방나래", "S909"), ("탁보미", "S910"), ("피솔빈", "S911"),
             ("엄라온", "S912")],
+    "심화C": [("차온유", "S905"), ("노별찬", "S906"), ("진여름", "S914"), ("도해솔", "S915"), ("백시온", "S916"),
+            ("오누리", "S917")],
+    "케어D": [("남다온", "S918"), ("표이안", "S919"), ("하은결", "S920"), ("구윤슬", "S921"), ("석로아", "S922")],
 }
+# F13: a strong student who averages ~30 min late and whose parents were last contacted 180 days ago.
+# They must top 연락 필요, with a call script that opens with their math strength.
+LATE_STAR = "S916"
+# F13: parent profiles cycle through these (channel, style, greeting); every 5th parent prefers KakaoTalk
+PROFILES = [("call", "weekly", "어머님"), ("call", "needed", "아버님"), ("both", "weekly", "어머님"),
+            ("call", "needed", "어머님"), ("kakao", "needed", "보호자님"), ("call", "weekly", "아버님")]
+CONTACT_SUMMARIES = ["학기 초 상담: 목표와 수업 방식 안내", "과제 습관 이야기, 집에서도 확인해 주시기로", "테스트 결과 설명, 다음 목표 공유",
+                     "출석 시간 안내, 잘 지키고 있음", "어머님 문의 회신: 진도 안내"]
 NOTES = [
     "풀이 과정을 끝까지 적는 습관이 자리 잡고 있어요.",
     "어려운 문항에도 먼저 손을 대 보는 모습이 좋아졌어요.",
@@ -58,46 +70,60 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
     if n and not force:
         raise DemoError("demo data already present; use --force to re-seed (or delete the demo database)")
     if n:
-        for t in ("attitude", "submissions", "checkins", "moments", "tests", "notes", "effort", "sessions", "students", "classes"):
+        for t in ("attitude", "submissions", "checkins", "moments", "tests", "notes", "effort", "contacts", "snoozes",
+                  "parent_profiles", "class_bonus", "sessions", "students", "classes"):
             conn.execute(f"DELETE FROM {t}")
 
     rng = random.Random(rng_seed)
     start = today - timedelta(days=21)
     term = f"{start.isoformat()}..{(today + timedelta(days=56)).isoformat()}"
-    for cname, days, reward in CLASSES:
+    order = 0
+    for cname, days, reward, t0, t1, self_study, late_min, kind in CLASSES:
         cur = conn.execute(
-            "INSERT INTO classes (name, term, weekday_mask, reward_label) VALUES (?, ?, ?, ?)",
-            (cname, term, M.mask_from_days(days), reward))
+            """INSERT INTO classes (name, term, weekday_mask, reward_label, start_time, end_time, self_study_until, late_min,
+                                    late_avg_min) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (cname, term, M.mask_from_days(days), reward, t0, t1, self_study, late_min, max(15, late_min)))
         cid = cur.lastrowid
         cls = conn.execute("SELECT * FROM classes WHERE id = ?", (cid,)).fetchone()
         studs = [add_student(conn, cid, full, ext_id=ext) for full, ext in STUDENTS[cname]]
         cdays = sorted(M.scheduled_days(cls["weekday_mask"], start, today))
         sess = {d: ops.ensure_session(conn, cid, d, SET_IDS[min(2, (d - start).days // 7)]) for d in cdays}
         for sid_ in sess.values():
-            conn.execute("UPDATE sessions SET start_time = '18:00', code = ? WHERE id = ?", (f"{rng.randint(0, 9999):04d}", sid_))
+            conn.execute("UPDATE sessions SET start_time = ?, code = ? WHERE id = ?", (t0, f"{rng.randint(0, 9999):04d}", sid_))
+        past = sorted(d for d in sess if d < today)
+        recent = set(past[-3:])
+        start_m = M_(t0)
+        sub_lo = M_(t1) - 10 if kind != "care" else M_(self_study or t1) - 30
         for i, s in enumerate(studs):
-            p = [0.92, 0.85, 0.7, 0.95, 0.6, 0.8][i]
+            ext = s["ext_id"]
+            p = [0.92, 0.85, 0.7, 0.95, 0.6, 0.8][i % 6]
+            absent = set(past[-2:]) if ext == "S911" else set(past[-1:]) if ext == "S920" else set()
+            no_hw = set(past[-3:]) if ext == "S915" else set()
             d = start
             while d <= today:
                 # leave today open for the first student of each class so the e2e upload is a fresh one
                 skip_today = d == today and i == 0
-                if not skip_today and rng.random() < (p + (0.05 if d in sess else -0.1)):
-                    mins = rng.randint(19 * 60 + 50, 21 * 60)              # 과제 끝 19:50-21:00
+                must = d in recent and d not in absent and d not in no_hw      # keep the demo's flags deliberate
+                if d in absent or d in no_hw:
+                    pass
+                elif not skip_today and (must or rng.random() < (p + (0.05 if d in sess else -0.1))):
+                    mins = min(23 * 60 + 50, rng.randint(sub_lo, sub_lo + 70))  # 과제 끝 after class (or self-study)
                     at = datetime.combine(d, time(mins // 60, mins % 60), KST)
                     now = M.kst_now()
                     if at > now:  # never in the future: earlier today instead
                         at = max(datetime.combine(d, time(0, 5), KST), now - timedelta(minutes=rng.randint(5, 300)))
                     ts = at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+                    solved = rng.randint(6, 28) if (kind != "strong" and rng.random() < 0.75) else None
                     conn.execute(
-                        """INSERT INTO submissions (student_id, session_id, day, ts, photo_key, source, status)
-                           VALUES (?, ?, ?, ?, ?, ?, 'received')""",
-                        (s["id"], sess.get(d), d.isoformat(), ts, None, rng.choice(["phone"] * 9 + ["paper"])))
+                        """INSERT INTO submissions (student_id, session_id, day, ts, photo_key, source, status, solved)
+                           VALUES (?, ?, ?, ?, ?, ?, 'received', ?)""",
+                        (s["id"], sess.get(d), d.isoformat(), ts, None, rng.choice(["phone"] * 9 + ["paper"]), solved))
                 d += timedelta(days=1)
             for d, sid in sess.items():
-                if d < today:
+                if d < today and d not in absent:
                     ops.set_attitude(conn, s["id"], sid, rng.choice([1, 2, 2, 3, 3, 3, 0]))
-                    if rng.random() < 0.85:
-                        at = datetime.combine(d, time(17, rng.randint(40, 59)) if rng.random() < .8 else time(18, rng.randint(0, 9)), KST)
+                    if d in recent or rng.random() < 0.9:
+                        at = _arrival(rng, d, start_m, kind, ext == LATE_STAR)
                         ops.record_checkin(conn, s["id"], sid, at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
                                            rng.choice(["phone"] * 6 + ["teacher"]))
             wk_now, wk_prev = M.iso_week(today), M.iso_week(today - timedelta(days=7))
@@ -105,8 +131,54 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
             ops.add_note(conn, s["id"], wk_now, NOTES[i % len(NOTES)])
         if cname == KONG["class"]:
             _seed_kong(conn, cid, sess, today, rng)
+    _seed_contacts(conn, today, rng)
     log_event(conn, "demo_seed", {"today": today.isoformat()})
     conn.commit()
+
+
+def M_(hhmm: str) -> int:
+    h, m = hhmm.split(":")
+    return int(h) * 60 + int(m)
+
+
+def _arrival(rng: random.Random, d: date, start_m: int, kind: str, late_star: bool) -> datetime:
+    """출석 time: strong/care classes arrive a little early; the basic class anywhere from 50 min early to 40 min late
+    (its policy is late_min 30); the late star 18-45 min late (an average of about 30)."""
+    if late_star:
+        m = start_m + rng.randint(18, 45)
+    elif kind == "basic":
+        m = start_m + rng.randint(-50, 40)
+    else:
+        m = start_m + (rng.randint(-20, 5) if rng.random() < 0.93 else rng.randint(11, 16))
+    return datetime.combine(d, time(m // 60, m % 60), KST)
+
+
+def _seed_contacts(conn: sqlite3.Connection, today: date, rng: random.Random) -> None:
+    """F13: an established roster (enrolled ~5 months ago), parent profiles and a contact history. Most parents
+    were contacted 4-26 days ago; one care-class parent 38 days ago (red); the late star's parents 180 days ago."""
+    rows = conn.execute("SELECT id, ext_id FROM students ORDER BY class_id, id").fetchall()
+    enrolled = datetime.combine(today - timedelta(days=150), time(15, 0), KST)
+    for k, r in enumerate(rows):
+        conn.execute("UPDATE students SET created_at = ? WHERE id = ?",
+                     (enrolled.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"), r["id"]))
+        ch, style, greet = PROFILES[k % len(PROFILES)]
+        if r["ext_id"] == LATE_STAR:
+            ch, style, greet = "call", "needed", "어머님"
+        conn.execute("INSERT INTO parent_profiles (student_id, channel, style, greeting) VALUES (?, ?, ?, ?)",
+                     (r["id"], ch, style, greet))
+        if r["ext_id"] == LATE_STAR:
+            ago = [180]
+        elif r["ext_id"] == "S921":
+            ago = [38, 95]
+        else:
+            first = rng.randint(4, 26)
+            ago = [first, first + rng.randint(25, 40)]
+        for j, a in enumerate(ago):
+            at = datetime.combine(today - timedelta(days=a), time(13 + rng.randint(0, 4), rng.randint(0, 59)), KST)
+            conn.execute("INSERT INTO contacts (student_id, ts, kind, direction, summary) VALUES (?, ?, ?, ?, ?)",
+                         (r["id"], at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+                          "meeting" if a >= 150 else ("message" if ch == "kakao" else "call"), "in" if j == 1 and k % 4 == 0 else "out",
+                          CONTACT_SUMMARIES[(k + j) % len(CONTACT_SUMMARIES)]))
 
 
 MOMENT_TEXTS = ["칠판 위 인수분해 3단 콤보", "다 같이 풀어낸 마지막 문제", "오늘의 명풀이: 거꾸로 생각하기",
@@ -207,6 +279,7 @@ def write_screeners(out: Path | None = None, rng_seed: int = 7) -> list[Path]:
     rng = random.Random(rng_seed)
     everyone = [st for c in STUDENTS.values() for st in c]
     base = {ext: (rng.uniform(0.45, 0.8), rng.uniform(0.35, 0.75), rng.uniform(-0.06, 0.08)) for _, ext in everyone}
+    base[LATE_STAR] = (0.88, 0.86, 0.0)                    # F13: the late star is strong in math
     paths = []
     for r, (set_id, d) in enumerate(zip(SET_IDS, ROUND_DATES)):
         nq = 12

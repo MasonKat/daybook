@@ -165,3 +165,69 @@ def deploy(cfg: Config, runner=None, out: str = "dist") -> dict:
 def weekly(conn: sqlite3.Connection, cfg: Config, cls: sqlite3.Row, day: date) -> list[str]:
     from .weekly import messages
     return messages(conn, cfg, cls, day)
+
+
+# ---------------------------------------------------------------- F13: the parent-contact desk (laptop only)
+
+def contacts(conn: sqlite3.Connection, cfg: Config, cls: sqlite3.Row, day: date) -> dict:
+    """Everything the Teacher tab's contact sections show: 연락 필요, 이번 주 할 일, 연락 현황, monthly good news."""
+    from . import contact as C
+    return {"flags": C.flags(conn, cfg, day), "plan": C.plan_week(conn, cfg, day), "status": C.status(conn, cfg, day),
+            "month_end": C.last_week_of_month(day), "good_news": C.good_news(conn, cfg, day),
+            "policy": C.policy(cls), "settings": C.settings(cfg)}
+
+
+def class_flags(conn: sqlite3.Connection, cfg: Config, class_id: int, day: date) -> dict:
+    """The board's "선생님 보기" toggle: this class's flags, names and reasons only (never on the projected view)."""
+    from . import contact as C
+    return {"flags": [{"display_name": f["display_name"], "level": f["level"], "rules": f["rules"]}
+                      for f in C.flags(conn, cfg, day, class_id)]}
+
+
+def contact_log(conn: sqlite3.Connection, body: dict) -> dict:
+    from . import contact as C
+    s = ops.get_student(conn, str(body.get("slug", "")))
+    cid = C.log_contact(conn, s["id"], str(body.get("kind", "call")), str(body.get("summary", "") or ""),
+                        str(body.get("direction", "out") or "out"), str(body.get("follow_up") or "") or None)
+    conn.commit()
+    return {"ok": True, "id": cid}
+
+
+def contact_snooze(conn: sqlite3.Connection, body: dict, day: date) -> dict:
+    from . import contact as C
+    s = ops.get_student(conn, str(body.get("slug", "")))
+    until = C.snooze(conn, s["id"], str(body.get("rule", "all") or "all"), day)
+    conn.commit()
+    return {"ok": True, "until": until}
+
+
+def contact_profile(conn: sqlite3.Connection, body: dict) -> dict:
+    from . import contact as C
+    s = ops.get_student(conn, str(body.get("slug", "")))
+    new = C.set_profile(conn, s["id"], body.get("channel") or None, body.get("style") or None, body.get("greeting") or None)
+    conn.commit()
+    return {"ok": True, **new}
+
+
+def policy_save(conn: sqlite3.Connection, cls: sqlite3.Row, body: dict) -> dict:
+    """F13.2 per-class thresholds and the class hours (also `daybook class edit`)."""
+    sets = ops.class_policy(conn, cls, {k: body.get(k) for k in ops.POLICY_FIELDS if k in body})
+    conn.commit()
+    return {"ok": True, "changed": sorted(sets)}
+
+
+def solved_rows(conn: sqlite3.Connection, class_id: int, day: date) -> list[dict]:
+    """F13.5: this week's self-reported 푼 문제 수 for the class, so the teacher can correct one."""
+    mon, sun = M.week_bounds(day)
+    return [{"slug": r["slug"], "display_name": r["display_name"], "day": r["day"], "solved": r["solved"]}
+            for r in conn.execute("""SELECT s.slug, s.display_name, sb.day, sb.solved FROM submissions sb
+                                     JOIN students_public s ON s.id = sb.student_id
+                                     WHERE s.class_id = ? AND s.active = 1 AND sb.status != 'deleted' AND sb.day BETWEEN ? AND ?
+                                     ORDER BY sb.day DESC, s.id""", (class_id, mon.isoformat(), sun.isoformat()))]
+
+
+def solved_fix(conn: sqlite3.Connection, body: dict) -> dict:
+    s = ops.get_student(conn, str(body.get("slug", "")))
+    ops.set_solved(conn, s["id"], str(body.get("day", "")), body.get("solved"))
+    conn.commit()
+    return {"ok": True}

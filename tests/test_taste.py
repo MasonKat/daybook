@@ -91,7 +91,7 @@ def test_push_tokmap_after_publish(demo_db, monkeypatch):
     sent = {}
     monkeypatch.setattr(pull, "http_put_json", lambda cfg, path, payload: sent.update(path=path, payload=payload) or {"n": len(payload["tokmap"])})
     msg = pull.push_tokmap(demo_db, Config(worker_url="https://w.example", teacher_token="t"))
-    assert sent["path"] == "/tokmap" and len(sent["payload"]["tokmap"]) == 13 and "13 student links" in msg
+    assert sent["path"] == "/tokmap" and len(sent["payload"]["tokmap"]) == 22 and "22 student links" in msg
     assert pull.push_tokmap(demo_db, Config()) == ""                  # no Worker configured: nothing to do
     def boom(*a):
         raise pull.PullError("offline")

@@ -44,6 +44,8 @@ ul.notes { margin: 0; padding-left: 5mm; } ul.notes li { margin: 1mm 0; }
 {% else %}<p class="muted">{{ S.tests_empty }}</p>{% endif %}
 <h2>{{ S.parent_note }}</h2>
 <ul class="notes">{% for n in me.notes %}<li><span class="muted">{{ n.week }}</span> {{ n.text }}</li>{% else %}<li class="muted">–</li>{% endfor %}</ul>
+<h2>{{ S.report_contacts }}</h2>
+<ul class="notes">{% for c in contacts %}<li><span class="muted">{{ c.date }}</span> {{ S['c_kind_' ~ c.kind] }}{% if c.direction == 'in' %} ({{ S.report_contact_in }}){% endif %}{% if c.summary %} · {{ c.summary }}{% endif %}{% if c.follow_up %} <span class="muted">→ {{ c.follow_up }}</span>{% endif %}</li>{% else %}<li class="muted">–</li>{% endfor %}</ul>
 <p class="muted" style="margin-top:8mm">{{ S.report_footer }}</p>
 </body>
 </html>

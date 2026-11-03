@@ -255,7 +255,7 @@ def _week_days(mon: date, subs: dict, cd: set, today: date, wk: list[str]) -> li
     return out
 
 
-LOCAL_ONLY_STATIC = {"teacher.js", "live.js", "sw.js"}
+LOCAL_ONLY_STATIC = {"teacher.js", "live.js", "sw.js", "flags.js"}
 TASTE_SLUG = "콩"      # the demo student shown in the taste build (F1)
 TASTE_PATH = "kong"   # fixed paths /s/kong/ and /p/kong/
 

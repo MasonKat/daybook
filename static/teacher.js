@@ -149,5 +149,164 @@
     });
   }
 
+  /* ------------------------------------------------------------ F13: the parent-contact desk (laptop only) */
+  var C = S.c;
+  function fmt(t, o) { return t.replace(/\{(\w+)\}/g, function (_, k) { return o[k] === undefined ? '' : o[k]; }); }
+  function btn(label, cls) { return el('button', { type: 'button', 'class': 'btn ' + (cls || 'ghost') + ' sm' }, label); }
+  function reloadContacts() { loadContacts(); }
+
+  function needCard(f) {
+    var box = el('div', { 'class': 'need lv-' + f.level, 'data-slug': f.slug });
+    var h = el('h3', {}, f.class_name + ' · ' + f.display_name + ' ');
+    h.appendChild(el('span', { 'class': 'badge ' + f.level }, f.level === 'need' ? C.need : C.notice));
+    box.appendChild(h);
+    var ul = el('ul', { 'class': 'reasons' });
+    f.rules.forEach(function (r) { ul.appendChild(el('li', {}, C.rule[r.rule] + ' · ' + r.reason)); });
+    box.appendChild(ul);
+    box.appendChild(el('p', { 'class': 'muted' }, C.script));
+    var ol = el('ol', { 'class': 'script' });
+    f.script.forEach(function (line) { ol.appendChild(el('li', {}, line)); });
+    box.appendChild(ol);
+    var det = el('details'); det.appendChild(el('summary', {}, C.kakao));
+    var pre = el('pre', { 'class': 'tout' }, f.kakao); det.appendChild(pre);
+    var cp = btn(S.copy); cp.onclick = function () { copy(f.kakao, cp); }; det.appendChild(cp);
+    box.appendChild(det);
+    var row = el('div', { 'class': 'trow' });
+    var sum = el('input', { type: 'text', maxlength: '120', placeholder: C.summary_ph, 'class': 'csum' });
+    var fu = el('input', { type: 'date', title: C.follow, 'class': 'cfu' });
+    var called = btn(C.called, 'primary'), sent = btn(C.messaged), hold = btn(C.hold);
+    var msg = el('span', { 'class': 'muted' });
+    function log(kind) {
+      api('/api/teacher/contact', { slug: f.slug, kind: kind, summary: sum.value, follow_up: fu.value || null }).then(function (j) {
+        if (j.ok) reloadContacts(); else msg.textContent = j.error || '';
+      });
+    }
+    called.onclick = function () { log('call'); };
+    sent.onclick = function () { log('message'); };
+    hold.onclick = function () {
+      api('/api/teacher/snooze', { slug: f.slug, rule: 'all' }).then(function (j) { if (j.ok) reloadContacts(); else msg.textContent = j.error || ''; });
+    };
+    [sum, fu, called, sent, hold, msg].forEach(function (e) { row.appendChild(e); });
+    box.appendChild(row);
+    return box;
+  }
+
+  function planRow(it) {
+    var li = el('li', { 'class': 'pitem' + (it.locked ? ' locked' : '') + (it.done ? ' done' : ''), 'data-slug': it.slug, 'data-type': it.type });
+    var cb = el('input', { type: 'checkbox', 'aria-label': it.display_name });
+    cb.checked = it.done; cb.disabled = it.done;
+    cb.onchange = function () {
+      cb.disabled = true;
+      var p = it.type === 'line'
+        ? api('/api/teacher/note', { slug: it.slug, week: planWeek, text: it.why })
+        : api('/api/teacher/contact', { slug: it.slug, kind: it.type, summary: '' });
+      p.then(function (j) { if (j.ok) reloadContacts(); else { cb.disabled = false; cb.checked = false; } });
+    };
+    var lab = el('label');
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode(' ' + C.kind[it.type] + ' ' + it.minutes + '분 · ' + it.class_name + ' ' + it.display_name
+      + (it.locked ? ' (' + C.locked + ')' : '')));
+    li.appendChild(lab);
+    if (it.why) li.appendChild(el('span', { 'class': 'muted why' }, ' ' + it.why));
+    return li;
+  }
+  var planWeek = '';
+
+  function statusRow(x) {
+    var tr = el('tr', { 'class': 'st ' + x.level, 'data-slug': x.slug });
+    tr.appendChild(el('td', { 'class': 'dd tnum' }, fmt(C.days, { n: x.days })));
+    tr.appendChild(el('td', {}, x.class_name + ' · ' + x.display_name));
+    tr.appendChild(el('td', { 'class': 'muted' }, x.last || C.never));
+    function sel(field, opts) {
+      var s = el('select', { 'aria-label': field });
+      Object.keys(opts).forEach(function (k) { var o = el('option', { value: k }, opts[k]); if (x[field] === k) o.selected = true; s.appendChild(o); });
+      s.onchange = function () { var b = { slug: x.slug }; b[field] = s.value; api('/api/teacher/profile', b).then(function (j) { $('status-msg').textContent = j.ok ? S.saved : (j.error || ''); }); };
+      return s;
+    }
+    var td = el('td');
+    td.appendChild(sel('channel', C.channel)); td.appendChild(sel('style', C.style));
+    td.appendChild(sel('greeting', { '어머님': '어머님', '아버님': '아버님', '보호자님': '보호자님' }));
+    tr.appendChild(td);
+    var td2 = el('td');
+    var sum = el('input', { type: 'text', maxlength: '120', placeholder: C.summary_ph });
+    var kind = el('select', { 'aria-label': 'kind' });
+    ['call', 'message', 'meeting'].forEach(function (k) { kind.appendChild(el('option', { value: k }, C.kind[k])); });
+    var b = btn(C.log);
+    b.onclick = function () {
+      api('/api/teacher/contact', { slug: x.slug, kind: kind.value, summary: sum.value }).then(function (j) {
+        if (j.ok) reloadContacts(); else $('status-msg').textContent = j.error || '';
+      });
+    };
+    td2.appendChild(kind); td2.appendChild(sum); td2.appendChild(b);
+    tr.appendChild(td2);
+    return tr;
+  }
+
+  function loadContacts() {
+    api('/api/teacher/contacts').then(function (j) {
+      var need = $('need-rows'); need.innerHTML = '';
+      if (!j.flags.length) need.appendChild(el('p', { 'class': 'muted' }, C.none));
+      j.flags.forEach(function (f) { need.appendChild(needCard(f)); });
+
+      planWeek = j.plan.week;
+      var pr = $('plan-rows'); pr.innerHTML = '';
+      j.plan.items.forEach(function (it) { pr.appendChild(planRow(it)); });
+      var mv = $('plan-moved'); mv.innerHTML = '';
+      j.plan.moved.forEach(function (it) { mv.appendChild(el('li', {}, C.moved + ' · ' + C.kind[it.type] + ' ' + it.class_name + ' ' + it.display_name)); });
+      $('plan-total').textContent = fmt(C.total, { t: j.plan.total, b: j.plan.budget });
+      $('plan-cover').textContent = j.plan.coverage.text;
+
+      $('status-hint').textContent = fmt(C.status_hint, { a: j.settings.amber, r: j.settings.red });
+      var sr = $('status-rows'); sr.innerHTML = '';
+      j.status.forEach(function (x) { sr.appendChild(statusRow(x)); });
+
+      $('good-hint').textContent = j.month_end ? C.good_hint : C.good_not_yet;
+      var gr = $('good-rows'); gr.innerHTML = '';
+      j.good_news.forEach(function (g) {
+        var w = el('div', { 'class': 'wrow', 'data-slug': g.slug });
+        w.appendChild(el('h3', {}, g.class_name + ' · ' + g.display_name));
+        var ta = el('textarea', { rows: '6', 'class': 'gtext' }); ta.value = g.text; w.appendChild(ta);
+        var cp = btn(S.copy); cp.onclick = function () { copy(ta.value, cp); };
+        var sent = btn(C.messaged);
+        sent.onclick = function () {
+          api('/api/teacher/contact', { slug: g.slug, kind: 'message', summary: '이달의 좋은 소식' }).then(function (r) {
+            if (r.ok) { sent.disabled = true; sent.textContent = '✓ ' + C.messaged; loadContacts(); }
+          });
+        };
+        w.appendChild(cp); w.appendChild(sent); gr.appendChild(w);
+      });
+
+      ['start_time', 'end_time', 'self_study_until', 'late_min', 'late_count', 'late_avg_min'].forEach(function (k) {
+        var inp = $('pol-' + k), v = k === 'start_time' ? j.policy.start : k === 'end_time' ? j.policy.end : j.policy[k];
+        if (inp && document.activeElement !== inp) inp.value = v === null || v === undefined ? '' : v;
+      });
+    });
+  }
+  $('pol-save').onclick = function () {
+    var b = {};
+    ['start_time', 'end_time', 'self_study_until', 'late_min', 'late_count', 'late_avg_min'].forEach(function (k) { b[k] = $('pol-' + k).value; });
+    api('/api/teacher/policy', b).then(function (j) { $('pol-msg').textContent = j.ok ? S.saved : (j.error || ''); if (j.ok) loadContacts(); });
+  };
+
+  function loadSolved() {
+    api('/api/teacher/solved').then(function (j) {
+      var tb = $('solved-rows'); tb.innerHTML = '';
+      j.rows.forEach(function (r) {
+        var tr = el('tr', { 'data-slug': r.slug, 'data-day': r.day });
+        tr.appendChild(el('td', {}, r.day.slice(5) + ' · ' + r.display_name));
+        var inp = el('input', { type: 'number', min: '0', max: '60', inputmode: 'numeric', 'aria-label': r.display_name });
+        inp.value = r.solved === null ? '' : r.solved;
+        var b = btn(S.save), st = el('span', { 'class': 'muted' });
+        b.onclick = function () {
+          api('/api/teacher/solved', { slug: r.slug, day: r.day, solved: inp.value }).then(function (k) { st.textContent = k.ok ? '✓' : (k.error || ''); });
+        };
+        var td = el('td'); td.appendChild(inp); td.appendChild(b); td.appendChild(st);
+        tr.appendChild(td); tb.appendChild(tr);
+      });
+    });
+  }
+
+  loadContacts(); loadSolved();
+
   loadRoster(); loadNotes(); loadMoments(); loadWeekly();
 })();

@@ -158,7 +158,7 @@ async function audit(browser, url, file, label, viewport, colorScheme) {
     const students = fs.readdirSync(path.join(DIST, 's'));
     const parents = fs.readdirSync(path.join(DIST, 'p'));
     console.log(`\n[1] every page at 360x740 and 390x844, light and dark (${students.length} student, ${parents.length} parent, go, index)`);
-    check(students.length === 13 && parents.length === 13, 'dist/s and dist/p exist for all 13 demo students (12 + 콩)');
+    check(students.length === 22 && parents.length === 22, 'dist/s and dist/p exist for all 22 demo students (4 classes, incl. 콩)');
     const targets = [];
     for (const t of students) targets.push([`${PAGES}/s/${t}/`, path.join(DIST, 's', t, 'index.html'), `s/${t.slice(0, 6)}…`]);
     for (const t of parents) targets.push([`${PAGES}/p/${t}/`, path.join(DIST, 'p', t, 'index.html'), `p/${t.slice(0, 6)}…`]);
@@ -176,11 +176,12 @@ async function audit(browser, url, file, label, viewport, colorScheme) {
     const thumbs = fs.existsSync(path.join(DIST, 't')) ? fs.readdirSync(path.join(DIST, 't')) : [];
     check(thumbs.length > 0 && thumbs.every((f) => fs.statSync(path.join(DIST, 't', f)).size <= 60 * 1024), `${thumbs.length} thumbnails in dist/t, each <= 60 KB`);
 
-    /* today's class (F2): the demo has 고1A on 화·금 and 기초B on 월·수. The class with class today gets a session
-       (code + window) through the real CLI; the other one has no class today (on 목·토·일 고1A gets the session). */
+    /* today's class (F2): the demo has 고1A on 화·목·토 and 기초B on 월·수·금 (F13: four classes; 심화C and 케어D are
+       not driven here). The class with class today gets a session (code + window) through the real CLI; the other
+       one has no class today (on 일 고1A gets the session). */
     const today = kstToday();
     const wdNow = (new Date(today + 'T00:00:00Z').getUTCDay() + 6) % 7;
-    const CLASS_ON = [0, 2].includes(wdNow) ? '기초B' : '고1A';
+    const CLASS_ON = [0, 2, 4].includes(wdNow) ? '기초B' : '고1A';
     const CLASS_OFF = CLASS_ON === '고1A' ? '기초B' : '고1A';
     const nowHM = new Date(Date.now() + 9 * 3600e3).toISOString().slice(11, 16);
     const pickFrom = (cls) => JSON.parse(execFileSync(PYTHON, ['-c', `
@@ -515,6 +516,14 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     check(after > before && (await bp.textContent('#b-three')).includes(pick.display_name), `attitude 3 moved the class bar ${before}% -> ${after}% and lists the student under 오늘 3점`);
     check(await bp.evaluate(() => document.documentElement.scrollWidth) <= 390 && berrs.length === 0, 'board fits 390 px with 0 console errors');
     await shot(bp, 'board.png', { fullPage: true });
+    // F13: flags are never on the projected board; "선생님 보기" fetches them on demand and removes them again
+    check(await bp.isHidden('#tv-flags') && (await bp.innerHTML('#tv-flags')) === '', 'projected board: no 연락 필요 in the page until "선생님 보기"');
+    await bp.click('#tv-toggle');
+    await bp.waitForSelector('#tv-flags:not([hidden])', { timeout: 5000 }).catch(() => {});
+    const tvN = await bp.locator('#tv-flags .tvf').count();
+    check(await bp.isVisible('#tv-flags') && (tvN > 0 || /연락 필요 없음/.test(await bp.textContent('#tv-flags'))), `"선생님 보기" shows this class's flags (${tvN})`);
+    await bp.click('#tv-toggle');
+    check(await bp.isHidden('#tv-flags') && (await bp.innerHTML('#tv-flags')) === '', 'toggling it off removes them from the page');
 
     console.log('\n[6a] AMP Live (F7): projector + 2 phones, counts only, no question text on phones');
     const twoToks = JSON.parse(execFileSync(PYTHON, ['-c', `
@@ -574,9 +583,27 @@ print(c.execute("SELECT COUNT(*), SUM(correct) FROM effort WHERE source = 'live'
     const terr = [];
     tpage.on('console', (m) => { if (m.type() === 'error') terr.push(m.text()); });
     await tpage.goto(BOARD + '/teacher', { waitUntil: 'networkidle' });
-    check((await tpage.locator('#roster-rows tr').count()) >= 6, `roster lists the class (${await tpage.locator('#roster-rows tr').count()} students)`);
+    check((await tpage.locator('#roster-rows tr').count()) >= 5, `roster lists the class (${await tpage.locator('#roster-rows tr').count()} students)`);
     check((await tpage.locator('#notes-rows .nrow input').first().inputValue()).length > 0, 'notes are prefilled (note or data draft)');
-    check((await tpage.locator('#weekly-rows pre').count()) >= 6, 'weekly paste messages with copy buttons');
+    check((await tpage.locator('#weekly-rows pre').count()) >= 5, 'weekly paste messages with copy buttons');
+    // F13: the parent-contact desk
+    await tpage.waitForSelector('#need-rows .need', { timeout: 5000 }).catch(() => {});
+    const needN = await tpage.locator('#need-rows .need').count();
+    const topCard = tpage.locator('#need-rows .need').first();
+    const topSlug = await topCard.getAttribute('data-slug');
+    check(needN >= 3 && (await topCard.locator('.reasons li').count()) >= 2 && (await topCard.locator('.script li').count()) === 3,
+      `연락 필요: ${needN} cards; the top one has its reasons and a 3-line call script`);
+    check(/수학 실력/.test(await topCard.locator('.script li').first().innerText()) && /AMP 수학입니다/.test(await topCard.locator('details pre').textContent()),
+      'the late strong student is on top; the script opens with math strength; a formal 카톡 draft is ready');
+    check((await tpage.locator('#status-rows tr').count()) === 22 && (await tpage.locator('#status-rows tr.red').count()) >= 2,
+      `연락 현황 lists all 22 students, red first (${await tpage.locator('#status-rows tr.red').count()} red)`);
+    check((await tpage.locator('#plan-rows li').count()) >= 5 && /4주 내 연락 \d+%/.test(await tpage.textContent('#plan-cover')),
+      `이번 주 할 일: ${await tpage.locator('#plan-rows li').count()} items · ${await tpage.textContent('#plan-total')} · ${await tpage.textContent('#plan-cover')}`);
+    await topCard.locator('.csum').fill('출석 시간 같이 목표 잡기로 함');
+    await topCard.locator('button.primary').click();
+    await tpage.waitForFunction((sl) => !document.querySelector(`#need-rows .need[data-slug="${sl}"]`), topSlug, { timeout: 5000 }).catch(() => {});
+    check((await tpage.locator(`#need-rows .need[data-slug="${topSlug}"]`).count()) === 0 && (await tpage.locator(`#status-rows tr[data-slug="${topSlug}"] .dd`).innerText()).startsWith('0'),
+      '"통화함" logs the call: the flag clears and 연락 현황 resets to 0 days');
     await tpage.click('#pub-do');
     await tpage.waitForFunction(() => /lint passed|STOPPED/.test(document.getElementById('pub-out').textContent), null, { timeout: 30000 }).catch(() => {});
     check(/lint passed/.test(await tpage.textContent('#pub-out')), `Publish button: ${(await tpage.textContent('#pub-out')).split('\n').filter(Boolean).join(' | ')}`);

@@ -210,11 +210,31 @@ One line each. "deferred" = not built in P0, on purpose.
 - The Worker dates a queued photo by when it arrives (it never trusts a date from the phone), so a photo queued at 23:50 and sent after midnight counts for the next day.
 - "홈 화면에 추가" card (iPhone Safari steps, Android Chrome steps) on the 오늘 tab, shown once per phone and never inside the installed app.
 
+## F13: the parent-contact desk (2026-11-03, from F13_PROMPT_cloudCC_20261104)
+- **Order.** The prompt says "run after F10–F12", but no F10–F12 prompt ever reached this session. F13 was built on top of F9 (`a5a89b3`); F10–F12 are not started and nothing here assumes them.
+- **Principle: the system notices, drafts and remembers; the teacher calls.** Nothing is sent: every draft is copied by hand, and every button only writes the laptop's database.
+- **Laptop only.** Schema v7 adds `parent_profiles` (channel call|kakao|both, style weekly|needed, greeting 어머님|아버님|보호자님), `contacts` (call|message|meeting, out|in, summary ≤ 120, follow-up date) and `snoozes`. Every write also goes to `events` (`contact`, `contact_snooze`, `parent_profile`, `class_policy`, `solved_fix`). The generator never reads these tables; the e2e and `tests/test_contact.py` check that no reason, draft or summary reaches `dist/`, `dist-taste/` or the projected board.
+- **연락 현황:** days since the last contact, counted from the student's enrolment (`created_at`) when there is none, so a fresh roster is not all red. Amber ≥ 21, red ≥ 35 days (`contact_amber_days`, `contact_red_days` in daybook.json).
+- **Rules (per class, `daybook class edit --late-min/--late-count/--late-avg-min` or the Teacher tab):** computed over the last 6 class days (schedule + sessions, minus 휴강).
+  - 지각: lateness = 출석 time − the session's start (else the class start). Late on a day = more than `late_min`; fires on ≥ `late_count` such days **or** an average lateness ≥ `late_avg_min` (early arrivals count as 0). The average-only wording says "평균 N분" without a misleading "0회 지각".
+  - 결석: counted backwards from the last *past* class day (today is still open); a day with neither 출석 nor a submission. 1 = 참고 (notice), 2 in a row = 연락 필요.
+  - 과제: ≥ 3 past class days in a row without a submission (a paper/teacher submission counts).
+  - 테스트: the latest round's 확보 효율 ≥ 15 points below the mean of the 3 rounds before it (needs 4 rounds; the demo has 3, so the demo shows no test flag).
+  - 오래 연락 없음: the red state.
+  - **Clearing:** a logged contact on or after the flag's latest evidence date clears it until new evidence appears; 오래 연락 없음 clears because the days reset. "이번 주는 보류" writes a 7-day snooze (rule `all`), logged.
+  - The basic demo class uses `late_min 30` and `late_avg_min 30` (a basic class whose students drift in focuses on 결석).
+- **Script and draft:** line 1 is the most convincing positive fact (a test ≥ 80 % or a rise, the streak, ♥ days, a recent 장면), line 2 the main rule's fact with dates and times, line 3 one concrete proposal. The KakaoTalk draft is greeting + the same three lines + closing. Order of flags: 연락 필요 first, then the number of rules, then days without contact.
+- **The board:** the projected page never contains flags. "선생님 보기" (a local-only `static/flags.js`, excluded from `dist/` like `teacher.js`) fetches this class's flags on demand and removes them from the DOM when switched off.
+- **Planner (이번 주 할 일):** 연락 필요 items (call, or message for kakao-only parents) are locked; then the rotation: every parent whose last contact is ≥ 21 days ago (one week before the 4-week limit), oldest first, red ones locked; then the weekly lines for 매주 parents, prefilled by `note suggest`. Minutes: call 8, message 2, line 1 (`contact_minutes`), budget `weekly_contact_minutes` 100. Unlocked items over budget move to next week; locked ones never move, even past the budget. A checked call/message logs a contact; a checked line saves the prefilled note. Coverage: parents contacted since Monday and the share contacted within 4 weeks. Tested: 30 students, staggered history, 8 simulated weeks: every gap between contacts ≤ 28 days.
+- **Monthly good news:** positive facts only for every parent (hands-off ones too); shown all month, marked as the time to send in the last 7 days of the month. "메시지 보냄" logs it as a message.
+- **Tone:** all parent wording is in `strings.ko.json` → `parent_msg` (합니다체, "안녕하세요, {g}. AMP 수학입니다.", no emoji, no `~ ㅋ ㅎ ^^ !`). A pytest lints every `parent_msg` string and every generated draft.
+- **`export report`** gains 연락 기록 (date, kind, in/out, summary, follow-up) for the term.
+- **Demo:** four classes, 22 students: 고1A (strong, 화목토 18–20, 5 incl. 콩), 기초B (basic, 월수금 20–22, 6, late_min 30), 심화C (strong, 월수금 18–20, 6), 케어D (care, 화목토 17:30–20:00, 자습 ~21:00, 5). 시온 (심화C, S916) arrives 18–45 min late (about 30 on average), tests about 90 %, last parent contact 180 days ago: always on top, script opens "확보 효율 …%로, 수학 실력이 …". Also seeded: one 2-in-a-row absence (기초B), one single absence (케어D, notice), one 3-day homework gap (심화C), one red parent (케어D, 38 days). Everyone enrolled 150 days ago with a contact history.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).
 - deferred: several reward cycles per term (the class total counts the whole term).
-- deferred: service worker / offline mode.
 - deferred: a real-device install test on iPhone Safari and Android Chrome (manifest, icons, apple meta tags and standalone mode are in place; only Chromium was tested here).
 - deferred: the Cloudflare deploy itself (needs the teacher's account: README "Teacher deploy steps").
 - deferred: the `effort` table is created empty (P2 data source not defined yet).

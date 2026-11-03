@@ -12,7 +12,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 KST = timezone(timedelta(hours=9))  # Asia/Seoul has no DST
 
 SCHEMA = """
@@ -24,7 +24,13 @@ CREATE TABLE IF NOT EXISTS classes (
     reward_label       TEXT,
     reward_goal_points INTEGER,           -- NULL = computed (and frozen) at the next publish
     goal_coef          REAL DEFAULT 2.4,
-    milestone_fracs    TEXT DEFAULT '0.33,0.67'
+    milestone_fracs    TEXT DEFAULT '0.33,0.67',
+    start_time         TEXT,              -- F13: class hours HH:MM (sessions may override the start)
+    end_time           TEXT,
+    self_study_until   TEXT,              -- F13.5: e.g. 21:00 after a 17:30-20:00 class
+    late_min           INTEGER DEFAULT 10,   -- F13.2 policy: late = check-in later than start + late_min
+    late_count         INTEGER DEFAULT 3,    -- ... on >= late_count of the last 6 class days
+    late_avg_min       INTEGER DEFAULT 15    -- ... or an average lateness >= late_avg_min
 );
 
 CREATE TABLE IF NOT EXISTS students (
@@ -64,6 +70,31 @@ CREATE TABLE IF NOT EXISTS moments (      -- 오늘의 장면 (F4): class-wide, 
     image_key  TEXT NOT NULL                -- file name inside moments_dir (EXIF-free JPEG, <= 1080 px, <= 200 KB)
 );
 
+CREATE TABLE IF NOT EXISTS parent_profiles (   -- F13.1: how this parent wants to be reached (laptop only)
+    student_id INTEGER PRIMARY KEY REFERENCES students(id),
+    channel    TEXT NOT NULL DEFAULT 'call' CHECK (channel IN ('call', 'kakao', 'both')),
+    style      TEXT NOT NULL DEFAULT 'weekly' CHECK (style IN ('weekly', 'needed')),
+    greeting   TEXT NOT NULL DEFAULT '보호자님' CHECK (greeting IN ('어머님', '아버님', '보호자님'))
+);
+
+CREATE TABLE IF NOT EXISTS contacts (       -- F13.1: the teacher's parent-contact log (never published)
+    id         INTEGER PRIMARY KEY,
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    ts         TEXT NOT NULL,
+    kind       TEXT NOT NULL CHECK (kind IN ('call', 'message', 'meeting')),
+    direction  TEXT NOT NULL DEFAULT 'out' CHECK (direction IN ('out', 'in')),
+    summary    TEXT,                       -- <= 120 characters
+    follow_up  TEXT                        -- YYYY-MM-DD
+);
+
+CREATE TABLE IF NOT EXISTS snoozes (        -- F13.2: "이번 주는 보류" (7 days)
+    id         INTEGER PRIMARY KEY,
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    rule       TEXT NOT NULL,
+    until      TEXT NOT NULL,
+    ts         TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS class_bonus (  -- F7: class-wide points (AMP Live: >= 80 % of the class correct)
     id         INTEGER PRIMARY KEY,
     class_id   INTEGER NOT NULL REFERENCES classes(id),
@@ -95,6 +126,7 @@ CREATE TABLE IF NOT EXISTS submissions (
     status     TEXT NOT NULL DEFAULT 'received' CHECK (status IN ('received', 'parsed', 'deleted')),
     reflection TEXT,                      -- F3: 오늘 한 줄 (0-40 chars, the student's own words)
     chip       TEXT,                      -- F3: ok | confused | rewatch
+    solved     INTEGER,                   -- F13.5: 오늘 푼 문제 수 (self-reported 0-60, the teacher may correct)
     UNIQUE (student_id, day)
 );
 
@@ -185,13 +217,19 @@ def migrate(conn: sqlite3.Connection) -> None:
     """Additive migrations for databases created by an older version (never drops data)."""
     if not is_initialized(conn):
         return
-    for table, new_cols in (("sessions", ("start_time", "code", "cancelled")), ("submissions", ("reflection", "chip"))):
+    added = {   # table -> {column: declaration} for columns that arrived after v1 (additive only)
+        "sessions": {"start_time": "TEXT", "code": "TEXT", "cancelled": "TEXT"},
+        "submissions": {"reflection": "TEXT", "chip": "TEXT", "solved": "INTEGER"},
+        "classes": {"start_time": "TEXT", "end_time": "TEXT", "self_study_until": "TEXT", "late_min": "INTEGER DEFAULT 10",
+                    "late_count": "INTEGER DEFAULT 3", "late_avg_min": "INTEGER DEFAULT 15"},
+    }
+    for table, new_cols in added.items():
         cols = _columns(conn, table)
         if not cols:          # the table does not exist yet: SCHEMA below creates it with every column
             continue
-        for col in new_cols:
+        for col, decl in new_cols.items():
             if col not in cols:
-                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} TEXT")
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
     conn.executescript(SCHEMA)   # creates any new tables (IF NOT EXISTS)
     if conn.execute("PRAGMA user_version").fetchone()[0] < SCHEMA_VERSION:
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
