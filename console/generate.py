@@ -26,7 +26,7 @@ STATIC = ROOT / "static"
 
 SVG_W, SVG_H = 320, 150
 JS_STRINGS = ("done_title", "streak_label", "class_plus", "reward_to_go", "uploading", "upload_error",
-              "upload_rate", "upload_offline", "replaced", "no_worker", "today_set", "weekdays", "story_streak")
+              "upload_rate", "upload_offline", "replaced", "no_worker", "today_set", "set_default", "weekdays", "story_streak")
 YT_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 WEEKDAYS_FULL = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
 PARENT_WEEKS = 8      # weeks kept in the parent room
@@ -46,6 +46,51 @@ def env() -> Environment:
                     trim_blocks=True, lstrip_blocks=True)
     e.filters["fmt"] = lambda s, **kw: s.format(**kw)
     return e
+
+
+def set_hash(set_id: str) -> str:
+    """FNV-1a 32-bit, base 36 (same as fnv() in app.js): the page maps ?set= to a label without containing the raw id."""
+    h = 0x811C9DC5
+    for ch in set_id:
+        h = ((h ^ ord(ch)) * 0x01000193) & 0xFFFFFFFF
+    return _b36(h)
+
+
+def _b36(n: int) -> str:
+    digits = "0123456789abcdefghijklmnopqrstuvwxyz"
+    out = ""
+    while True:
+        n, r = divmod(n, 36)
+        out = digits[r] + out
+        if n == 0:
+            return out
+
+
+def _resolve(cfg_path: str) -> Path | None:
+    p = Path(cfg_path)
+    if not p.is_absolute():
+        p = Path.cwd() / p
+        if not p.exists():
+            p = ROOT / cfg_path
+    return p if p.exists() else None
+
+
+def set_labels(conn: sqlite3.Connection, cfg: Config, class_id: int | None) -> dict[str, str]:
+    """{hash(set_id): label} for the student page. Label = assignments.json, else the session topic,
+    else "{M/D} 과제" from the session date. Unknown sets get "{today} 과제" in the browser."""
+    S = strings()
+    out: dict[str, str] = {}
+    if class_id is not None:
+        for r in conn.execute("SELECT date, set_id, topic FROM sessions WHERE class_id = ? AND set_id IS NOT NULL "
+                              "ORDER BY date", (class_id,)):
+            d = date.fromisoformat(r["date"])
+            out[set_hash(r["set_id"])] = (r["topic"] or "").strip() or S["set_default"].format(md=f"{d.month}/{d.day}")
+    p = _resolve(cfg.assignments_path)
+    if p is not None:
+        for sid, label in json.loads(p.read_text(encoding="utf-8")).items():
+            if isinstance(label, str) and label.strip() and not sid.startswith("_"):
+                out[set_hash(sid)] = label.strip()
+    return out
 
 
 def videos_file(cfg: Config) -> Path | None:
@@ -262,6 +307,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "toGo": rw.to_go if rw else 0,
             "weekStart": mon.isoformat(),
             "stories": {st_["key"]: st_["hash"] for st_ in stories},
+            "sets": set_labels(conn, cfg, s["class_id"]),
             "S": {k: S[k] for k in JS_STRINGS},
         }
         students.append({

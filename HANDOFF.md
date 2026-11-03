@@ -31,6 +31,15 @@ cd daybook && git remote set-url origin git@github.com:MasonKat/daybook.git && g
 make demo
 ```
 
+On Windows (no `make`), in PowerShell from the repo folder:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\demo.ps1
+```
+
+`scripts\check.ps1` reruns the checks and `scripts\deploy-pages.ps1` is `make deploy-pages`. Use `.venv\Scripts\daybook.exe`
+wherever this file says `.venv/bin/daybook`. No `PYTHONUTF8` is needed any more.
+
 (Proves the toolchain works; uses `demo.sqlite`, not the real DB.) Then, after the README deploy steps:
 
 ```bash
@@ -160,6 +169,12 @@ The student 영상 tab is rendered at publish from the file named by `videos_pat
   (480 px wide, ≤ 60 KB; needs Pillow, installed by `make`). Download the thumbnails once into a local folder next to
   `videos.local.json`, never from the page. Without one, the reel shows a gradient card with the title.
 - `demo/videos.demo.json` (written by `daybook demo`) and `demo/thumbs/` are a complete synthetic example.
+
+## 5b. Assignment labels (optional)
+
+Students never see a set id. The 오늘 tab shows a label for `?set=<set_id>` from `assignments.json` (gitignored; copy
+`mappings/assignments.example.json`), else the topic of `daybook session start <class> --set <id> --topic "…"`,
+else "{M/D} 과제". The lint stops publish if a raw id (`Adaptive_…`, `round_…`, `_G10`, `.json`) reaches a page.
 
 ## 6. The teacher's Saturday (after the pilot starts Friday 11-06)
 

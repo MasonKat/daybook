@@ -36,6 +36,9 @@ cd daybook
 make demo
 ```
 
+Windows (no `make`): `powershell -ExecutionPolicy Bypass -File scripts\demo.ps1`, then `scripts\check.ps1`;
+`scripts\deploy-pages.ps1` replaces `make deploy-pages`.
+
 `make demo` creates `.venv`, installs the console, seeds the synthetic demo into `demo.sqlite`, publishes it into
 `dist/`, and runs every check. If Playwright is missing it installs it once (`npm install playwright` plus
 `npx playwright install chromium`). The demo never touches the real database `daybook.sqlite`.

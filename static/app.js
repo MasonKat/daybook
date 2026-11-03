@@ -17,6 +17,12 @@
   }
   function weekday(day) { return (new Date(day + 'T00:00:00Z').getUTCDay() + 6) % 7; } /* Mon = 0 */
   function data() { return JSON.parse($('data').textContent); }
+  /* FNV-1a 32-bit in base 36; same as console/generate.py set_hash() */
+  function fnv(str) {
+    var h = 0x811c9dc5;
+    for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return h.toString(36);
+  }
 
   var page = document.body.getAttribute('data-page');
   if (page === 'go') go();
@@ -74,7 +80,12 @@
     showTab((location.hash || '#today').slice(1));
 
     $('today-date').textContent = Number(today.slice(5, 7)) + '월 ' + Number(today.slice(8, 10)) + '일 (' + WD[weekday(today)] + ')';
-    if (set) { $('today-set').textContent = fmt(S.today_set, { set: set }); $('today-set').hidden = false; }
+    if (set) {
+      /* never show the raw set id: the page only knows hash(set_id) -> label */
+      var label = (D.sets || {})[fnv(set)] || fmt(S.set_default, { md: Number(today.slice(5, 7)) + '/' + Number(today.slice(8, 10)) });
+      $('today-set').textContent = fmt(S.today_set, { label: label });
+      $('today-set').hidden = false;
+    }
 
     /* known submission days: published + this device + the Worker */
     var published = {}, known = {};

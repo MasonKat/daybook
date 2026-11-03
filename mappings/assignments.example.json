@@ -1,0 +1,4 @@
+{
+  "_comment": "Optional labels for set ids, copied to assignments.json (or set assignments_path in daybook.json). Students see the label, never the id. Without a label: the session topic, else \"{M/D} 과제\".",
+  "Adaptive_Screeners_3S_Nov06_G10": "11/6 프린트"
+}

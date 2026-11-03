@@ -85,6 +85,11 @@ One line each. "deferred" = not built in P0, on purpose.
 - The room footer reads "이 방은 주간 기록 전용입니다 · 답장·문의는 카카오톡으로" (both strings from §5).
 - The e2e audit renders every page at 360×740 and 390×844 in light and dark; overflow is measured on scroll containers too, not only the document.
 
+## Pipeline fixes from the v2 review (2026-11-03)
+- Windows: every text file read/write names UTF-8 (`scripts/check_encoding.py`, enforced by pytest); the CLI writes UTF-8 to the console and recovers undecoded POSIX arguments; a test runs the CLI under an ASCII locale with UTF-8 mode off (stricter than cp1252). `scripts/demo.ps1`, `check.ps1`, `deploy-pages.ps1` are the twins of the make targets; they were written without a PowerShell to run them here, so the local agent runs them first.
+- Raw ids: a student page never contains a set/round id. It carries `{fnv1a(set_id): label}` and maps `?set=` in the browser; label = `assignments.json` (optional, gitignored; example in `mappings/`), else the session topic, else "{M/D} 과제" of the session date, else today's date.
+- Lint `raw_id` (student and parent pages): `Adaptive_`, `round_`, `_G1`..`_G12`, `.json`. A note that quotes a round id now stops publish.
+
 ## Deferred
 - deferred (local agent will add after the clone, before 수능 week): `daybook class cancel <class> <date>` so a closed day does not break streaks.
 - deferred: `export pdf` (the command is a stub that exits 2 with a message).

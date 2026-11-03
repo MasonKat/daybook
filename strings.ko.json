@@ -24,7 +24,7 @@
   "go_need_link": "먼저 선생님이 준 내 링크를 한 번 열어 주세요",
   "page_title": "AMP 학습 기록",
   "today_hint": "수업 프린트나 숙제를 한 장에 보이게 찍어 주세요.",
-  "today_set": "과제 {set}",
+  "today_set": "{label}",
   "uploading": "올리는 중…",
   "upload_error": "올리지 못했어요. 다시 시도해 주세요.",
   "upload_rate": "잠시 후 다시 시도해 주세요.",
@@ -78,5 +78,6 @@
   "tile_heart": "3점",
   "messages_empty": "아직 메시지가 없어요.",
   "card_sub": "주간 제출",
-  "card_sub_now": "이번 주 제출"
+  "card_sub_now": "이번 주 제출",
+  "set_default": "{md} 과제"
 }

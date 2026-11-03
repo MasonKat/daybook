@@ -22,6 +22,8 @@ RESOURCE_RE = re.compile(
 )
 CSS_URL_RE = re.compile(r"url\(\s*['\"]?\s*((?:https?:)?//[^)'\"]+)", re.I)
 IMPORT_RE = re.compile(r"@import\s+(?:url\()?['\"]?((?:https?:)?//[^)'\";]+)", re.I)
+# internal round / assignment ids and file names must never reach a student or parent page
+RAW_ID_RE = re.compile(r"Adaptive_|round_|_G(?:[1-9]|1[0-2])(?![0-9A-Za-z])|\.json\b")
 BRAND_RE = re.compile(r"kakao|instagram|#fee500", re.I)
 IMG_SRC_RE = re.compile(r"<img[^>]*\ssrc\s*=\s*[\"']([^\"']*)", re.I)
 # a submission photo: the Worker's /photo endpoint, a KV photo key, or an R2 key <day>/<token>.<ext>
@@ -124,6 +126,9 @@ def lint_dir(root: Path, students: list[PrivateRow], page_title: str) -> list[Fi
                     findings.append(Finding("error", rel, "og", f"not generic: {og.strip()!r}"))
             for url in RESOURCE_RE.findall(text):
                 findings.append(Finding("error", rel, "third_party", url))
+            if rel.split("/")[0] in ("s", "p"):
+                for m in RAW_ID_RE.finditer(text):
+                    findings.append(Finding("error", rel, "raw_id", m.group(0)))
             # another student's display name on a per-student page (warning: short names collide with words)
             parts = rel.split("/")
             if len(parts) >= 3 and parts[0] in ("s", "p") and parts[1] in by_token:
