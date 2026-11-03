@@ -288,6 +288,8 @@ def make_handler(board: Board):
                     return self._json(T.class_flags(conn, board.cfg, board.class_id, day))
                 if path == "/api/teacher/solved":
                     return self._json({"rows": T.solved_rows(conn, board.class_id, day)})
+                if path == "/api/teacher/push":               # F15.3
+                    return self._json(T.push_view(conn, board.cfg))
                 if path == "/api/teacher/videos":             # F15.1/F15.2
                     return self._json(T.videos_view(conn, board.cfg, day, int((q.get("days") or ["7"])[0] or 7)))
                 if path == "/api/teacher/rounds":             # F14
@@ -330,6 +332,8 @@ def make_handler(board: Board):
                         return self._json(T.cancel(conn, cls, body))
                     if self.path == "/api/teacher/publish":
                         return self._json(T.publish(conn, board.cfg, db_path=board.db_path))
+                    if self.path == "/api/teacher/push-send":            # F15.3
+                        return self._json(T.push_send(conn, board.cfg, body))
                     if self.path == "/api/teacher/backup":               # G2
                         return self._json(T.backup_now(board.db_path, board.cfg))
                     if self.path == "/api/teacher/deploy":

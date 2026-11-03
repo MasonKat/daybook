@@ -643,6 +643,8 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         "go_js": json.dumps({"s": "/s/"}, separators=(",", ":")),
         "taste": taste,
         "worker": cfg.worker,
+        # F15.3: the VAPID public key (not secret) turns on the opt-in box; never in the taste build
+        "vapid": "" if taste or not cfg.worker else str(cfg.extra.get("vapid_public") or ""),
     }
 
 
@@ -679,7 +681,12 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
     for f in STATIC.iterdir():
         if f.is_file() and f.name not in LOCAL_ONLY_STATIC:      # the Teacher tab's script never goes online
             shutil.copy2(f, out / "static" / f.name)
-    shutil.copy2(STATIC / "sw.js", out / "sw.js")                 # F9: served from the root so it may control /s/
+    # F9: served from the root so it may control /s/ (and /p/ for push). The cache name carries a hash of the static
+    # files, so every publish that changes app.js / app.css also changes sw.js: phones then fetch the new files instead
+    # of keeping a cache-first copy forever.
+    shell = hashlib.sha256(b"".join((STATIC / n).read_bytes() for n in ("app.js", "app.css", "sw.js"))).hexdigest()[:10]
+    (out / "sw.js").write_text((STATIC / "sw.js").read_text(encoding="utf-8").replace("daybook-shell-v1", f"daybook-shell-{shell}"),
+                               encoding="utf-8", newline="")
     if any(v["thumb_src"] for v in ctx["videos"]):
         from .thumbs import make_thumb
         (out / "t").mkdir()

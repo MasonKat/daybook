@@ -732,6 +732,9 @@ def publish(obj: Ctx, out, d, taste):
         sys.exit(1)
     if not taste:
         _send_links(obj, obj.conn)
+        from . import push as P
+        for line in P.after_publish(obj.conn, obj.cfg):                  # F15.3: one push, if set up
+            click.echo(line)
         click.echo(_auto_backup(obj.db_path, obj.cfg))
 
 
@@ -1070,6 +1073,65 @@ def cards(obj: Ctx, kind, class_name, out_dir):
     except (ops.OpError, ValueError) as e:
         fail(str(e))
     click.echo(f"{path}  (open it in a browser and print, A4)")
+
+
+# ---------------------------------------------------------------- F15.3: Web Push (opt-in)
+
+@cli.group("push")
+def push_():
+    """Opt-in Web Push: keys, send, count. Generic texts only; quiet hours 22-08 KST; one a day per subscriber."""
+
+
+@push_.command("keys")
+@click.option("--subject", required=True, help="mailto:you@example.com (push services may contact this address)")
+@click.option("--force", is_flag=True, help="Replace existing keys (ends every subscription)")
+@click.pass_obj
+def push_keys(obj: Ctx, subject, force):
+    """Generate VAPID keys into daybook.json (never the repo) and print the Worker secrets to set."""
+    from . import push as P
+    try:
+        pub, path = P.write_keys(obj.cfg, subject, force)
+    except P.PushError as e:
+        fail(str(e))
+    click.echo(f"VAPID keys written to {path}. Now, once, in the worker folder:")
+    click.echo("  npx wrangler secret put VAPID_PRIVATE    (paste vapid_private from daybook.json)")
+    click.echo(f"  npx wrangler secret put VAPID_PUBLIC     (paste {pub})")
+    click.echo(f"  npx wrangler secret put VAPID_SUBJECT    (paste {subject})")
+    click.echo("Then publish once: the pages get the public key and show 알림 받기.")
+
+
+@push_.command("send")
+@click.option("--class", "classes", multiple=True, help="Class name (repeatable; default: every class)")
+@click.option("--kind", type=click.Choice(["video", "message", "report", "test"]), required=True)
+@click.option("--text", default=None, help="Your own generic text (no names); default per kind")
+@click.option("--n", type=int, default=0, help="The number in the video text (새 영상 n개)")
+@click.pass_obj
+def push_send(obj: Ctx, classes, kind, text, n):
+    from . import push as P
+    try:
+        r = P.send(obj.conn, obj.cfg, kind, list(classes) or None, text, n)
+    except (P.PushError, ops.OpError) as e:
+        fail(str(e))
+    if r["quiet"]:
+        click.echo("quiet hours (22:00-08:00 KST): nothing sent (logged)")
+    else:
+        click.echo(f"\"{r['text']}\": {r['sent']} sent, {r['capped']} already had one today, "
+                   f"{r['removed']} gone (unsubscribed), {r['failed']} failed")
+
+
+@push_.command("count")
+@click.pass_obj
+def push_count(obj: Ctx):
+    """How many students / parents are subscribed per class (never who)."""
+    from . import push as P
+    from .pull import PullError
+    try:
+        r = P.count(obj.conn, obj.cfg)
+    except PullError as e:
+        fail(str(e))
+    click.echo(f"students {r['students']}, parents {r['parents']}" + ("" if r["vapid"] else "  (the Worker has no VAPID keys yet)"))
+    for name, v in sorted(r["by_class"].items()):
+        click.echo(f"  {name}: students {v.get('s', 0)}, parents {v.get('p', 0)}")
 
 
 if __name__ == "__main__":

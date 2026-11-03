@@ -533,5 +533,28 @@
   $('vv-copy').onclick = function () { copy(vvText, $('vv-copy')); };
   loadVideos(7);
 
+  /* ------------------------------------------------------------ F15.3: 알림 보내기 (counts only, never who) */
+  var NP = { texts: {} };
+  function loadPush() {
+    api('/api/teacher/push').then(function (j) {
+      NP.texts = j.texts || {};
+      var sel = $('np-class'); while (sel.options.length > 1) sel.remove(1);
+      (classesAll.length ? classesAll : []).forEach(function (c) { sel.appendChild(el('option', { value: c.name }, c.name)); });
+      $('np-count').textContent = !j.enabled ? S.n.off : j.ok ? fmt(S.n.count, { s: j.students, p: j.parents }) : (j.error || '');
+      $('np-send').disabled = !j.enabled;
+      if (!$('np-text').value) $('np-text').value = NP.texts[$('np-kind').value] || '';
+    });
+  }
+  $('np-kind').onchange = function () { $('np-text').value = NP.texts[$('np-kind').value] || ''; };
+  $('np-send').onclick = function () {
+    $('np-msg').textContent = S.running;
+    api('/api/teacher/push-send', { 'class': $('np-class').value, kind: $('np-kind').value, text: $('np-text').value }).then(function (j) {
+      $('np-msg').textContent = !j.ok ? (j.error || '') : j.quiet ? '22:00–08:00: 보내지 않았어요 (기록됨)'
+        : '보냄 ' + j.sent + ' · 오늘 이미 받음 ' + j.capped + (j.removed ? ' · 해지됨 ' + j.removed : '');
+      loadPush();
+    });
+  };
+  setTimeout(loadPush, 300);   /* after the roster has loaded the class list */
+
   loadRoster(); loadNotes(); loadMoments(); loadWeekly();
 })();

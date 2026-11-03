@@ -133,3 +133,23 @@ def test_doctor_button(tserver):  # noqa: F811
     labels = [x["label"] for x in j["lines"]]
     assert code == 200 and "database integrity" in labels and "dist/ no-PII lint" in labels
     assert all(x["status"] in ("✓", "⚠", "✗") for x in j["lines"]) and j["ok"] in (True, False)
+
+
+def test_push_section(tserver, monkeypatch):  # noqa: F811
+    """F15.3: the Teacher tab's 알림: counts only; sending goes through the same console function."""
+    import json as _json
+    from console import pull as pullmod
+    url, b, sent = tserver
+    code, j = call(url + "/api/teacher/push")
+    assert code == 200 and j["enabled"] is False and j["texts"]["report"] == "이번 주 기록이 업데이트됐어요"
+    assert call(url + "/api/teacher/push-send", {"kind": "report"})[0] == 400              # not set up yet
+    b.cfg.extra["vapid_public"] = "BP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A8"
+    posted = []
+    monkeypatch.setattr(pullmod, "http_post_json", lambda cfg, path, payload: posted.append((path, payload)) or
+                        {"ok": True, "sent": 3, "removed": 0, "failed": 0, "capped": 0, "more": False})
+    monkeypatch.setattr(pullmod, "http_fetch", lambda cfg: (lambda path: _json.dumps({"ok": True, "students": 3, "parents": 0,
+                                                                                    "vapid": True, "by_class": {}}).encode()))
+    code, j = call(url + "/api/teacher/push")
+    assert j["enabled"] and j["students"] == 3 and "token" not in _json.dumps(j)
+    code, j = call(url + "/api/teacher/push-send", {"class": "고1A", "kind": "message", "text": ""})
+    assert j["ok"] and j["sent"] == 3 and posted[0][0] == "/push/send" and posted[0][1]["body"] == "선생님 메시지가 왔어요"

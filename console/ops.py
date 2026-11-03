@@ -143,7 +143,7 @@ def session_payload(conn: sqlite3.Connection, sess: sqlite3.Row) -> dict:
     """PUT /session body: the session (class key, code, window) + the token -> class-key map of all active students."""
     day = date.fromisoformat(sess["date"])
     t_from, t_until = session_window(day, sess["start_time"])
-    return {"tokmap": tokmap(conn), "class": class_key(sess["class_id"]), "date": sess["date"], "code": sess["code"], "start": sess["start_time"],
+    return {"tokmap": tokmap(conn), "parents": parent_tokmap(conn), "class": class_key(sess["class_id"]), "date": sess["date"], "code": sess["code"], "start": sess["start_time"],
             "open_from": t_from.isoformat(), "open_until": t_until.isoformat()}
 
 
@@ -151,6 +151,12 @@ def tokmap(conn: sqlite3.Connection) -> dict[str, str]:
     """token -> opaque class key for every active student (H3: the Worker accepts only these tokens)."""
     return {r["student_token"]: class_key(r["class_id"]) for r in conn.execute(
         "SELECT student_token, class_id FROM students_public WHERE active = 1 AND class_id IS NOT NULL")}
+
+
+def parent_tokmap(conn: sqlite3.Connection) -> dict[str, str]:
+    """F15.3: parent token -> class key, only so a parent page can opt in to push (a parent link never uploads)."""
+    return {r["parent_token"]: class_key(r["class_id"]) for r in conn.execute(
+        "SELECT parent_token, class_id FROM students_public WHERE active = 1 AND class_id IS NOT NULL")}
 
 
 def board_window(day: date, start: str | None, until: str | None = None) -> tuple[datetime, datetime] | None:

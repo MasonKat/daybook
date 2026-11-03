@@ -29,6 +29,61 @@
   else if (page === 'student') student();
   else if (page === 'parent') parent();
   else if (page === 'board') board();
+  if (page === 'student' || page === 'parent') pushBox();
+
+  /* ------------------------------------------------------------ F15.3: opt-in Web Push (students; parents optional) */
+  function pushBox() {
+    var box = document.getElementById('push');
+    if (!box) return;                                     /* no VAPID key published, or the taste build */
+    var m = location.pathname.match(/\/([sp])\/([a-z2-7]{26})\//);
+    var vapid = box.getAttribute('data-vapid'), worker = box.getAttribute('data-worker'), role = box.getAttribute('data-role');
+    if (!m || !vapid || !worker) return;
+    var T = JSON.parse(box.getAttribute('data-s')), btn = box.querySelector('.push-btn'), note = box.querySelector('.push-note');
+    var tok = m[2], scope = '/' + m[1] + '/';
+    var ios = /iP(hone|ad|od)/.test(navigator.userAgent);
+    var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone;
+    box.hidden = false;
+    /* iOS (16.4+) allows push only for a web app launched from the home screen: one line, no button */
+    if ((ios && !standalone) || !('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      btn.hidden = true; note.textContent = ios ? T.ios : T.err;
+      if (!ios) box.hidden = true;
+      return;
+    }
+    function key(b64) {
+      var s = b64.replace(/-/g, '+').replace(/_/g, '/'); s += '==='.slice((s.length + 3) % 4);
+      var bin = atob(s), out = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+    function reg() { return navigator.serviceWorker.register('/sw.js', { scope: scope }); }
+    function state(sub) {
+      btn.textContent = sub ? T.off : T.on; btn.setAttribute('aria-pressed', sub ? 'true' : 'false');
+      note.textContent = sub ? T.done : T.hint;
+    }
+    reg().then(function (r) { return r.pushManager.getSubscription(); }).then(state, function () { state(null); });
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      reg().then(function (r) {
+        return r.pushManager.getSubscription().then(function (sub) {
+          if (sub) {                                       /* 알림 끄기: here and on the Worker */
+            var off = new FormData(); off.append('t', tok); off.append('endpoint', sub.endpoint);
+            return sub.unsubscribe().then(function () { return fetch(worker + '/push/unsubscribe', { method: 'POST', body: off }); })
+              .then(function () { state(null); });
+          }
+          return Notification.requestPermission().then(function (p) {
+            if (p !== 'granted') { note.textContent = T.denied; return; }
+            return r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key(vapid) }).then(function (s) {
+              var j = s.toJSON(), fd = new FormData();
+              fd.append('t', tok); fd.append('role', role); fd.append('endpoint', j.endpoint);
+              fd.append('p256dh', j.keys.p256dh); fd.append('auth', j.keys.auth);
+              return fetch(worker + '/push/subscribe', { method: 'POST', body: fd }).then(function (x) { return x.json(); })
+                .then(function (x) { if (!x.ok) throw new Error(x.error); state(s); });
+            });
+          });
+        });
+      }).catch(function () { note.textContent = T.err; }).then(function () { btn.disabled = false; });
+    });
+  }
 
   /* ------------------------------------------------------------ /go/?set=... */
   function go() {

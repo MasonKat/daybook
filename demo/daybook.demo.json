@@ -5,5 +5,6 @@
  "teacher_token": "dev-teacher-token",
  "videos_path": "demo/videos.demo.json",
  "board_poll_seconds": 60,
- "moments_dir": "demo/moments-store"
+ "moments_dir": "demo/moments-store",
+ "vapid_public": "BP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A8"
 }

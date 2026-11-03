@@ -151,6 +151,8 @@ def publish(conn: sqlite3.Connection, cfg: Config, out: Path | None = None, db_p
         msg = push_tokmap(conn, cfg)
         if msg:
             steps.append(msg)
+        from . import push as P
+        steps += P.after_publish(conn, cfg)                              # F15.3: one push, if set up
         if db_path:
             steps.append(backup_now(db_path, cfg)["message"])            # G2: every 발행 ends with a backup
     else:
@@ -436,3 +438,27 @@ def videos_view(conn: sqlite3.Connection, cfg: Config, day: date, days: int = 7)
     view = W.teacher_view(conn, generate.load_videos(cfg), day, 14 if days == 14 else 7)
     view["text"] = W.report_text(view)
     return view
+
+
+# ---------------------------------------------------------------- F15.3: 알림 보내기
+
+def push_view(conn: sqlite3.Connection, cfg: Config) -> dict:
+    from . import push as P
+    from .pull import PullError
+    texts = {k: P.default_text(k, 1) for k in P.KINDS}
+    if not P.enabled(cfg):
+        return {"ok": True, "enabled": False, "texts": texts}
+    try:
+        return {"ok": True, "enabled": True, "texts": texts, **P.count(conn, cfg)}
+    except PullError as e:
+        return {"ok": False, "enabled": True, "texts": texts, "error": str(e)}
+
+
+def push_send(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
+    from . import push as P
+    cls = [str(body["class"])] if body.get("class") else None
+    try:
+        r = P.send(conn, cfg, str(body.get("kind", "")), cls, (body.get("text") or "").strip() or None, int(body.get("n") or 0))
+    except P.PushError as e:
+        raise TeacherError(str(e)) from e
+    return {"ok": True, **r}

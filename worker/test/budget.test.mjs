@@ -1,7 +1,8 @@
 // H1: one full class day on the free plan must stay under 30 % of every daily limit.
 // 20 students, a 3-hour board polling every 60 s, 3 moments with 20 reactions each, every student opening the page 5x,
 // one AMP Live round (20 students x 10 questions, everyone polling every 2 s for ~20 minutes), and (F14) an open
-// weekly-test round: every student sends the report and edits it once.
+// weekly-test round: every student sends the report and edits it once; (F15) 3 watch records each, push opt-in and
+// one push after 발행.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { seoulDay } from '../src/index.js';
@@ -13,7 +14,11 @@ export const FREE = { requests: 100000, kvRead: 100000, kvWrite: 1000, kvList: 1
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(30000, 3)]).toString('base64');
 
 test('a full class day stays under 30 % of every free daily limit', async () => {
-  const env = mkEnv();
+  // F15.3: VAPID keys (the RFC 8291 test keys), a fake push service, no quiet hours for the day
+  const env = mkEnv({ VAPID_PUBLIC: 'BP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A8',
+    VAPID_PRIVATE: 'yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw', VAPID_SUBJECT: 'mailto:t@example.com', PUSH_QUIET: '0-0' });
+  let pushOut = 0;
+  env.PUSH_FETCH = async () => { pushOut++; return { status: 201 }; };
   let requests = 0;
   const go = async (path, init = {}) => { requests++; const r = await worker.fetch(new Request('https://w.example' + path, init), env); return r.headers.get('content-type')?.includes('json') ? r.json() : r.arrayBuffer(); };
   const teacher = (path, method = 'GET', body) => go(path, { method, headers: { 'X-Teacher-Token': TEACHER, 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) });
@@ -44,6 +49,11 @@ test('a full class day stays under 30 % of every free daily limit', async () => 
       rf.append('incorrect', edit ? '3,7,12' : '3,7'); rf.append('missed', '19,20'); rf.append('hardest', '7');
       rf.append('reasons', '계산실수,시간부족'); rf.append('wishlist', '풀이 영상'); rf.append('metaphor', '마라톤');
       assert.equal((await student('/report', rf)).ok, true);
+    }
+    {                                                                          // F15.3: the student opts in to push
+      const pf = new FormData(); pf.append('t', t); pf.append('role', 's'); pf.append('endpoint', `https://push.example.com/${t}`);
+      pf.append('p256dh', 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4'); pf.append('auth', 'BTBZMqHH6r4Tts7J_aSIgg');
+      assert.equal((await student('/push/subscribe', pf)).ok, true);
     }
     for (let k = 0; k < 3; k++) {                                              // F15.1: 3 videos watched, one record each
       const wf = new FormData(); wf.append('t', t); wf.append('v', `AMPvideo00${k}`); wf.append('sec', '240'); wf.append('pct', '80');
@@ -77,6 +87,11 @@ test('a full class day stays under 30 % of every free daily limit', async () => 
     await tpost('/live/reveal', { room });
   }
   await tpost('/live/close', { room });
+  // F15.3: after 발행, one push to the class, in batches (the free plan's subrequest/CPU limits), then nothing more today
+  for (let more = true; more;) more = (await teacher('/push/send', 'POST', { classes: ['c1'], kind: 'report', body: '이번 주 기록이 업데이트됐어요' })).more;
+  assert.equal(pushOut, 20);
+  assert.equal((await teacher('/push/send', 'POST', { classes: ['c1'], kind: 'video', body: 'x' })).sent, 0);   // daily cap
+  await teacher('/push/count');
   await teacher('/submissions'); await teacher('/checkins'); await teacher('/live/results'); await teacher('/reports'); await teacher('/watches');   // Saturday-style pull
 
   const kv = env.SUBMISSIONS.ops, d1 = env.DB.usage;

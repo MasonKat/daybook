@@ -3,7 +3,7 @@
 **Status (2026-11-04: P0, design v2, F1–F9, hotfix H1–H6, F10 videos per class, F11 members in the Teacher tab, F12 insights, F13 parent-contact desk, F14 weekly-test report):**
 1. P1 complete and tested: schema + `students_public`, `init`, `demo`, `roster add/list/import`, Worker `/submit` + `/submissions`, student 오늘 tab, `pull`, parent page, `publish` + no-PII lint, `import screeners`, deploy steps.
 2. P2 complete: board + attitude buttons, `score`, class reward bar, `note`, `weekly`, Playwright checks. P3: manifest/icons/standalone, `rotate-tokens`, `export pdf` stub, Worker node tests.
-3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 190 pytest + 42 Worker node tests (incl. the class-day budget with a Live round) + the Playwright end-to-end check (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
+3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 197 pytest + 48 Worker node tests (incl. the class-day budget with a Live round) + the Playwright end-to-end check (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
    Design v2: shorts reels + 강의 cards, story rings with content, status-coloured profile tiles, one weekly report per parent message.
 4. Features: taste build (콩, `make deploy-taste`), 출석 with a 4-digit code, 오늘 한 줄, 오늘의 장면 + reactions, 휴강, QR sheet, class band, term report, note drafts,
    the Teacher tab (no terminal on Saturdays), AMP Live (cooperative in-class rounds), the answer-card spike, an offline-capable student page.
@@ -94,6 +94,10 @@ Then follow `HANDOFF.md` (classes, roster import, links).
 
 Printable 안내 (G4): `daybook cards students <class>` (cut-out cards) and `daybook cards parents <class>` (A4 letters with
 `{원장·학원 문구}` placeholders). Paper never carries a link or a QR: links go by the teacher's 1:1 KakaoTalk only.
+Opt-in push (F15.3), once: `daybook push keys --subject mailto:you@example.com` (keys go into daybook.json only), then
+in `worker/`: `npx wrangler secret put VAPID_PRIVATE`, `… VAPID_PUBLIC`, `… VAPID_SUBJECT` (the values it prints),
+`npx wrangler deploy`, and publish once. Students and parents then see "알림 받기"; after every 발행 one generic push goes
+out (never at night, at most one a day). `daybook push send --kind message`, `daybook push count`.
 운영 가이드 (Korean, for the teacher): `docs/운영가이드.md`; print it with `daybook guide`.
 Before every class and every publish: `daybook doctor` (or 점검 in the Teacher tab): ✓ / ⚠ / ✗ with a fix per line.
 Backups: `daybook backup [--to <dir>] [--keep 30]`; every 발행 also backs up. Set `"backup_dir"` in daybook.json to a

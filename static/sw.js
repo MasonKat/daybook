@@ -33,3 +33,21 @@ self.addEventListener('fetch', function (e) {
     }));
   }
 });
+
+/* F15.3: opt-in Web Push. The payload is generic (no names, no scores); a tap opens the subscriber's own page. */
+self.addEventListener('push', function (e) {
+  var d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (x) { d = {}; }
+  e.waitUntil(self.registration.showNotification(d.title || 'AMP 학습 기록', {
+    body: d.body || '', icon: '/static/icon-192.png', badge: '/static/icon-192.png', data: { url: d.url || '/' }, tag: 'daybook'
+  }));
+});
+self.addEventListener('notificationclick', function (e) {
+  e.notification.close();
+  var url = (e.notification.data && e.notification.data.url) || '/';
+  if (new URL(url, self.location.origin).origin !== self.location.origin) url = '/';      /* only our own pages */
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
+    for (var i = 0; i < list.length; i++) if (list[i].url === url && 'focus' in list[i]) return list[i].focus();
+    return self.clients.openWindow(url);
+  }));
+});

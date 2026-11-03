@@ -365,6 +365,10 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
         && (await grp.locator('.rchips .chip').count()) >= 2 && (await grp.locator('.rvids a').count()) >= 1
         && (await grp.locator('blockquote').count()) === 1, '이번 주 복습 ring: focus chips, recommended videos and the student line');
     }
+    {   // F15.3: the opt-in box (demo VAPID key): a button, never a subscription without a tap
+      check(await page.locator('#push .push-btn').count() === 1 && /하루 한 번까지/.test(await page.textContent('#push')),
+        '알림 받기: an opt-in button on the student profile');
+    }
     {   // F15.2: the class's 인기 video (>= 3 students): a ring and a 🔥 badge, never a number or a name
       const pop = page.locator('.story[data-story="popular"]');
       const hotChips = await page.locator('#tab-videos .chip.hot').count();
@@ -732,6 +736,13 @@ print(c.execute("SELECT COUNT(*), SUM(correct) FROM effort WHERE source = 'live'
     await tpage.selectOption('#rs-class', '');
     check((await tpage.locator('#notes-rows .nrow input').first().inputValue()).length > 0, 'notes are prefilled (note or data draft)');
     check((await tpage.locator('#weekly-rows pre').count()) >= 5, 'weekly paste messages with copy buttons');
+    // F15.3: 알림 (subscriber counts only) and a send through the dev Worker (a push service that only counts)
+    await tpage.waitForFunction(() => /구독/.test(document.getElementById('np-count').textContent), null, { timeout: 5000 }).catch(() => {});
+    check(/학생 \d+명 · 학부모 \d+명 구독/.test(await tpage.textContent('#np-count')) && (await tpage.inputValue('#np-text')).length > 0,
+      `알림: ${await tpage.textContent('#np-count')} and a ready generic text`);
+    await tpage.click('#np-send');
+    await tpage.waitForFunction(() => /보냄|22:00/.test(document.getElementById('np-msg').textContent), null, { timeout: 8000 }).catch(() => {});
+    check(/보냄 \d+/.test(await tpage.textContent('#np-msg')), `알림 보내기: ${await tpage.textContent('#np-msg')}`);
     // F15.1/F15.2: 영상 (class numbers, per student behind a fold); the 2주 리포트 as text
     await tpage.waitForSelector('#vv-rows h3', { timeout: 5000 }).catch(() => {});
     check((await tpage.locator('#vv-rows h3').count()) === 4 && /🔥/.test(await tpage.textContent('#vv-rows')) && /\d+\/\d+명/.test(await tpage.textContent('#vv-rows')),

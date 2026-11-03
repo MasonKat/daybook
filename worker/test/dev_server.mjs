@@ -12,7 +12,11 @@ const port = Number(arg('port', 8788));
 const env = {
   SUBMISSIONS: new FakeKV(), DB: new FakeD1(), PHOTO_STORE: 'kv', PHOTO_TTL_DAYS: '7', RECORD_TTL_DAYS: '14', RATE_PER_HOUR: arg('rate', '10'),
   ALLOWED_ORIGIN: arg('origin', 'http://127.0.0.1:8790'), TEACHER_TOKEN: arg('teacher', 'dev-teacher-token'),
+  // F15.3 demo only: the RFC 8291 example key pair (public in the RFC), no quiet hours, a push service that only counts
+  VAPID_PUBLIC: 'BP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A8',
+  VAPID_PRIVATE: 'yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw', VAPID_SUBJECT: 'mailto:demo@example.com', PUSH_QUIET: '0-0',
 };
+env.PUSH_FETCH = async () => ({ status: 201 });
 env.LIVE = new FakeDONamespace(LiveRoom, env);
 
 http.createServer(async (req, res) => {

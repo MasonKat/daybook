@@ -180,6 +180,10 @@
   </ul>
   {% if me.solved_week is not none %}<p class="muted solved-me tnum" id="solved-me">{{ S.solved_me | fmt(n=me.solved_week) }}</p>{% endif %}
   {% if me.videos_week %}<p class="muted solved-me tnum" id="videos-me">{{ S.videos_me | fmt(n=me.videos_week) }}</p>{% endif %}
+  {% set role, hint = "s", S.push_hint_s %}{% if vapid %}<div class="pushbox" id="push" data-role="{{ role }}" data-vapid="{{ vapid }}" data-worker="{{ worker }}" data-s="{{ {"on": S.push_on, "off": S.push_off, "done": S.push_on_done, "ios": S.push_ios, "denied": S.push_denied, "err": S.push_err, "hint": hint} | tojson | forceescape }}" hidden>
+  <button type="button" class="btn ghost push-btn" aria-pressed="false">{{ S.push_on }}</button>
+  <p class="muted push-note">{{ hint }}</p>
+</div>{% endif %}
   {% if me.months|length > 1 %}
   <div class="highlights" id="highlights">
     {% for m in me.months %}<button type="button" class="hl-b" data-month="{{ m.key }}"><span class="ring"><span class="hl-in tnum">{{ m.n }}</span></span><span class="hl-l">{{ m.label }}</span></button>{% endfor %}

@@ -45,11 +45,11 @@ def http_put_json(cfg: Config, path: str, payload: dict, method: str = "PUT") ->
 def push_tokmap(conn: sqlite3.Connection, cfg: Config) -> str:
     """H3: send the token -> class-key map so the Worker accepts exactly the current students' links.
     Returns a one-line status for the CLI (never raises: publishing must not depend on the network)."""
-    from .ops import tokmap
+    from .ops import parent_tokmap, tokmap
     if not cfg.worker or not cfg.teacher_token:
         return ""
     try:
-        r = http_put_json(cfg, "/tokmap", {"tokmap": tokmap(conn)})
+        r = http_put_json(cfg, "/tokmap", {"tokmap": tokmap(conn), "parents": parent_tokmap(conn)})
         msg = f"Worker: {r.get('n', '?')} student links accepted"
     except PullError as e:
         return f"warning: student links not sent to the Worker ({e}); uploads from new links wait until it is"

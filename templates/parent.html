@@ -113,6 +113,10 @@
   </div>
   {% endfor %}
   <p class="room-end">{{ S.room_note }} · {{ S.reply_hint }}</p>
+  {% set role, hint = "p", S.push_hint_p %}{% if vapid %}<div class="pushbox" id="push" data-role="{{ role }}" data-vapid="{{ vapid }}" data-worker="{{ worker }}" data-s="{{ {"on": S.push_on, "off": S.push_off, "done": S.push_on_done, "ios": S.push_ios, "denied": S.push_denied, "err": S.push_err, "hint": hint} | tojson | forceescape }}" hidden>
+  <button type="button" class="btn ghost push-btn" aria-pressed="false">{{ S.push_on }}</button>
+  <p class="muted push-note">{{ hint }}</p>
+</div>{% endif %}
   <footer class="foot" id="foot">{{ S.updated_at | fmt(ts=updated) }}</footer>
 </main>
 <script src="/static/app.js" defer></script>

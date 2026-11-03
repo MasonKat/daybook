@@ -1,4 +1,5 @@
 // DAYBOOK Worker. Never sees names: tokens, opaque class keys, dates.
+import { send as pushSend } from './webpush.js';
 // Bindings: D1 DB (records: submissions, check-ins, sessions, token map, moments, reactions, rate counters),
 //           KV SUBMISSIONS (photos and moment JPEGs only, with TTLs), R2 PHOTOS (only when PHOTO_STORE = "r2").
 // Secret: TEACHER_TOKEN. No KV `list` anywhere: the free plan allows ~1,000 lists a day (see DECISIONS, H1).
@@ -11,8 +12,11 @@ const TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/heic': 'heic', '
 const CHIPS = new Set(['ok', 'confused', 'rewatch']);
 const RID_RE = /^[a-f0-9]{16}$/;
 // G1: bumped with every feature the console relies on (doctor warns when the deployed Worker is older):
-// 1 base, 2 출석, 3 장면 + Live, 4 푼 문제 수, 5 주간 테스트 reports, 6 /health version + /tokmap-info, 7 /watch
-export const WORKER_VERSION = 7;
+// 1 base, 2 출석, 3 장면 + Live, 4 푼 문제 수, 5 주간 테스트 reports, 6 /health version + /tokmap-info, 7 /watch,
+// 8 Web Push
+export const WORKER_VERSION = 8;
+const PUSH_KINDS = ['video', 'message', 'report', 'test'];
+const DEFAULT_KINDS = { s: 'video,message,report,test', p: 'report' };
 const VID_RE = /^[A-Za-z0-9_-]{6,20}$/;
 const REASONS = ['개념탈락', '계산실수', '정보이해부족', '시간부족'];   // F14: the teacher's Notion "Reasoning" options
 const REACTIONS = ['fire', 'clap', 'mind'];
@@ -57,6 +61,11 @@ export const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS watches (token TEXT NOT NULL, v TEXT NOT NULL, day TEXT NOT NULL, class TEXT NOT NULL,
      sec INTEGER NOT NULL, pct INTEGER NOT NULL, ts TEXT NOT NULL, updated TEXT NOT NULL, PRIMARY KEY (token, v, day))`,
   'CREATE INDEX IF NOT EXISTS watches_updated ON watches (updated)',
+  // F15.3 Web Push (opt-in): one row per browser subscription; parents' tokens get their own map (they never upload)
+  'CREATE TABLE IF NOT EXISTS ptokmap (token TEXT PRIMARY KEY, class TEXT NOT NULL)',
+  `CREATE TABLE IF NOT EXISTS pushsubs (endpoint TEXT PRIMARY KEY, token TEXT NOT NULL, role TEXT NOT NULL, class TEXT NOT NULL,
+     p256dh TEXT NOT NULL, auth TEXT NOT NULL, kinds TEXT NOT NULL, created TEXT NOT NULL, sent_day TEXT, sent_n INTEGER NOT NULL DEFAULT 0)`,
+  'CREATE INDEX IF NOT EXISTS pushsubs_class ON pushsubs (class)',
 ];
 const ready = new WeakMap();   // per database binding: create the tables once (no-op afterwards)
 function init(env) {
@@ -271,6 +280,81 @@ async function watch(req, env, h) {
   return json({ ok: true }, 200, h);
 }
 
+// ---------------------------------------------------------------- F15.3 Web Push (opt-in)
+async function pushSubscribe(req, env, h) {
+  let form;
+  try { form = await req.formData(); } catch { return json({ ok: false, error: 'bad_form' }, 400, h); }
+  const token = String(form.get('t') || '').toLowerCase(), role = String(form.get('role') || 's');
+  if (!TOKEN_RE.test(token)) return json({ ok: false, error: 'bad_token' }, 400, h);
+  const endpoint = String(form.get('endpoint') || ''), p256dh = String(form.get('p256dh') || ''), auth = String(form.get('auth') || '');
+  let ok = /^https:\/\/[^\s]{8,600}$/.test(endpoint) && (role === 's' || role === 'p');
+  try { ok = ok && unb64(p256dh).length === 65 && unb64(p256dh)[0] === 4 && unb64(auth).length === 16; } catch { ok = false; }
+  if (!ok) return json({ ok: false, error: 'bad_subscription' }, 200, h);
+  const row = await one(env, `SELECT class FROM ${role === 's' ? 'tokmap' : 'ptokmap'} WHERE token = ?`, token);
+  if (!row) return json({ ok: false, error: 'unknown_token' }, 200, h);
+  const now = new Date().toISOString();
+  await run(env, `INSERT INTO pushsubs (endpoint, token, role, class, p256dh, auth, kinds, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT (endpoint) DO UPDATE SET token = excluded.token, role = excluded.role, class = excluded.class,
+      p256dh = excluded.p256dh, auth = excluded.auth, kinds = excluded.kinds`, endpoint, token, role, row.class, p256dh, auth, DEFAULT_KINDS[role], now);
+  // at most 5 browsers per link: the oldest go
+  await run(env, `DELETE FROM pushsubs WHERE token = ? AND endpoint NOT IN
+    (SELECT endpoint FROM pushsubs WHERE token = ? ORDER BY created DESC LIMIT 5)`, token, token);
+  return json({ ok: true }, 200, h);
+}
+
+async function pushUnsubscribe(req, env, h) {
+  let form;
+  try { form = await req.formData(); } catch { return json({ ok: false, error: 'bad_form' }, 400, h); }
+  const token = String(form.get('t') || '').toLowerCase();
+  if (!TOKEN_RE.test(token)) return json({ ok: false, error: 'bad_token' }, 400, h);
+  await run(env, 'DELETE FROM pushsubs WHERE token = ? AND endpoint = ?', token, String(form.get('endpoint') || ''));
+  return json({ ok: true }, 200, h);
+}
+
+const unb64 = (s) => Uint8Array.from(atob(String(s).replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((String(s).length + 3) % 4)), (c) => c.charCodeAt(0));
+
+function quietNow(env, now) {
+  // KST quiet hours, "22-8" by default: no push is sent then (the console logs the skip)
+  const [from, to] = String(env.PUSH_QUIET || '22-8').split('-').map(Number);
+  const hour = new Date(now + 9 * 3600e3).getUTCHours();
+  return from > to ? (hour >= from || hour < to) : (hour >= from && hour < to);
+}
+
+async function pushSendAll(req, env) {
+  let b;
+  try { b = await req.json(); } catch { return json({ ok: false, error: 'bad_json' }, 400, {}); }
+  const kind = String((b && b.kind) || '');
+  if (!PUSH_KINDS.includes(kind)) return json({ ok: false, error: 'bad_kind' }, 400, {});
+  if (!env.VAPID_PUBLIC || !env.VAPID_PRIVATE || !env.VAPID_SUBJECT) return json({ ok: false, error: 'no_vapid' }, 200, {});
+  const now = Date.now(), day = seoulDay(now);
+  if (quietNow(env, now)) return json({ ok: true, quiet: true, sent: 0, more: false }, 200, {});
+  const classes = Array.isArray(b.classes) ? b.classes.filter((c) => CLASS_RE.test(String(c))) : [];
+  const cap = num(env.PUSH_PER_DAY, 1), batch = Math.min(num(env.PUSH_BATCH, 10), 40);   // free plan: few subrequests/CPU
+  const where = `kinds LIKE ? ${classes.length ? `AND class IN (${classes.map(() => '?').join(',')})` : ''}`;
+  const args = [`%${kind}%`, ...classes];
+  const capped = (await one(env, `SELECT COUNT(*) AS n FROM pushsubs WHERE ${where} AND sent_day = ? AND sent_n >= ?`, ...args, day, cap)).n;
+  const due = await all(env, `SELECT * FROM pushsubs WHERE ${where} AND (sent_day IS NULL OR sent_day != ? OR sent_n < ?)
+    ORDER BY created LIMIT ?`, ...args, day, cap, batch + 1);
+  const title = String(b.title || 'AMP 학습 기록').replace(/[\u0000-\u001f]/g, ' ').slice(0, 40);
+  const body = String(b.body || '').replace(/[\u0000-\u001f]/g, ' ').slice(0, 120);
+  const vapid = { publicKey: env.VAPID_PUBLIC, privateKey: env.VAPID_PRIVATE, subject: env.VAPID_SUBJECT };
+  const fetchFn = env.PUSH_FETCH || fetch;
+  let sent = 0, removed = 0, failed = 0;
+  for (const sub of due.slice(0, batch)) {
+    // tapping opens the subscriber's own page (the payload is end-to-end encrypted to that browser)
+    const url = `${env.ALLOWED_ORIGIN}/${sub.role === 'p' ? 'p' : 's'}/${sub.token}/`;
+    const status = await pushSend(sub, { title, body, url, kind }, vapid, fetchFn);
+    if (status >= 200 && status < 300) {
+      sent++;
+      await run(env, `UPDATE pushsubs SET sent_n = CASE WHEN sent_day = ? THEN sent_n + 1 ELSE 1 END, sent_day = ? WHERE endpoint = ?`, day, day, sub.endpoint);
+    } else if (status === 404 || status === 410) {
+      removed++;                                     // the browser dropped it: forget it
+      await run(env, 'DELETE FROM pushsubs WHERE endpoint = ?', sub.endpoint);
+    } else failed++;
+  }
+  return json({ ok: true, quiet: false, sent, removed, failed, capped, more: due.length > batch }, 200, {});
+}
+
 // ---------------------------------------------------------------- 출석 (F2)
 async function putSession(req, env) {
   let b;
@@ -278,7 +362,7 @@ async function putSession(req, env) {
   const { class: cls, date, code, open_from: from, open_until: until, start } = b || {};
   if (!CLASS_RE.test(cls || '') || !DAY_RE.test(date || '') || !CODE_RE.test(code || '') ||
       Number.isNaN(Date.parse(from)) || Number.isNaN(Date.parse(until))) return json({ ok: false, error: 'bad_session' }, 400, {});
-  if (b.tokmap && typeof b.tokmap === 'object') await replaceTokmap(env, b.tokmap);
+  if (b.tokmap && typeof b.tokmap === 'object') await replaceTokmap(env, b.tokmap, b.parents);
   await run(env, `INSERT INTO sessions (class, date, code, open_from, open_until, start) VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT (class, date) DO UPDATE SET code = excluded.code, open_from = excluded.open_from,
       open_until = excluded.open_until, start = excluded.start`,
@@ -286,10 +370,23 @@ async function putSession(req, env) {
   return json({ ok: true }, 200, {});
 }
 
-async function replaceTokmap(env, map) {
+async function replaceTokmap(env, map, parents) {
   const rows = Object.entries(map).filter(([t, c]) => TOKEN_RE.test(t) && CLASS_RE.test(String(c)));
   const stmts = [env.DB.prepare('DELETE FROM tokmap')];
   for (const [t, c] of rows) stmts.push(env.DB.prepare('INSERT INTO tokmap (token, class) VALUES (?, ?)').bind(t, String(c)));
+  if (parents && typeof parents === 'object') {          // F15.3: parent links (push opt-in only; they never upload)
+    stmts.push(env.DB.prepare('DELETE FROM ptokmap'));
+    for (const [t, c] of Object.entries(parents).filter(([t, c]) => TOKEN_RE.test(t) && CLASS_RE.test(String(c)))) {
+      stmts.push(env.DB.prepare('INSERT INTO ptokmap (token, class) VALUES (?, ?)').bind(t, String(c)));
+    }
+  }
+  // a retired or rotated link stops getting pushes; a moved student's subscription follows the new class
+  stmts.push(env.DB.prepare("DELETE FROM pushsubs WHERE role = 's' AND token NOT IN (SELECT token FROM tokmap)"));
+  stmts.push(env.DB.prepare("UPDATE pushsubs SET class = (SELECT class FROM tokmap WHERE tokmap.token = pushsubs.token) WHERE role = 's'"));
+  if (parents && typeof parents === 'object') {
+    stmts.push(env.DB.prepare("DELETE FROM pushsubs WHERE role = 'p' AND token NOT IN (SELECT token FROM ptokmap)"));
+    stmts.push(env.DB.prepare("UPDATE pushsubs SET class = (SELECT class FROM ptokmap WHERE ptokmap.token = pushsubs.token) WHERE role = 'p'"));
+  }
   await env.DB.batch(stmts);
   return rows.length;
 }
@@ -537,6 +634,8 @@ async function route(req, env, url, h) {
   if (p === '/react' && req.method === 'POST') return react(req, env, h);
   if (p === '/report' && req.method === 'POST') return report(req, env, h);
   if (p === '/watch' && req.method === 'POST') return watch(req, env, h);
+  if (p === '/push/subscribe' && req.method === 'POST') return pushSubscribe(req, env, h);
+  if (p === '/push/unsubscribe' && req.method === 'POST') return pushUnsubscribe(req, env, h);
   if (p === '/live/join' && req.method === 'POST') return liveStudent(req, env, url, h, 'join');
   if (p === '/live/answer' && req.method === 'POST') return liveStudent(req, env, url, h, 'answer');
   if (p === '/live/state' && req.method === 'GET' && url.searchParams.get('t')) return liveStudent(req, env, url, h, 'state');
@@ -569,7 +668,7 @@ async function route(req, env, url, h) {
     return new Response(img, { headers: { ...h, 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=600' } });
   }
   const teacherPaths = ['/submissions', '/photo', '/checkins', '/session', '/moment-put', '/tokmap',
-    '/live/open', '/live/next', '/live/reveal', '/live/close', '/live/state', '/live/results', '/rounds', '/reports', '/tokmap-info', '/watches'];
+    '/live/open', '/live/next', '/live/reveal', '/live/close', '/live/state', '/live/results', '/rounds', '/reports', '/tokmap-info', '/watches', '/push/send', '/push/count'];
   if (teacherPaths.includes(p)) {
     if (!teacherOk(req, env)) return json({ ok: false, error: 'unauthorized' }, 401, {});
     const since = url.searchParams.get('since') || '';
@@ -594,6 +693,16 @@ async function route(req, env, url, h) {
         FROM reports WHERE updated > ? ORDER BY updated`, since);
       return json({ now: new Date().toISOString(), items }, 200, {});
     }
+    if (p === '/push/send' && req.method === 'POST') return pushSendAll(req, env);
+    if (p === '/push/count' && req.method === 'GET') {
+      // how many browsers are subscribed, per class key and role: never who
+      const rows = await all(env, 'SELECT class, role, COUNT(*) AS n FROM pushsubs GROUP BY class, role');
+      const by = {};
+      for (const x of rows) { by[x.class] = by[x.class] || { s: 0, p: 0 }; by[x.class][x.role] = x.n; }
+      return json({ ok: true, students: rows.filter((x) => x.role === 's').reduce((n, x) => n + x.n, 0),
+        parents: rows.filter((x) => x.role === 'p').reduce((n, x) => n + x.n, 0), by_class: by,
+        vapid: !!(env.VAPID_PUBLIC && env.VAPID_PRIVATE && env.VAPID_SUBJECT) }, 200, {});
+    }
     if (p === '/watches' && req.method === 'GET') {
       const items = await all(env, 'SELECT token, v, day, sec, pct, ts, updated FROM watches WHERE updated > ? ORDER BY updated', since);
       return json({ now: new Date().toISOString(), items }, 200, {});
@@ -613,7 +722,7 @@ async function route(req, env, url, h) {
       let b;
       try { b = await req.json(); } catch { return json({ ok: false, error: 'bad_json' }, 400, {}); }
       if (!b || typeof b.tokmap !== 'object') return json({ ok: false, error: 'bad_tokmap' }, 400, {});
-      return json({ ok: true, n: await replaceTokmap(env, b.tokmap) }, 200, {});
+      return json({ ok: true, n: await replaceTokmap(env, b.tokmap, b.parents) }, 200, {});
     }
     return json({ ok: false, error: 'method' }, 405, {});
   }
@@ -631,7 +740,7 @@ export default {
     const url = new URL(req.url);
     const h = corsHeaders(req, env);
     const origin = req.headers.get('Origin');
-    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react', '/report', '/watch', '/live/join', '/live/answer'].includes(url.pathname)
+    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react', '/report', '/watch', '/push/subscribe', '/push/unsubscribe', '/live/join', '/live/answer'].includes(url.pathname)
       || (url.pathname === '/live/state' && url.searchParams.has('t'));
     // CORS: browsers may only call the student endpoints from the Pages origin.
     if (isStudent && origin && origin !== env.ALLOWED_ORIGIN) return json({ ok: false, error: 'origin' }, 403, h);
