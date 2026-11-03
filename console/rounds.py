@@ -231,11 +231,12 @@ def export(conn: sqlite3.Connection, round_id: str, fmt: str = "csv", out_dir: s
         for row in rows:
             w.writerow({k: ",".join(map(str, v)) if isinstance(v, list) else v for k, v in row.items()})
         path = out / f"{round_id}.csv"
-        path.write_text(buf.getvalue(), encoding="utf-8-sig")      # Excel on Windows reads Korean with the BOM
+        # Excel on Windows reads Korean with the BOM; newline="" keeps "\n" so the bytes are the same on every OS
+        path.write_text(buf.getvalue(), encoding="utf-8-sig", newline="")
     elif fmt == "notion-json":
         path = out / f"{round_id}.json"
         path.write_text(json.dumps({"round": round_id, "columns": EXPORT_COLUMNS, "rows": rows}, ensure_ascii=False, indent=1) + "\n",
-                        encoding="utf-8")
+                        encoding="utf-8", newline="")
     else:
         raise RoundError("format: csv | notion-json")
     log_event(conn, "reports_export", {"round": round_id, "rows": len(rows), "format": fmt})

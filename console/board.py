@@ -11,8 +11,10 @@ Only requests whose Host is 127.0.0.1/localhost on this port are served (no DNS-
 from __future__ import annotations
 
 import json
+import socket
 import sqlite3
 import threading
+import time
 from datetime import date
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -232,6 +234,7 @@ class Board:
 
 MAX_POST = 25 * 1024 * 1024        # a moment photo as a data URL fits easily
 DRAIN_CAP = 64 * 1024 * 1024       # beyond this a client is not a browser on this laptop: stop reading, close
+LINGER_S, LINGER_BYTES = 2.0, 64 * 1024   # lingering close (see H.finish)
 
 
 def make_handler(board: Board):
@@ -382,6 +385,30 @@ def make_handler(board: Board):
             else:
                 self._send(404, b"not found", "text/plain")
 
+        _linger = False
+
+        def finish(self):
+            """A lingering close on every path that closes the connection itself (as Apache and nginx do): send the
+            reply, half-close, then read and discard what the client still sends (until EOF, 2 s or 64 KB) before
+            closing. Closing with unread bytes makes Windows reset the connection, and the reply can be lost."""
+            if self._linger:
+                try:
+                    self.wfile.flush()
+                    self.connection.shutdown(socket.SHUT_WR)
+                    self.connection.settimeout(0.2)
+                    end, left = time.monotonic() + LINGER_S, LINGER_BYTES
+                    while left > 0 and time.monotonic() < end:
+                        try:
+                            chunk = self.connection.recv(min(8192, left))
+                        except socket.timeout:
+                            continue
+                        if not chunk:
+                            break
+                        left -= len(chunk)
+                except OSError:
+                    pass
+            super().finish()
+
         def _read_body(self) -> bytes | None:
             """Read the whole request body before any reply, refusals included: answering first and closing with
             unread bytes makes Windows reset the connection (WinError 10054 on the client). Returns None when the
@@ -392,7 +419,7 @@ def make_handler(board: Board):
             except ValueError:
                 n = -1
             if n < 0:                          # no usable length: nothing can be read safely; answer 400 and close
-                self.close_connection = True
+                self.close_connection = self._linger = True
                 return b"\x00"
             if n > MAX_POST:
                 left = min(n, DRAIN_CAP)
@@ -401,7 +428,7 @@ def make_handler(board: Board):
                     if not chunk:
                         break
                     left -= len(chunk)
-                self.close_connection = True
+                self.close_connection = self._linger = True
                 return None
             return self.rfile.read(n) if n else b""
 

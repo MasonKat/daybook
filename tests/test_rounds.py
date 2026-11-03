@@ -92,6 +92,9 @@ def test_export_columns_and_order_are_exact(conn, rnd, tmp_path):
                            item(studs[0]["student_token"], incorrect="", missed="", reasons="", hardest="", wishlist="", metaphor="")])
     path = R.export(conn, RID, "csv", tmp_path)
     assert path.name == f"{RID}.csv"
+    raw = path.read_bytes()                       # identical bytes on every OS (the local Notion sync depends on it)
+    assert raw.startswith(b"\xef\xbb\xbfStudent ID,") and b"\r" not in raw
+    assert b"\r" not in R.export(conn, RID, "notion-json", tmp_path).read_bytes()
     text = path.read_text(encoding="utf-8-sig")
     rows = list(csv.reader(text.splitlines()))
     assert rows[0] == ["Student ID", "Name", "Grade", "Round ID", "Screening Date", "Incorrect Quiz #", "Missed Quiz #",

@@ -106,8 +106,8 @@ def test_every_refusal_reads_the_body_first(server, case, monkeypatch):
     if case == "too_big":
         body = b"x" * (2 * 1024 * 1024)
     length = {"bad_length": "12abc"}.get(case, str(len(body)))
-    if case == "bad_length":           # no usable length = nothing can be drained safely; real clients never do this
-        body = b""
+    if case == "bad_length":           # no usable length: the reply goes out, then a lingering close drains what follows
+        body = b"x" * 32_000
     head = f"POST /api/attitude HTTP/1.1\r\nHost: {host}\r\n{origin}Content-Type: application/json\r\nContent-Length: {length}\r\n\r\n"
     code, data = _raw(url, head, body)
     assert code == {"origin": 403, "host": 403, "too_big": 413, "bad_length": 400}[case]

@@ -526,7 +526,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     {
       const outDir = path.join(TMP, 'reports');
       console.log('      ' + daybook('export', 'reports', '--round', RID, '--out', outDir).trim().split('\n')[0]);
-      const lines = fs.readFileSync(path.join(outDir, RID + '.csv'), 'utf-8').replace(/^\uFEFF/, '').trim().split('\n');
+      const lines = fs.readFileSync(path.join(outDir, RID + '.csv'), 'utf-8').replace(/^\uFEFF/, '').trim().split(/\r?\n/);
       check(lines[0] === 'Student ID,Name,Grade,Round ID,Screening Date,Incorrect Quiz #,Missed Quiz #,Most Challenging Quiz,Reasoning,Wishlist,metaphor'
         && lines.length === 3 && lines.some((l) => l.includes('"3,7,12"') && l.includes('"계산실수,시간부족"') && l.includes('마라톤')),
         `pull → export reports: the Notion columns, one row per reporting student (${lines.length - 1} rows)`);

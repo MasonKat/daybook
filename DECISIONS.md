@@ -273,6 +273,10 @@ One line each. "deferred" = not built in P0, on purpose.
 - Demo: `daybook demo` writes `demo/insights.demo.json` (gitignored) dated today for 고1A and 기초B and imports it.
 - **next (from the combined prompt, not built):** retiring the Google Form → make.com → Notion intake in favour of F14's report; the teacher decides after the trial.
 
+## Windows fixes after ffd6d96 (2026-11-04, from the local agent's run on the teacher's laptop)
+- `export reports` writes with `newline=""`: the CSV (UTF-8 BOM, `\n` line ends) and the JSON have identical bytes on every OS (Windows text mode had turned them into CRLF, so the exact-header check failed and the local Notion sync would see different bytes). A pytest reads the file in binary and asserts there is no `\r`; the e2e splits on `\r?\n`.
+- The board uses a **lingering close** on every path that closes the connection itself (a non-numeric Content-Length; a body over the drain cap): reply, half-close (`SHUT_WR`), read and discard until EOF, 2 s or 64 KB, then close, as Apache and nginx do. The bad-length test now sends a 32 KB body and stays strict. Linux does not reproduce the Windows reset (the old code passes there too), so the local 20x loop on Windows is the proof.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).
