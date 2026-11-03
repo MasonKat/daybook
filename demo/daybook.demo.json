@@ -4,5 +4,5 @@
   "pages_url": "http://127.0.0.1:8790",
   "teacher_token": "dev-teacher-token",
   "videos_path": "videos.json",
-  "board_poll_seconds": 10
+  "board_poll_seconds": 30
 }

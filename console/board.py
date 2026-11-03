@@ -65,7 +65,7 @@ class Board:
             st = self.state(conn)
         tpl = generate.env().get_template("board.html")
         return tpl.render(S=self.S, page="board", cls=st["cls"], students=st["students"], reward=st["reward"],
-                          three=st["three"], poll=self.poll,
+                          three=st["three"], poll=self.poll, poll_seconds=self.cfg.board_poll_seconds,
                           js=generate.json_script({"refresh": max(2, min(self.cfg.board_poll_seconds, 10))}))
 
     def poll_loop(self, stop: threading.Event) -> None:

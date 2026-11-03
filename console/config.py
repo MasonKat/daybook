@@ -15,7 +15,7 @@ class Config:
     pages_url: str = ""          # https://<project>.pages.dev  (used for printed links and QR URLs)
     teacher_token: str = ""      # same value as the Worker secret TEACHER_TOKEN
     videos_path: str = "videos.json"
-    board_poll_seconds: int = 10
+    board_poll_seconds: int = 30
     extra: dict = field(default_factory=dict)
 
     @property
@@ -37,7 +37,7 @@ def load(path: str | Path | None = None) -> Config:
         pages_url=data.get("pages_url", ""),
         teacher_token=data.get("teacher_token", ""),
         videos_path=data.get("videos_path", "videos.json"),
-        board_poll_seconds=int(data.get("board_poll_seconds", 10)),
+        board_poll_seconds=int(data.get("board_poll_seconds", 30)),
         extra={k: v for k, v in data.items()},
     )
     cfg.worker_url = os.environ.get("DAYBOOK_WORKER_URL", cfg.worker_url)

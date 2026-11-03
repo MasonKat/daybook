@@ -2,7 +2,7 @@
 {% block body %}
 <header class="top">
   <span class="brand">{{ S.board_title }} · {{ cls.name }}</span>
-  <span class="who" id="b-poll">{{ S.board_poll_on if poll else S.board_poll_off }}</span>
+  <span class="who" id="b-poll">{{ S.board_poll_on | fmt(n=poll_seconds) if poll else S.board_poll_off }}</span>
 </header>
 <main class="board">
 <section class="card">

@@ -56,7 +56,7 @@ One line each. "deferred" = not built in P0, on purpose.
 - If the browser cannot decode the photo (e.g. HEIC on desktop Chrome), the original is sent if ≤ 8 MB.
 - Pull reads since the previous Worker `now` − 5 minutes (KV list is eventually consistent); upserts are idempotent.
 - Old student tokens from `roster rotate-tokens` still map to their student on pull (kept in the event log).
-- Free-plan budget: each upload = 3 KV writes (1,000/day free); the board polls with `list` (1,000/day free), about 540 per 90-minute class at 10 s, so two board classes on one day need `board_poll_seconds` ≥ 20.
+- Free-plan budget: each upload = 3 KV writes (1,000/day free); the board polls the Worker with `list` (1,000/day free). Default `board_poll_seconds` = 30 (2026-11-03, local agent's review): about 180 list calls per 90-minute class instead of 540 at 10 s. The board page still refreshes from the laptop every 10 s; `board_poll_seconds` in daybook.json overrides.
 
 ## Console and board
 - Extra commands beyond the brief: `class add|edit|list` (roster commands need a class), `roster edit`, `roster list --links` (to send links), `submit` (paper/teacher mark), `pull --photos`.
@@ -65,6 +65,7 @@ One line each. "deferred" = not built in P0, on purpose.
 - Config lives in `daybook.json` (gitignored) or `DAYBOOK_*` environment variables; the teacher token never enters the repo.
 
 ## Deferred
+- deferred (local agent will add after the clone, before 수능 week): `daybook class cancel <class> <date>` so a closed day does not break streaks.
 - deferred: `export pdf` (the command is a stub that exits 2 with a message).
 - deferred: class median band on the parent trend.
 - deferred: cancelling a scheduled class day (holidays); a cancelled weekday still counts as a class day for the streak.

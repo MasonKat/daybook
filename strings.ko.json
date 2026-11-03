@@ -47,6 +47,6 @@
   "board_title": "오늘 수업",
   "board_none": "아직 없어요",
   "board_poll_off": "제출 서버 미연결 (수동)",
-  "board_poll_on": "10초마다 제출 확인",
+  "board_poll_on": "{n}초마다 제출 확인",
   "weekdays": "월,화,수,목,금,토,일"
 }
