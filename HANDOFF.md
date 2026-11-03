@@ -9,7 +9,7 @@ in `daybook.sqlite` (gitignored), and on the deployed pages behind unguessable l
 
 ## 0. State at 11-04 (after F6–F14 and G1–G5): what to do before Friday 11-06
 
-`main` is green from a clean clone: 197 pytest, 48 Worker node tests (incl. the class-day budget with an AMP Live round
+`main` is green from a clean clone: 199 pytest, 48 Worker node tests (incl. the class-day budget with an AMP Live round
 and a weekly-test round), the full Playwright check. Built: P0, design v2, F1–F14, hotfix H1–H6, G1 doctor, G2 backup,
 G3 운영 가이드, G4 안내 cards, G5 taste refresh. Every choice is in `DECISIONS.md`. Console schema v8 (migrates by itself);
 Worker v6. The pilot: two Mon/Wed/Fri 고1 classes from Friday 11-06; the weekly test restarts that day (고2 on Saturday).
@@ -38,6 +38,20 @@ Worker v6. The pilot: two Mon/Wed/Fri 고1 classes from Friday 11-06; the weekly
 9. **doctor green**: `daybook doctor` (or 점검): no ✗. Before Friday's class, "session not started" is a normal ⚠;
    it turns ✓ when the board starts.
 10. Taste build for curious students: `make deploy-taste` (amp-taste.pages.dev; nothing is stored).
+
+**F15 (after the pilot starts, when the teacher wants them):**
+
+- **Push (opt-in):** `.venv\Scripts\python.exe -m console push keys --subject mailto:<teacher's address>` writes the VAPID
+  keys into daybook.json (never the repo). Then in `worker\`: `npx wrangler secret put VAPID_PRIVATE`,
+  `npx wrangler secret put VAPID_PUBLIC`, `npx wrangler secret put VAPID_SUBJECT` (the values it prints) and
+  `npx wrangler deploy` (Worker v8; doctor says when it is older). Publish once: pages show "알림 받기". Never run
+  `push keys --force` casually: new keys end every subscription.
+- **YouTube's own counters:** the local agent may fill `views` and `views_7d` (whole numbers) per item in `videos.json`
+  (or the files of the videos folder) from the teacher's YouTube Studio exports. Only the Teacher tab shows them
+  (영상 → "전체 조회 … · 7일 … · 우리 반 …명"); DAYBOOK never calls YouTube.
+- **Mascot:** put the academy's image at `brand\mascot.png` (the folder is gitignored) and add
+  `"brand": {"mascot": "brand/mascot.png", "mascot_public": false}` to daybook.json; set `mascot_public` to true only if
+  it may appear on the public taste site.
 
 Still not done here: the Cloudflare deploys (above), a real-phone install test, Live over WebSockets (polling is used),
 a webcam capture on the board. Re-check Cloudflare's Durable Objects free-plan page once before the first Live class.
