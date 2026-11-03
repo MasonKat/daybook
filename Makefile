@@ -4,13 +4,15 @@ VENV := .venv
 BIN := $(VENV)/bin
 DEMO_ENV := DAYBOOK_DB=demo.sqlite DAYBOOK_CONFIG=demo/daybook.demo.json
 
-.PHONY: help setup init demo check test test-worker e2e node-deps publish clean
+.PHONY: help setup init demo check test test-worker e2e node-deps publish deploy-pages clean
+PAGES_PROJECT ?= daybook
 
 help:
 	@echo "make demo        clean demo: schema + synthetic seed + publish + all checks (pytest, worker, playwright)"
 	@echo "make check       run all checks on the current demo"
 	@echo "make test        pytest only        make test-worker   node tests of the Worker"
 	@echo "make init        create daybook.sqlite (real data; see README)"
+	@echo "make deploy-pages  daybook publish + wrangler pages deploy ./dist (real data)"
 
 setup: $(BIN)/daybook
 
@@ -46,6 +48,10 @@ e2e: setup node-deps
 
 publish: setup
 	$(BIN)/daybook publish
+
+# Real data: publish (stops on a lint finding), then deploy dist/ to Cloudflare Pages (needs `wrangler login`).
+deploy-pages: publish
+	cd worker && npx wrangler pages deploy ../dist --project-name $(PAGES_PROJECT) --branch main
 
 clean:
 	rm -rf dist .dist-staging demo.sqlite
