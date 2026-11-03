@@ -326,6 +326,7 @@
     }
     function padSubmit() {
       padBusy = true;
+      if (padMode === 'live') return liveJoin(digits);
       if (TASTE) {   /* simulated: any 4 digits, nothing is sent */
         setTimeout(function () { padBusy = false; checkedIn(new Date().toISOString()); }, 300);
         return;
@@ -345,7 +346,137 @@
         })
         .catch(function () { padBusy = false; digits = ''; padRender(S.ck_error, true); });
     }
-    $('ck-open').addEventListener('click', padOpen);
+    var padMode = 'checkin';
+    $('ck-open').addEventListener('click', function () {
+      padMode = 'checkin';
+      $('pad-t').textContent = S.pad_title;
+      padOpen();
+      if (TASTE) padRender(S.pad_taste, false);
+    });
+    $('live-open').addEventListener('click', function () {
+      padMode = 'live';
+      $('pad-t').textContent = S.live_pad;
+      padOpen();
+      padRender(TASTE ? S.live_taste : '', false);
+    });
+
+    /* ---- AMP Live (F7): only answer buttons on the phone; the question is on the projector */
+    var LV = { room: null, timer: null, st: null, buf: '', picked: {}, stop: true, sim: null };
+    function liveShow(on) {
+      $('live').hidden = !on;
+      if (!on) { LV.stop = true; clearTimeout(LV.timer); clearInterval(LV.timer); LV.timer = null; }
+    }
+    function liveJoin(code) {
+      if (TASTE) { padBusy = false; padClose(); return tasteLive(); }
+      var fd = new FormData();
+      fd.append('t', tok); fd.append('room', code);
+      fetch(D.worker + '/live/join', { method: 'POST', body: fd })
+        .then(function (r) { return r.json(); })
+        .then(function (st) {
+          padBusy = false;
+          if (!st.open) { digits = ''; padRender(S.live_noroom, true); return; }
+          LV.room = code; LV.stop = false; LV.picked = {};
+          padClose(); liveShow(true); liveRender(st);
+          LV.timer = setInterval(livePoll, 2000);
+        })
+        .catch(function () { padBusy = false; digits = ''; padRender(S.ck_error, true); });
+    }
+    function livePoll() {
+      if (LV.stop) return;
+      fetch(D.worker + '/live/state?t=' + tok + '&room=' + LV.room, { cache: 'no-store' })
+        .then(function (r) { return r.json(); }).then(liveRender).catch(function () { /* next tick */ });
+    }
+    function liveAnswer(a) {
+      var st = LV.st;
+      if (!st || !st.accepting || (st.mine && st.mine.answered)) return;
+      LV.picked[st.q] = String(a);
+      if (TASTE) return LV.sim.answer(String(a));
+      var fd = new FormData();
+      fd.append('t', tok); fd.append('room', LV.room); fd.append('q', st.q); fd.append('a', String(a));
+      fetch(D.worker + '/live/answer', { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(liveRender).catch(function () {});
+    }
+    function liveRender(st) {
+      if (!st) return;
+      if (!st.open) {
+        $('lv-status').textContent = S.live_closed;
+        LV.stop = true; clearInterval(LV.timer); clearTimeout(LV.timer);
+        setTimeout(function () { liveShow(false); }, 2500);
+        return;
+      }
+      LV.st = st;
+      var mine = st.mine || {}, size = Math.max(1, st.size || 1);
+      $('lv-qn').textContent = st.q ? st.q + ' / ' + st.n : '';
+      $('lv-status').textContent = !st.q ? S.live_wait
+        : st.revealed ? (mine.correct ? S.live_right : (mine.answered ? S.live_wrong : ''))
+        : (mine.answered ? S.live_sent : '');
+      $('lv-mine').textContent = st.revealed && mine.correct ? '✓' : '';
+      var isNum = st.kind === 'num';
+      $('lv-choices').hidden = !st.q || isNum;
+      $('lv-numbox').hidden = !st.q || !isNum;
+      var lock = !st.accepting || mine.answered;
+      var bs = $('lv-choices').children;
+      for (var i = 0; i < bs.length; i++) {
+        bs[i].disabled = lock;
+        bs[i].classList.toggle('mine', LV.picked[st.q] === bs[i].getAttribute('data-a'));
+      }
+      var ks = $('lv-keys').children;
+      for (var k = 0; k < ks.length; k++) ks[k].disabled = lock;
+      $('lv-send').disabled = lock;
+      if (lock && isNum && LV.picked[st.q]) $('lv-num').textContent = LV.picked[st.q];
+      if (!lock && LV.lastQ !== st.q) { LV.buf = ''; $('lv-num').textContent = ''; }
+      LV.lastQ = st.q;
+      var val = st.revealed && st.correct != null ? st.correct : st.answered;
+      $('lv-fill').style.width = Math.min(100, 100 * (val || 0) / size).toFixed(1) + '%';
+      $('lv-class').textContent = st.revealed && st.correct != null ? fmt(S.live_class_c, { c: st.correct, s: st.size })
+        : fmt(S.live_class, { a: st.answered || 0, s: st.size });
+    }
+    $('lv-x').addEventListener('click', function () { liveShow(false); });
+    $('lv-choices').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) liveAnswer(b.getAttribute('data-a')); });
+    $('lv-keys').addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (!b) return;
+      var k = b.getAttribute('data-k');
+      if (k === 'b') LV.buf = LV.buf.slice(0, -1);
+      else if (k === '-') LV.buf = LV.buf ? LV.buf : '-';
+      else if (LV.buf.replace('-', '').length < 6) LV.buf += k;
+      $('lv-num').textContent = LV.buf;
+    });
+    $('lv-send').addEventListener('click', function () { if (/^-?\d+$/.test(LV.buf)) liveAnswer(LV.buf); });
+
+    /* the taste build: an 8-student practice room that plays itself; nothing is sent */
+    function tasteLive() {
+      var KINDS = ['choice', 'num', 'choice', 'num', 'choice'], KEYS = ['3', '6', '3', '7', '4'], size = 8;
+      var sim = { q: 0, n: 5, answered: 0, correct: 0, accepting: false, revealed: false, mine: null };
+      function view() {
+        return { open: true, q: sim.q, n: sim.n, kind: KINDS[sim.q - 1], accepting: sim.accepting, revealed: sim.revealed, size: size,
+          joined: size, answered: sim.answered + (sim.mine ? 1 : 0), correct: sim.revealed ? sim.correct + (sim.mine && sim.mine.correct ? 1 : 0) : null,
+          mine: { joined: true, answered: !!sim.mine, correct: sim.revealed && sim.mine ? sim.mine.correct : null } };
+      }
+      function reveal() { if (LV.stop || sim.revealed) return; sim.accepting = false; sim.revealed = true; liveRender(view()); LV.timer = setTimeout(next, 3000); }
+      function bot() {
+        if (LV.stop || !sim.accepting) return;
+        if (sim.answered < size - 1) { sim.answered++; if (Math.random() < 0.75) sim.correct++; liveRender(view()); }
+        if (sim.answered >= size - 1 && sim.mine) { LV.timer = setTimeout(reveal, 600); return; }
+        LV.timer = setTimeout(bot, 400 + Math.random() * 600);
+      }
+      function next() {
+        if (LV.stop) return;
+        if (sim.q >= sim.n) return liveRender({ open: false });
+        sim.q++; sim.accepting = true; sim.revealed = false; sim.answered = 0; sim.correct = 0; sim.mine = null;
+        liveRender(view());
+        LV.timer = setTimeout(bot, 500);
+      }
+      LV.sim = { answer: function (a) {
+        if (!sim.accepting || sim.mine) return;
+        sim.mine = { a: a, correct: a === KEYS[sim.q - 1] };
+        liveRender(view());
+        if (sim.answered >= size - 1) { clearTimeout(LV.timer); LV.timer = setTimeout(reveal, 600); }
+      } };
+      LV.stop = false; LV.picked = {};
+      liveShow(true);
+      liveRender({ open: true, q: 0, n: 5, size: size, joined: size, answered: 0, mine: { joined: true } });
+      LV.timer = setTimeout(next, 1200);
+    }
     $('sp-m').addEventListener('click', function () {
       var b = document.querySelector('.story[data-story="moments"]');
       if (b && !b.hidden && momentSlides().length) b.click();

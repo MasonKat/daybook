@@ -94,7 +94,7 @@
 </section>
 
 <section id="tab-today" class="panel" role="tabpanel">
-  <div class="rhead"><h1 class="rtitle" id="r-title">{{ S.ritual_study }}</h1><p class="chip set-chip" id="today-set" hidden></p></div>
+  <div class="rhead"><h1 class="rtitle" id="r-title">{{ S.ritual_study }}</h1><p class="chip set-chip" id="today-set" hidden></p><button type="button" class="chip livebtn" id="live-open">{{ S.live_btn }}</button></div>
   <ol class="steps" id="steps" hidden>
     <li id="sp-ck"><span class="sn">1</span><span class="sl">{{ S.step_checkin }}</span><span class="sv2" id="sp-ck-v"></span></li>
     <li id="sp-m" role="button" tabindex="0"><span class="sn">2</span><span class="sl">{{ S.step_moment }}</span><span class="sv2" id="sp-m-v"></span></li>
@@ -200,6 +200,20 @@
       <button type="button" data-k="x" aria-label="{{ S.close }}">×</button><button type="button" data-k="0">0</button><button type="button" data-k="b" aria-label="{{ S.pad_back }}">⌫</button>
     </div>
   </div>
+</div>
+
+<div class="live" id="live" role="dialog" aria-modal="true" aria-label="{{ S.live_btn }}" hidden>
+  <div class="live-top"><b>{{ S.live_btn }} <span class="tnum" id="lv-qn"></span></b><button type="button" class="live-x" id="lv-x" aria-label="{{ S.close }}">×</button></div>
+  <p class="live-status" id="lv-status" aria-live="polite"></p>
+  <div class="live-choices" id="lv-choices">{% for m in ["①", "②", "③", "④", "⑤"] %}<button type="button" data-a="{{ loop.index }}">{{ m }}</button>{% endfor %}</div>
+  <div id="lv-numbox" hidden>
+    <div class="live-num tnum" id="lv-num"></div>
+    <div class="live-keys" id="lv-keys">{% for k in ("1","2","3","4","5","6","7","8","9","-","0","b") %}<button type="button" data-k="{{ k }}">{{ "⌫" if k == "b" else ("−" if k == "-" else k) }}</button>{% endfor %}</div>
+    <button type="button" class="btn primary wide" id="lv-send">{{ S.live_send }}</button>
+  </div>
+  <div class="live-mine" id="lv-mine"></div>
+  <div class="live-bar"><div class="fill" id="lv-fill"></div></div>
+  <p class="live-class tnum" id="lv-class"></p>
 </div>
 
 <div class="sv" id="sv" role="dialog" aria-modal="true" hidden>

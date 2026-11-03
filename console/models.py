@@ -146,13 +146,15 @@ def streak(sub_days: set[date], cls_days: set[date], today: date, floor: date | 
 # ---------------------------------------------------------------- attitude / reward
 
 def class_total(conn: sqlite3.Connection, class_id: int) -> int:
+    """Attitude points of the active students + class-wide bonuses (F7 AMP Live). Never decreases."""
     row = conn.execute(
         """SELECT COALESCE(SUM(a.points), 0) FROM attitude a
            JOIN students_public s ON s.id = a.student_id
            WHERE s.class_id = ? AND s.active = 1""",
         (class_id,),
     ).fetchone()
-    return int(row[0])
+    bonus = conn.execute("SELECT COALESCE(SUM(points), 0) FROM class_bonus WHERE class_id = ?", (class_id,)).fetchone()
+    return int(row[0]) + int(bonus[0])
 
 
 def active_count(conn: sqlite3.Connection, class_id: int) -> int:

@@ -488,6 +488,59 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     check(await bp.evaluate(() => document.documentElement.scrollWidth) <= 390 && berrs.length === 0, 'board fits 390 px with 0 console errors');
     await shot(bp, 'board.png', { fullPage: true });
 
+    console.log('\n[6a] AMP Live (F7): projector + 2 phones, counts only, no question text on phones');
+    const twoToks = JSON.parse(execFileSync(PYTHON, ['-c', `
+import json, sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+print(json.dumps([r[0] for r in c.execute("SELECT s.student_token FROM students_public s JOIN classes k ON k.id = s.class_id WHERE k.name = ? AND s.active = 1 ORDER BY s.id LIMIT 2", (sys.argv[2],))]))`, env.DAYBOOK_DB, CLASS_ON], { encoding: 'utf-8' }));
+    const proj = await bctx.newPage();
+    await proj.setViewportSize({ width: 1100, height: 800 });
+    const perr = [];
+    proj.on('console', (m) => { if (m.type() === 'error') perr.push(m.text()); });
+    await proj.goto(BOARD + '/live', { waitUntil: 'networkidle' });
+    await proj.click('#lv-open');
+    await proj.waitForSelector('#lv-room:not([hidden])', { timeout: 5000 });
+    const ROOM = (await proj.textContent('#lv-code')).trim();
+    check(/^\d{4}$/.test(ROOM), `projector shows the room code ${ROOM}`);
+    const phones = [];
+    for (const t of twoToks) {
+      const c = await browser.newContext({ viewport: PHONE });
+      const p = await c.newPage();
+      const errs2 = [];
+      p.on('console', (m) => { if (m.type() === 'error') errs2.push(m.text()); });
+      await p.goto(`${PAGES}/s/${t}/#today`, { waitUntil: 'networkidle' });
+      await p.click('#live-open');
+      for (const k of ROOM) await p.click(`#keys button[data-k="${k}"]`);
+      await p.waitForSelector('#live:not([hidden])', { timeout: 5000 });
+      phones.push({ c, p, errs2 });
+    }
+    check(phones.length === 2 && await phones[1].p.isVisible('#live'), 'two phones joined with their own links + the room code (no nickname)');
+    await proj.click('#lv-next');
+    for (const ph of phones) await ph.p.waitForSelector('#lv-choices:not([hidden]) button:not([disabled])', { timeout: 6000 });
+    check(!(await phones[0].p.content()).includes('x + 5'), 'the phone shows answer buttons only, never the question text');
+    await phones[0].p.click('#lv-choices button[data-a="3"]');
+    await phones[1].p.click('#lv-choices button[data-a="1"]');
+    await proj.waitForFunction(() => /답한 사람 2\//.test(document.getElementById('lv-count').textContent), null, { timeout: 6000 }).catch(() => {});
+    check(/답한 사람 2\//.test(await proj.textContent('#lv-count')) && (await proj.textContent('#lv-q')).includes('x + 5'), `projector: question text + live bar (${await proj.textContent('#lv-count')})`);
+    await shot(phones[0].p, 'live-phone.png');
+    await proj.click('#lv-reveal');
+    await phones[0].p.waitForFunction(() => document.getElementById('lv-status').textContent.includes('정답'), null, { timeout: 6000 }).catch(() => {});
+    await phones[1].p.waitForFunction(() => document.getElementById('lv-status').textContent.includes('아쉬워요'), null, { timeout: 6000 }).catch(() => {});
+    check((await phones[0].p.textContent('#lv-mine')) === '✓' && (await phones[1].p.textContent('#lv-mine')) === '', 'after reveal each phone sees only its own ✓');
+    check(/반 정답 1\//.test(await proj.textContent('#lv-count')) && !/[가-힣]{2}\s*✓/.test(await proj.textContent('#lv-room')), 'projector: class count only, no names, no ranking');
+    await shot(proj, 'live-projector.png');
+    await proj.click('#lv-close');
+    await phones[0].p.waitForFunction(() => document.getElementById('lv-status').textContent.includes('끝'), null, { timeout: 6000 }).catch(() => {});
+    check((await phones[0].p.textContent('#lv-status')).includes('끝났어요'), 'closing the room ends Live on the phones');
+    check(phones.every((ph) => ph.errs2.length === 0) && perr.length === 0, `0 console errors on the projector and the phones`);
+    for (const ph of phones) await ph.c.close();
+    console.log('      ' + daybook('pull').trim());
+    const eff = execFileSync(PYTHON, ['-c', `
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+print(c.execute("SELECT COUNT(*), SUM(correct) FROM effort WHERE source = 'live'").fetchone())`, env.DAYBOOK_DB], { encoding: 'utf-8' }).trim();
+    check(eff === '(2, 1)', `daybook pull imported the per-student counts into effort, source 'live' ${eff}`);
+
     console.log('\n[6b] Teacher tab (F6): roster, notes, publish from the browser');
     const tpage = await bctx.newPage();
     const terr = [];
@@ -539,6 +592,13 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
       await tp.click('#post');
       await tp.waitForSelector('#st-done:not([hidden])', { timeout: 5000 });
       check(/연속 2[12]일/.test(await tp.textContent('#d-streak')), `upload simulated locally: 오늘 완료, ${await tp.textContent('#d-streak')}`);
+      await tp.click('#live-open');
+      for (const k of '0000') await tp.click(`#keys button[data-k="${k}"]`);
+      await tp.waitForSelector('#lv-choices:not([hidden]) button:not([disabled])', { timeout: 6000 });
+      await tp.click('#lv-choices button[data-a="3"]');
+      await tp.waitForFunction(() => /정답|아쉬워요/.test(document.getElementById('lv-status').textContent), null, { timeout: 12000 }).catch(() => {});
+      check(/정답|아쉬워요/.test(await tp.textContent('#lv-status')) && /반 정답 \d\/8/.test(await tp.textContent('#lv-class')), `taste: the 8-student practice room plays itself (${await tp.textContent('#lv-class')})`);
+      await tp.click('#lv-x');
       await tp.goto(TASTE + '/p/kong/', { waitUntil: 'networkidle' });
       check(await tp.isVisible('.taste-bar') && /AMP 수학 · 콩/.test(await tp.textContent('.room-title')), 'parent page /p/kong/ with the banner');
       check(treqs.length === 0, `0 requests outside the taste site during the whole visit (${treqs.slice(0, 2).join(', ')})`);

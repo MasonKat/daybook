@@ -12,7 +12,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 KST = timezone(timedelta(hours=9))  # Asia/Seoul has no DST
 
 SCHEMA = """
@@ -62,6 +62,17 @@ CREATE TABLE IF NOT EXISTS moments (      -- 오늘의 장면 (F4): class-wide, 
     ts         TEXT NOT NULL,
     text       TEXT,
     image_key  TEXT NOT NULL                -- file name inside moments_dir (EXIF-free JPEG, <= 1080 px, <= 200 KB)
+);
+
+CREATE TABLE IF NOT EXISTS class_bonus (  -- F7: class-wide points (AMP Live: >= 80 % of the class correct)
+    id         INTEGER PRIMARY KEY,
+    class_id   INTEGER NOT NULL REFERENCES classes(id),
+    session_id INTEGER REFERENCES sessions(id),
+    points     INTEGER NOT NULL CHECK (points > 0),
+    source     TEXT NOT NULL,
+    ref        TEXT NOT NULL,              -- e.g. live:<date>:<room>:<q>; one bonus per ref
+    ts         TEXT NOT NULL,
+    UNIQUE (source, ref)
 );
 
 CREATE TABLE IF NOT EXISTS checkins (     -- 출석 (F2)

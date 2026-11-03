@@ -1,12 +1,14 @@
 // H1: one full class day on the free plan must stay under 30 % of every daily limit.
-// 20 students, a 3-hour board polling every 60 s, 3 moments with 20 reactions each, every student opening the page 5x.
+// 20 students, a 3-hour board polling every 60 s, 3 moments with 20 reactions each, every student opening the page 5x,
+// and one AMP Live round (20 students x 10 questions, everyone polling every 2 s for ~20 minutes).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { seoulDay } from '../src/index.js';
 import { ORIGIN, TEACHER, mkEnv } from './helpers.mjs';
 
 // Cloudflare free plan, per day (Workers / KV / D1 pricing pages; re-check them if the plan changes)
-export const FREE = { requests: 100000, kvRead: 100000, kvWrite: 1000, kvList: 1000, kvDelete: 1000, d1RowsRead: 5000000, d1RowsWritten: 100000 };
+export const FREE = { requests: 100000, kvRead: 100000, kvWrite: 1000, kvList: 1000, kvDelete: 1000, d1RowsRead: 5000000, d1RowsWritten: 100000,
+  doRequests: 100000, doRowsRead: 5000000, doRowsWritten: 100000 };
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(30000, 3)]).toString('base64');
 
 test('a full class day stays under 30 % of every free daily limit', async () => {
@@ -46,10 +48,28 @@ test('a full class day stays under 30 % of every free daily limit', async () => 
     await teacher('/checkins?since=2026-01-01T00:00:00.000Z');
     await teacher('/moments?class=c1');
   }
-  await teacher('/submissions'); await teacher('/checkins');                    // Saturday-style pull
+  // F7: one AMP Live round, 20 students x 10 questions, ~2 min per question, everyone polling every 2 s
+  const open = await go('/live/open', { method: 'POST', headers: { 'X-Teacher-Token': TEACHER, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ class: 'c1', questions: Array.from({ length: 10 }, (_, i) => ({ kind: 'choice', answer: String(1 + (i % 5)) })) }) });
+  const room = open.room;
+  const tpost = (path, body) => go(path, { method: 'POST', headers: { 'X-Teacher-Token': TEACHER, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  for (const t of toks) { const f = new FormData(); f.append('t', t); f.append('room', room); await student('/live/join', f); }
+  for (let q = 1; q <= 10; q++) {
+    await tpost('/live/next', { room, q });
+    for (let tick = 0; tick < 60; tick++) {                                      // 120 s at 2 s
+      await teacher(`/live/state?room=${room}`);                                 // the projector
+      for (const t of toks) await student(`/live/state?t=${t}&room=${room}`);
+    }
+    for (const t of toks) { const f = new FormData(); f.append('t', t); f.append('room', room); f.append('q', q); f.append('a', '1'); await student('/live/answer', f); }
+    await tpost('/live/reveal', { room });
+  }
+  await tpost('/live/close', { room });
+  await teacher('/submissions'); await teacher('/checkins'); await teacher('/live/results');   // Saturday-style pull
 
   const kv = env.SUBMISSIONS.ops, d1 = env.DB.usage;
-  const used = { requests, kvRead: kv.get, kvWrite: kv.put, kvList: kv.list, kvDelete: 0, d1RowsRead: d1.rowsRead, d1RowsWritten: d1.rowsWritten };
+  const dO = env.LIVE.usage;
+  const used = { requests, kvRead: kv.get, kvWrite: kv.put, kvList: kv.list, kvDelete: 0, d1RowsRead: d1.rowsRead, d1RowsWritten: d1.rowsWritten,
+    doRequests: dO.requests, doRowsRead: dO.rowsRead, doRowsWritten: dO.rowsWritten };
   const table = Object.keys(FREE).map((k) => `${k.padEnd(14)} ${String(used[k]).padStart(7)} / ${String(FREE[k]).padStart(9)}  ${(100 * used[k] / FREE[k]).toFixed(2)} %`);
   console.log('\n# class-day budget (free plan)\n# ' + table.join('\n# '));
   for (const k of Object.keys(FREE)) assert.ok(used[k] < 0.3 * FREE[k], `${k}: ${used[k]} is not < 30 % of ${FREE[k]}`);

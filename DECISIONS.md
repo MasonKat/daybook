@@ -176,6 +176,18 @@ One line each. "deferred" = not built in P0, on purpose.
 - The board server now answers only when the Host header is 127.0.0.1/localhost on its port (blocks DNS-rebinding reads of the console) and still refuses cross-origin writes. `teacher.js` is never copied into `dist/`.
 - The board is per class (`daybook board 고1A`); the Teacher tab works on that class, and 발행 publishes everything.
 
+## F7: AMP Live prototype (2026-11-03)
+- Free-plan finding: SQLite-backed Durable Objects are on the Workers Free plan (the key-value backend is Paid only): 100,000 requests/day, 5 M rows read, 100 k rows written, 13,000 GB-s/day, 5 GB. Source: Cloudflare's DO pricing/limits pages as quoted by a web search (developers.cloudflare.com itself is not reachable from the build's network): **re-check the official page before the first Live class.**
+- So: one Durable Object `LiveRoom` per room (SQLite storage), behind the existing Worker. Transport: **HTTP polling every 2 s, only while a room is open** (phones while the Live screen is open, the projector while its room is open). WebSockets are deferred: the polling path runs in the Node tests and the local dev server without workerd, and the class-day budget stays far below 30 %.
+- What leaves the laptop: per question only `kind` (choice ①–⑤ / num) and the answer key; the question text and the choices stay in the local JSON file (`live/*.json`, gitignored; `demo/live/demo-round.json` is the synthetic example) and appear only on the projector. Phones show only answer buttons or a number pad.
+- Room code: 4 random digits, unique among open rooms (D1 `live_rooms`). A phone joins with its own token + the code (no nickname); only students of the room's class can join. One answer per question (the first one stays); answers close at the reveal.
+- Cooperative, not a race: the projector shows "답한 사람 a/s", after the reveal "반 정답 c/s"; each phone sees only its own ✓. No names, no speed, no ranking anywhere.
+- Class bonus: when ≥ 80 % of the class (all active students of the class, not only those who joined) is correct on a question, the board adds `live_bonus` points (default 5, daybook.json) once per question to the new `class_bonus` table (schema v6), which counts in the class total and the reward bar. "장면으로" turns the revealed question into a 오늘의 장면 from a generated card (numbers only: no face, name or book text, so the faces/names gate is answered by construction).
+- Retention: the room closes on "방 닫기" or 90 minutes after opening (DO alarm); it then writes only per-student answered/correct counts to D1 `live_results` and wipes its storage. `daybook pull` imports them into `effort` (`source = 'live'`, `set_id = live:<date>:<room>`).
+- Budget (`budget.test.mjs`, class day + one Live round of 20 students × 10 questions, everyone polling every 2 s for ~20 min): Worker requests 13.8 %, DO requests 12.8 %, DO rows read 1.8 %, every other limit below 3 %.
+- The taste build has a self-playing 8-student practice room (5 questions, nothing sent).
+- deferred: a WebSocket transport (hibernation API) for Live; polling is enough for one class.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

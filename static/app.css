@@ -403,3 +403,39 @@ body[data-page="student"][data-taste] .app { height: calc(100dvh - 24px); }
 .tlist { margin: 4px 0; padding-left: 18px; font-size: 13px; }
 .wrow { display: flex; gap: 6px; align-items: flex-start; } .wrow .tout { flex: 1; }
 .tmsg { font-size: 13px; color: var(--muted); }
+
+/* ---------- AMP Live projector (F7, local only) */
+.proj { max-width: 1100px; }
+.proj-top { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 8px 0; }
+.proj-code { display: flex; flex-direction: column; } .proj-code b { font-size: 64px; font-weight: 900; letter-spacing: .1em; line-height: 1; }
+.proj-meta { display: flex; flex-direction: column; text-align: right; font-size: 18px; }
+.proj-q { font-size: 34px; font-weight: 800; line-height: 1.35; margin: 16px 0; min-height: 1.4em; }
+.proj-choices { list-style: none; padding: 0; margin: 0 0 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 26px; }
+.proj-choices li { background: var(--card); border-radius: 12px; padding: 10px 16px; }
+.proj-choices li.right { background: var(--ok); color: #fff; font-weight: 800; }
+.proj-bar { position: relative; height: 34px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.proj-bar .fill { height: 100%; width: 0; background: var(--accent); transition: width .4s; }
+.proj-bar .fill.rev { background: var(--grad); }
+.proj-bar .mark { position: absolute; top: 0; bottom: 0; width: 4px; background: var(--fg); opacity: .6; }
+.proj-count { font-size: 24px; font-weight: 700; margin: 8px 0; }
+.proj-bonus { font-size: 28px; font-weight: 900; color: var(--ok); }
+@media (prefers-reduced-motion: reduce) { .proj-bar .fill { transition: none; } }
+
+/* ---------- AMP Live on the phone (F7) */
+.livebtn { border: 0; background: var(--grad); color: #fff; font-weight: 800; cursor: pointer; min-height: 32px; padding: 0 12px; }
+.live { position: fixed; inset: 0; z-index: 12; background: #05070c; color: #f2f4f8; display: flex; flex-direction: column; padding: calc(12px + env(safe-area-inset-top)) 16px 16px; }
+.live-top { display: flex; justify-content: space-between; align-items: center; }
+.live-top b { font-size: 18px; }
+.live-x { width: 44px; height: 44px; border: 0; background: none; color: #fff; font-size: 30px; cursor: pointer; }
+.live-status { text-align: center; font-size: 17px; font-weight: 700; min-height: 26px; margin: 12px 0; }
+.live-choices { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.live-choices button, .live-keys button { min-height: 64px; border-radius: 16px; border: 0; background: #1b2230; color: #f2f4f8; font: 800 26px var(--font); cursor: pointer; }
+.live-choices button.mine { background: #f2f4f8; color: #0b0f17; }
+.live-choices button:disabled, .live-keys button:disabled { opacity: .5; }
+.live-num { text-align: center; font-size: 40px; font-weight: 900; min-height: 56px; letter-spacing: .06em; }
+.live-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.live-keys button { min-height: 52px; font-size: 22px; }
+.live-bar { position: relative; height: 16px; border-radius: 999px; background: #263041; overflow: hidden; margin-top: auto; }
+.live-bar .fill { height: 100%; width: 0; background: var(--grad); transition: width .4s; }
+.live-class { text-align: center; font-size: 14px; color: #9aa3b2; margin: 6px 0 0; }
+.live-mine { text-align: center; font-size: 40px; font-weight: 900; min-height: 56px; }

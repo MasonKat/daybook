@@ -2,7 +2,8 @@
 // Needs Node >= 22 (node:sqlite); run with --experimental-sqlite on Node 22.5-22.12.
 // Usage: node test/dev_server.mjs [--port 8788] [--origin http://127.0.0.1:8790] [--teacher dev-teacher-token]
 import http from 'node:http';
-import worker from '../src/index.js';
+import worker, { LiveRoom } from '../src/index.js';
+import { FakeDONamespace } from './fake_do.mjs';
 import { FakeKV } from './fake_kv.mjs';
 import { FakeD1 } from './fake_d1.mjs';
 
@@ -12,6 +13,7 @@ const env = {
   SUBMISSIONS: new FakeKV(), DB: new FakeD1(), PHOTO_STORE: 'kv', PHOTO_TTL_DAYS: '7', RECORD_TTL_DAYS: '14', RATE_PER_HOUR: arg('rate', '10'),
   ALLOWED_ORIGIN: arg('origin', 'http://127.0.0.1:8790'), TEACHER_TOKEN: arg('teacher', 'dev-teacher-token'),
 };
+env.LIVE = new FakeDONamespace(LiveRoom, env);
 
 http.createServer(async (req, res) => {
   const chunks = [];

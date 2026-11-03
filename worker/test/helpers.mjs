@@ -1,4 +1,5 @@
-import worker from '../src/index.js';
+import worker, { LiveRoom } from '../src/index.js';
+import { FakeDONamespace } from './fake_do.mjs';
 import { FakeKV, FakeR2 } from './fake_kv.mjs';
 import { FakeD1 } from './fake_d1.mjs';
 
@@ -9,8 +10,10 @@ export const A = 'aaaaaaaaaaaaaaaaaaaaaaaaaa', A2 = 'dddddddddddddddddddddddddd'
 export const OTHER = 'zyxwvutsrqponmlkjihgfedcba';
 
 export function mkEnv(extra = {}) {
-  return { SUBMISSIONS: new FakeKV(), DB: new FakeD1(), ALLOWED_ORIGIN: ORIGIN, TEACHER_TOKEN: TEACHER, PHOTO_STORE: 'kv',
+  const env = { SUBMISSIONS: new FakeKV(), DB: new FakeD1(), ALLOWED_ORIGIN: ORIGIN, TEACHER_TOKEN: TEACHER, PHOTO_STORE: 'kv',
     PHOTO_TTL_DAYS: '7', RECORD_TTL_DAYS: '14', RATE_PER_HOUR: '10', ...extra };
+  env.LIVE = new FakeDONamespace(LiveRoom, env);
+  return env;
 }
 export const call = async (env, req) => {
   const r = await worker.fetch(req, env);

@@ -29,7 +29,8 @@ JS_STRINGS = ("done_title", "streak_label", "class_plus", "reward_to_go", "uploa
               "upload_rate", "upload_offline", "replaced", "no_worker", "today_set", "set_default", "weekdays", "story_streak",
               "recorded_at", "recorded", "ritual_class", "ritual_study", "study_cta", "end_cta", "ck_done", "ck_bad",
               "ck_closed", "ck_none", "ck_rate", "ck_error", "chip_ok", "chip_confused", "chip_rewatch", "day_class",
-              "day_study", "day_class_m", "bio", "story_moments", "react_fire", "react_clap", "react_mind")
+              "day_study", "day_class_m", "bio", "pad_title", "pad_taste", "live_pad", "live_noroom", "live_wait",
+              "live_sent", "live_right", "live_wrong", "live_closed", "live_class", "live_class_c", "live_taste", "story_moments", "react_fire", "react_clap", "react_mind")
 YT_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 WEEKDAYS_FULL = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
 PARENT_WEEKS = 8      # weeks kept in the parent room
@@ -253,7 +254,7 @@ def _week_days(mon: date, subs: dict, cd: set, today: date, wk: list[str]) -> li
     return out
 
 
-LOCAL_ONLY_STATIC = {"teacher.js"}
+LOCAL_ONLY_STATIC = {"teacher.js", "live.js"}
 TASTE_SLUG = "콩"      # the demo student shown in the taste build (F1)
 TASTE_PATH = "kong"   # fixed paths /s/kong/ and /p/kong/
 

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block body %}
+<header class="top">
+  <span class="brand">AMP Live · {{ cls.name }}</span>
+  <span class="who"><a class="tlink" href="/">{{ S.t_back }}</a></span>
+</header>
+<main class="proj">
+  {% if not worker %}<p class="err">{{ S.lv_need_worker }}</p>{% endif %}
+  <section id="lv-setup" class="card">
+    <h2>{{ S.lv_open_title }}</h2>
+    <div class="trow"><select id="lv-set"></select><button type="button" class="btn primary" id="lv-open">{{ S.lv_open }}</button></div>
+    <p class="muted">{{ S.lv_privacy }}</p>
+  </section>
+  <section id="lv-room" hidden>
+    <div class="proj-top">
+      <div class="proj-code"><span class="muted">{{ S.lv_code }}</span><b class="tnum" id="lv-code"></b></div>
+      <div class="proj-meta"><b id="lv-title"></b><span class="tnum" id="lv-qn"></span></div>
+    </div>
+    <div class="proj-q" id="lv-q"></div>
+    <ol class="proj-choices" id="lv-choices"></ol>
+    <div class="proj-bar"><div class="fill" id="lv-fill"></div><span class="mark" id="lv-mark"></span></div>
+    <p class="proj-count tnum" id="lv-count"></p>
+    <p class="proj-bonus" id="lv-bonus" hidden></p>
+    <div class="trow proj-btns">
+      <button type="button" class="btn primary" id="lv-next">{{ S.lv_next }}</button>
+      <button type="button" class="btn ghost" id="lv-reveal">{{ S.lv_reveal }}</button>
+      <button type="button" class="btn ghost" id="lv-moment">{{ S.lv_moment }}</button>
+      <button type="button" class="btn ghost" id="lv-close">{{ S.lv_close }}</button>
+    </div>
+    <p class="muted" id="lv-msg" aria-live="polite"></p>
+  </section>
+</main>
+<script type="application/json" id="data">{{ {"S": {"answered": S.lv_answered, "correct": S.lv_correct, "bonus": S.lv_bonus, "qn": S.lv_qn, "wait": S.lv_wait, "closed": S.lv_closed}} | tojson }}</script>
+<script src="/static/live.js" defer></script>
+{% endblock %}

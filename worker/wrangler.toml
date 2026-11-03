@@ -27,6 +27,15 @@ database_id = "REPLACE_WITH_D1_DATABASE_ID"
 [triggers]
 crons = ["17 19 * * *"]
 
+# AMP Live (F7): one Durable Object per room, SQLite storage backend (the only kind on the free plan).
+[[durable_objects.bindings]]
+name = "LIVE"
+class_name = "LiveRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LiveRoom"]
+
 # Photos and moment images only (KV with TTLs); no KV list is ever used.
 [[kv_namespaces]]
 binding = "SUBMISSIONS"

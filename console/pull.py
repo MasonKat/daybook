@@ -23,10 +23,14 @@ class PullError(RuntimeError):
     pass
 
 
-def http_put_json(cfg: Config, path: str, payload: dict) -> dict:
+def http_post_json(cfg: Config, path: str, payload: dict) -> dict:
+    return http_put_json(cfg, path, payload, method="POST")
+
+
+def http_put_json(cfg: Config, path: str, payload: dict, method: str = "PUT") -> dict:
     if not cfg.worker or not cfg.teacher_token:
         raise PullError("worker_url and teacher_token must be set")
-    req = urllib.request.Request(cfg.worker + path, data=json.dumps(payload).encode("utf-8"), method="PUT",
+    req = urllib.request.Request(cfg.worker + path, data=json.dumps(payload).encode("utf-8"), method=method,
                                  headers={"X-Teacher-Token": cfg.teacher_token, "Content-Type": "application/json",
                                           "User-Agent": "daybook-console"})
     try:
@@ -78,6 +82,7 @@ class PullReport:
     unknown_tokens: int = 0
     photos: list[str] = field(default_factory=list)
     checkins: int = 0
+    live: int = 0
 
 
 def _token_map(conn: sqlite3.Connection) -> dict[str, int]:
@@ -145,6 +150,25 @@ def apply_checkins(conn: sqlite3.Connection, items: list[dict], rep: PullReport)
             rep.checkins += 1
 
 
+def apply_live(conn: sqlite3.Connection, items: list[dict], rep: PullReport) -> None:
+    """F7: AMP Live keeps only per-student counts; they become `effort` rows (source 'live')."""
+    tokens = _token_map(conn)
+    for it in items:
+        sid = tokens.get(it.get("token", ""))
+        if sid is None or not all(k in it for k in ("date", "room", "answered", "correct", "ts")):
+            continue
+        set_id = f"live:{it['date']}:{it['room']}"
+        cur = conn.execute("SELECT id FROM effort WHERE student_id = ? AND set_id = ? AND source = 'live'", (sid, set_id)).fetchone()
+        if cur:
+            conn.execute("UPDATE effort SET attempted = ?, correct = ?, ts = ? WHERE id = ?",
+                         (int(it["answered"]), int(it["correct"]), it["ts"], cur["id"]))
+        else:
+            conn.execute("INSERT INTO effort (student_id, set_id, item_id, attempted, correct, source, ts) VALUES (?, ?, NULL, ?, ?, 'live', ?)",
+                         (sid, set_id, int(it["answered"]), int(it["correct"]), it["ts"]))
+            log_event(conn, "live_result", {"student_id": sid, "set_id": set_id})
+            rep.live += 1
+
+
 def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None = None) -> PullReport:
     last = last_event(conn, "pull") or {}
     since = last.get("next_since", "")
@@ -155,6 +179,11 @@ def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None =
         apply_checkins(conn, ck.get("items", []), rep)
     except PullError:
         pass  # an older Worker without /checkins
+    try:
+        lv = json.loads(fetch("/live/results" + (f"?since={urllib.parse.quote(since)}" if since else "")))
+        apply_live(conn, lv.get("items", []), rep)
+    except PullError:
+        pass  # an older Worker without AMP Live
     now = datetime.fromisoformat(body.get("now", datetime.now(timezone.utc).isoformat()).replace("Z", "+00:00"))
     next_since = (now - MARGIN).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     if photos_dir:
@@ -172,6 +201,6 @@ def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None =
                 pass  # expired (7-day retention) or missing
     log_event(conn, "pull", {"since": since, "next_since": next_since, "fetched": rep.fetched, "new": rep.new,
                              "updated": rep.updated, "unknown_tokens": rep.unknown_tokens,
-                             "checkins": rep.checkins})
+                             "checkins": rep.checkins, "live": rep.live})
     conn.commit()
     return rep

@@ -2,6 +2,7 @@
 {% block body %}
 <header class="top">
   <span class="brand">{{ S.board_title }} · {{ cls.name }}</span>
+  <a class="who tlink" href="/live">AMP Live</a>
   <a class="who tlink" href="/teacher">{{ S.board_teacher }}</a>
   <span class="who" id="b-poll">{{ S.board_poll_on | fmt(n=poll_seconds) if poll else S.board_poll_off }}</span>
 </header>

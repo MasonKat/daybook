@@ -24,7 +24,7 @@ class FakeWorker:
 
     def __call__(self, path):
         self.calls.append(path)
-        items = self.checkins if path.startswith("/checkins") else self.items
+        items = self.checkins if path.startswith("/checkins") else [] if path.startswith("/live/") else self.items
         return json.dumps({"now": "2026-11-06T13:00:00.000Z", "items": items}).encode()
 
 
@@ -50,8 +50,8 @@ def test_second_pull_uses_since_and_is_idempotent(conn, klass):
     fw = FakeWorker([item(tok)])
     pull(conn, fw)
     pull(conn, fw)
-    assert fw.calls[:2] == ["/submissions", "/checkins"]
-    assert fw.calls[2].startswith("/submissions?since=2026-11-06T12%3A55")
+    assert fw.calls[:3] == ["/submissions", "/checkins", "/live/results"]
+    assert fw.calls[3].startswith("/submissions?since=2026-11-06T12%3A55")
     assert conn.execute("SELECT COUNT(*) FROM submissions").fetchone()[0] == 1
 
 

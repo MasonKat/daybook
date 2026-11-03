@@ -64,6 +64,7 @@ Then follow `HANDOFF.md` (classes, roster import, links).
 | once | `daybook roster import roster.csv --map mappings/roster.json --class 고1A` | students from the roster export |
 | once | `daybook roster list 고1A --links` | each student's and parent's link, to send privately |
 | in class (P2) | `daybook board 고1A` → open http://127.0.0.1:8787 | live ✓, attitude 1·2·3, class bar, "대신 제출" |
+| in class, optional | `daybook board 고1A` → "AMP Live" (http://127.0.0.1:8787/live) | open a room from a local question file, show the code; phones answer ①–⑤; ≥ 80 % correct → class +5 |
 | in class | `daybook moment add 고1A --photo board.jpg --text "…"` (or the board) | 오늘의 장면: EXIF stripped, ≤ 1080 px, ≤ 200 KB, asks the faces/names check |
 | in class | `daybook session start 고1A --at 18:00 [--set <set_id>]` | draws 오늘의 코드 for 출석 and sends it to the Worker; prints the handout QR URL `…/go/?set=<set_id>` (no token) |
 | Saturday, no terminal | `daybook board 고1A` → "선생님" (http://127.0.0.1:8787/teacher) | roster, notes (drafts prefilled), imports, 장면/휴강, 발행, 배포, weekly messages |
@@ -117,6 +118,8 @@ Run these on the laptop, in the repo. You need a Cloudflare account; no payment 
    ```bash
    npx wrangler d1 create daybook
    ```
+
+   The AMP Live Durable Object (`LiveRoom`, SQLite) needs no setup: `wrangler deploy` creates it from `wrangler.toml`.
 
 3. Create the Pages project once (it prints the URL, usually `https://<name>.pages.dev`; use the printed one):
 
@@ -177,6 +180,8 @@ history. `dist/` and `*.sqlite` are gitignored. Every page sends `noindex` and h
 | PUT | `/tokmap` | `X-Teacher-Token` | `{tokmap: {token: class key}}`: the only tokens `/submit` accepts (sent after every publish and roster change) |
 | PUT | `/moment-put` | `X-Teacher-Token` | `{class, date, n (1–3), text, image (base64 JPEG ≤ 200 KB)}`: 오늘의 장면 for the same-day view |
 | GET | `/moments?t=<token>` · `/moment?t=&k=` | Pages origin, own class only | moments (text, date, counts, own reaction) · the JPEG |
+| POST | `/live/open` · `/live/next` · `/live/reveal` · `/live/close`, GET `/live/state?room=` · `/live/results` | `X-Teacher-Token` | AMP Live room control (kind + answer key only) and per-student counts |
+| POST | `/live/join` · `/live/answer`, GET `/live/state?t=&room=` | Pages origin, own class only | AMP Live on the phone: counts and the student's own result |
 | POST | `/react` | Pages origin, own class only | form `t`, `k`, `r` (fire\|clap\|mind) → `{counts, mine, already}`; one per token per moment |
 | GET | `/photo?key=<key>` | `X-Teacher-Token` | the photo bytes |
 

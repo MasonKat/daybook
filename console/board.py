@@ -125,6 +125,70 @@ class Board:
         }
 
     deploy_runner = None   # tests replace the wrangler call
+    live: dict | None = None   # F7: the open AMP Live room (code, set, local question text)
+
+    def live_page(self) -> str:
+        with self.conn() as conn:
+            cls = conn.execute("SELECT * FROM classes WHERE id = ?", (self.class_id,)).fetchone()
+        return generate.env().get_template("live.html").render(S=self.S, page="live", cls=cls, worker=bool(self.cfg.worker))
+
+    def live_view(self, conn, st: dict, bonus: int = 0) -> dict:
+        """Worker counts + the local question (text and choices never leave the laptop)."""
+        from . import live as L
+        lv = self.live or {}
+        q = int(st.get("q") or 0)
+        qs = lv.get("questions") or []
+        size = int(st.get("size") or lv.get("size") or 0)
+        out = {"ok": st.get("ok", True), "open": bool(st.get("open", bool(lv))), "room": lv.get("room"), "title": lv.get("title"),
+               "q": q, "n": len(qs), "accepting": st.get("accepting"), "revealed": st.get("revealed"),
+               "joined": st.get("joined", 0), "size": size, "answered": st.get("answered", 0), "correct": st.get("correct"),
+               "needed": L.needed(size), "bonus": bonus, "class_total": M.class_total(conn, self.class_id)}
+        if q and q <= len(qs):
+            cur = qs[q - 1]
+            out["question"] = {"text": cur["q"], "kind": cur["kind"], "choices": cur["choices"],
+                               "answer": cur["answer"] if st.get("revealed") else None}
+        return out
+
+    def live_call(self, op: str, body: dict | None = None) -> dict:
+        from . import live as L
+        from .pull import http_post_json
+        if not (self.cfg.worker and self.cfg.teacher_token):
+            raise L.LiveError("AMP Live needs the Worker (worker_url and teacher_token in daybook.json)")
+        with self.conn() as conn:
+            if op == "open":
+                data = L.find_set(self.cfg, str((body or {}).get("set", "")))
+                r = http_post_json(self.cfg, "/live/open", L.worker_payload(self.class_id, data["questions"]))
+                if not r.get("ok"):
+                    raise L.LiveError(r.get("error") or "could not open a room")
+                self.live = {"room": r["room"], "title": data["title"], "questions": data["questions"], "size": r.get("size", 0)}
+                return self.live_view(conn, {"open": True, "q": 0, "size": r.get("size", 0)})
+            if not self.live:
+                raise L.LiveError("no open room")
+            room = self.live["room"]
+            if op == "state":
+                st = json.loads(http_fetch(self.cfg)(f"/live/state?room={room}"))
+            elif op in ("next", "reveal"):
+                st = http_post_json(self.cfg, f"/live/{op}", {"room": room, **({"q": body.get("q")} if body and body.get("q") else {})})
+            elif op == "close":
+                http_post_json(self.cfg, "/live/close", {"room": room})
+                self.live = None
+                return {"ok": True, "open": False, "class_total": M.class_total(conn, self.class_id)}
+            elif op == "moment":
+                st = json.loads(http_fetch(self.cfg)(f"/live/state?room={room}"))
+                if not st.get("revealed") or st.get("correct") is None:
+                    raise L.LiveError("reveal the answer first")
+                rate = round(100 * st["correct"] / max(1, int(st.get("size") or 1)))
+                from . import moments as mm
+                from .pull import http_put_json
+                cls = conn.execute("SELECT * FROM classes WHERE id = ?", (self.class_id,)).fetchone()
+                # a generated card (numbers only): no face, name or book text, so the gate is answered by construction
+                mm.add_moment(conn, self.cfg, cls, self.day, L.moment_card(self.live["title"], st["q"], rate),
+                              f"AMP Live · {st['q']}번 · 반 정답률 {rate}%", confirmed=True,
+                              push=lambda payload: http_put_json(self.cfg, "/moment-put", payload))
+            else:
+                raise L.LiveError("unknown action")
+            bonus = L.maybe_bonus(conn, self.cfg, self.class_id, self.session_id, self.day, room, st)
+            return self.live_view(conn, st, bonus)
 
     def teacher_page(self) -> str:
         with self.conn() as conn:
@@ -237,6 +301,17 @@ def make_handler(board: Board):
             path, _, query = self.path.partition("?")
             if path.startswith("/api/teacher/"):
                 return self._teacher_get(path, query)
+            if path == "/live":
+                return self._send(200, board.live_page().encode(), "text/html; charset=utf-8")
+            if path == "/api/live/sets":
+                from . import live as L
+                return self._json({"sets": L.list_sets(board.cfg), "open": board.live and {k: board.live[k] for k in ("room", "title")}})
+            if path == "/api/live/state":
+                from . import live as L
+                try:
+                    return self._json(board.live_call("state"))
+                except (L.LiveError, PullError) as e:
+                    return self._json({"ok": False, "error": str(e)}, 400)
             if path == "/teacher":
                 return self._send(200, board.teacher_page().encode(), "text/html; charset=utf-8")
             if path == "/":
@@ -268,6 +343,14 @@ def make_handler(board: Board):
                 body = json.loads(self.rfile.read(n) or b"{}")
                 if self.path.startswith("/api/teacher/"):
                     return self._teacher_post(body)
+                if self.path.startswith("/api/live/"):
+                    from . import live as L
+                    from .moments import MomentError
+                    try:
+                        with board.lock:
+                            return self._json(board.live_call(self.path[len("/api/live/"):], body))
+                    except (L.LiveError, PullError, MomentError) as e:
+                        return self._json({"ok": False, "error": str(e)}, 400)
                 if self.path == "/api/moment":
                     from .moments import MomentError
                     with board.lock, board.conn() as conn:

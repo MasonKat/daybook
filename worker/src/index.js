@@ -33,6 +33,12 @@ export const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS reactions (k TEXT NOT NULL, token TEXT NOT NULL, r TEXT NOT NULL, ts TEXT NOT NULL,
      PRIMARY KEY (k, token))`,
   'CREATE TABLE IF NOT EXISTS counters (key TEXT PRIMARY KEY, n INTEGER NOT NULL, day TEXT NOT NULL)',
+  // F7 AMP Live: open rooms (code -> class) and, after a room closes, only per-student counts
+  `CREATE TABLE IF NOT EXISTS live_rooms (code TEXT PRIMARY KEY, class TEXT NOT NULL, date TEXT NOT NULL,
+     status TEXT NOT NULL, closes_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS live_results (room TEXT NOT NULL, date TEXT NOT NULL, class TEXT NOT NULL, token TEXT NOT NULL,
+     answered INTEGER NOT NULL, correct INTEGER NOT NULL, ts TEXT NOT NULL, PRIMARY KEY (room, date, token))`,
+  'CREATE INDEX IF NOT EXISTS live_results_ts ON live_results (ts)',
 ];
 const ready = new WeakMap();   // per database binding: create the tables once (no-op afterwards)
 function init(env) {
@@ -230,6 +236,153 @@ async function react(req, env, h) {
   return json({ ok: true, mine, already: !(ins.meta && ins.meta.changes), counts: c }, 200, h);
 }
 
+
+// ---------------------------------------------------------------- AMP Live (F7)
+// One Durable Object per room (SQLite storage, free plan). Phones and the projector poll every 2 s, only while a room is
+// open. No question text ever reaches the Worker: the room knows only, per question, its kind and the answer key.
+const ROOM_RE = /^\d{4}$/;
+const LIVE_MINUTES = 90;
+
+function roomStub(env, code) { return env.LIVE.get(env.LIVE.idFromName(`room:${code}`)); }
+async function roomCall(env, code, op, body) {
+  const r = await roomStub(env, code).fetch(new Request(`https://room/${op}`, { method: 'POST', body: JSON.stringify(body || {}) }));
+  return r.json();
+}
+
+async function liveOpen(req, env) {
+  let b;
+  try { b = await req.json(); } catch { return json({ ok: false, error: 'bad_json' }, 400, {}); }
+  const qs = Array.isArray(b && b.questions) ? b.questions : [];
+  if (!CLASS_RE.test((b && b.class) || '') || !qs.length || qs.length > 30 ||
+      !qs.every((q) => (q.kind === 'choice' && /^[1-5]$/.test(String(q.answer))) || (q.kind === 'num' && /^-?\d{1,6}$/.test(String(q.answer))))) {
+    return json({ ok: false, error: 'bad_room' }, 400, {});
+  }
+  const size = (await one(env, 'SELECT COUNT(*) AS n FROM tokmap WHERE class = ?', b.class)).n;
+  const now = Date.now(), day = seoulDay(now), closes = new Date(now + LIVE_MINUTES * 60e3).toISOString();
+  let code = null;
+  for (let i = 0; i < 20 && !code; i++) {
+    const c = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+    const r = await run(env, `INSERT INTO live_rooms (code, class, date, status, closes_at) VALUES (?, ?, ?, 'open', ?)
+      ON CONFLICT (code) DO UPDATE SET class = excluded.class, date = excluded.date, status = 'open', closes_at = excluded.closes_at
+      WHERE live_rooms.status != 'open' OR live_rooms.closes_at < ?`, c, b.class, day, closes, new Date(now).toISOString());
+    if (r.meta && r.meta.changes) code = c;
+  }
+  if (!code) return json({ ok: false, error: 'busy' }, 503, {});
+  await roomCall(env, code, 'open', { code, class: b.class, date: day, size,
+    questions: qs.map((q) => ({ kind: q.kind, answer: String(q.answer) })), closes_at: closes });
+  return json({ ok: true, room: code, size, closes_at: closes }, 200, {});
+}
+
+async function liveStudent(req, env, url, h, op) {
+  const form = op === 'state' ? url.searchParams : await req.formData().catch(() => null);
+  if (!form) return json({ ok: false, error: 'bad_form' }, 400, h);
+  const token = String(form.get('t') || '').toLowerCase(), code = String(form.get('room') || '');
+  if (!TOKEN_RE.test(token) || !ROOM_RE.test(code)) return json({ ok: false, error: 'bad_request' }, 400, h);
+  const cls = await classOf(env, token);
+  const room = await one(env, "SELECT class, closes_at FROM live_rooms WHERE code = ? AND status = 'open'", code);
+  if (!cls || !room || room.class !== cls || Date.parse(room.closes_at) < Date.now()) return json({ ok: false, error: 'no_room', open: false }, 200, h);
+  const body = { token };
+  if (op === 'answer') { body.q = Number(form.get('q')); body.a = String(form.get('a') || ''); }
+  return json(await roomCall(env, code, op, body), 200, h);
+}
+
+async function liveTeacher(req, env, url, op) {
+  const code = op === 'state' ? url.searchParams.get('room') : (await req.clone().json().catch(() => ({}))).room;
+  if (!ROOM_RE.test(String(code || ''))) return json({ ok: false, error: 'bad_room' }, 400, {});
+  const body = op === 'state' ? {} : await req.json().catch(() => ({}));
+  const r = await roomCall(env, code, op === 'state' ? 'teacher' : op, body);
+  if (op === 'close') await run(env, "UPDATE live_rooms SET status = 'closed' WHERE code = ?", code);
+  return json(r, 200, {});
+}
+
+export class LiveRoom {
+  constructor(ctx, env) {
+    this.ctx = ctx; this.env = env; this.sql = ctx.storage.sql;
+    this.schema();
+  }
+  schema() {
+    this.sql.exec('CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)');
+    this.sql.exec('CREATE TABLE IF NOT EXISTS members (token TEXT PRIMARY KEY, ts TEXT NOT NULL)');
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS answers (token TEXT NOT NULL, q INTEGER NOT NULL, a TEXT NOT NULL,
+      correct INTEGER NOT NULL, ts TEXT NOT NULL, PRIMARY KEY (token, q))`);
+  }
+  get(k) { const r = this.sql.exec('SELECT v FROM meta WHERE k = ?', k).toArray()[0]; return r ? JSON.parse(r.v) : null; }
+  set(k, v) { this.sql.exec('INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v', k, JSON.stringify(v)); }
+  counts(q) {
+    const r = this.sql.exec('SELECT COUNT(*) AS answered, COALESCE(SUM(correct), 0) AS correct FROM answers WHERE q = ?', q).toArray()[0];
+    return { answered: r.answered, correct: r.correct };
+  }
+  view(token) {
+    const st = this.get('state');
+    if (!st || st.closed) return { ok: true, open: false };
+    const qs = this.get('questions'), q = st.q, joined = this.sql.exec('SELECT COUNT(*) AS n FROM members').toArray()[0].n;
+    const c = q ? this.counts(q) : { answered: 0, correct: 0 };
+    const out = { ok: true, open: true, q, n: qs.length, kind: q ? qs[q - 1].kind : null, accepting: st.accepting,
+      revealed: st.revealed, size: st.size, joined, answered: c.answered, correct: st.revealed ? c.correct : null };
+    if (token) {
+      const mine = q ? this.sql.exec('SELECT correct FROM answers WHERE token = ? AND q = ?', token, q).toArray()[0] : null;
+      out.mine = { joined: !!this.sql.exec('SELECT 1 AS x FROM members WHERE token = ?', token).toArray()[0], answered: !!mine,
+        correct: mine && st.revealed ? !!mine.correct : null };
+    }
+    return out;
+  }
+  async fetch(req) {
+    const op = new URL(req.url).pathname.slice(1), b = await req.json().catch(() => ({}));
+    const st = this.get('state');
+    if (op === 'open') {
+      this.sql.exec('DELETE FROM members'); this.sql.exec('DELETE FROM answers');
+      this.set('questions', b.questions);
+      this.set('state', { code: b.code, class: b.class, date: b.date, size: b.size, q: 0, accepting: false, revealed: false, closed: false });
+      await this.ctx.storage.setAlarm(Date.parse(b.closes_at));
+      return Response.json({ ok: true });
+    }
+    if (!st || st.closed) return Response.json({ ok: false, error: 'no_room', open: false });
+    if (op === 'join') {
+      this.sql.exec('INSERT OR IGNORE INTO members (token, ts) VALUES (?, ?)', b.token, new Date().toISOString());
+      return Response.json(this.view(b.token));
+    }
+    if (op === 'state') return Response.json(this.view(b.token));
+    if (op === 'teacher') return Response.json(this.view(null));
+    if (op === 'answer') {
+      const qs = this.get('questions');
+      if (!st.accepting || b.q !== st.q) return Response.json({ ...this.view(b.token), ok: false, error: 'closed' });
+      this.sql.exec('INSERT OR IGNORE INTO members (token, ts) VALUES (?, ?)', b.token, new Date().toISOString());
+      const right = String(b.a).trim().replace(/^\+/, '') === qs[st.q - 1].answer ? 1 : 0;
+      this.sql.exec('INSERT OR IGNORE INTO answers (token, q, a, correct, ts) VALUES (?, ?, ?, ?, ?)',
+        b.token, st.q, String(b.a).slice(0, 8), right, new Date().toISOString());   // once per question: the first answer stays
+      return Response.json(this.view(b.token));
+    }
+    if (op === 'next') {
+      const qs = this.get('questions'), q = Number(b.q) || st.q + 1;
+      if (q < 1 || q > qs.length) return Response.json({ ok: false, error: 'no_question' });
+      this.set('state', { ...st, q, accepting: true, revealed: false });
+      return Response.json(this.view(null));
+    }
+    if (op === 'reveal') { this.set('state', { ...st, accepting: false, revealed: true }); return Response.json(this.view(null)); }
+    if (op === 'close') return Response.json(await this.close());
+    return Response.json({ ok: false, error: 'op' });
+  }
+  async close() {
+    const st = this.get('state');
+    if (!st || st.closed) return { ok: true, closed: true, results: 0 };
+    // keep nothing but per-student counts (in D1, for `daybook pull` -> effort, source 'live')
+    const rows = this.sql.exec(`SELECT m.token, COUNT(a.q) AS answered, COALESCE(SUM(a.correct), 0) AS correct
+      FROM members m LEFT JOIN answers a ON a.token = m.token GROUP BY m.token`).toArray();
+    const ts = new Date().toISOString();
+    if (rows.length) {
+      await this.env.DB.batch(rows.map((r) => this.env.DB.prepare(`INSERT INTO live_results (room, date, class, token, answered, correct, ts)
+        VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (room, date, token) DO UPDATE SET answered = excluded.answered,
+        correct = excluded.correct, ts = excluded.ts`).bind(st.code, st.date, st.class, r.token, r.answered, r.correct, ts)));
+    }
+    await this.env.DB.prepare("UPDATE live_rooms SET status = 'closed' WHERE code = ?").bind(st.code).run();
+    await this.ctx.storage.deleteAll();     // the answers are gone; only the counts above remain (in D1)
+    this.schema();
+    this.set('state', { closed: true });
+    return { ok: true, closed: true, results: rows.length };
+  }
+  async alarm() { await this.close(); }   // 90 minutes after opening
+}
+
 // ---------------------------------------------------------------- teacher reads
 async function getPhoto(url, env) {
   const key = url.searchParams.get('key') || '';
@@ -251,6 +404,9 @@ async function route(req, env, url, h) {
   if (p === '/submit' && req.method === 'POST') return submit(req, env, h);
   if (p === '/checkin' && req.method === 'POST') return checkin(req, env, h);
   if (p === '/react' && req.method === 'POST') return react(req, env, h);
+  if (p === '/live/join' && req.method === 'POST') return liveStudent(req, env, url, h, 'join');
+  if (p === '/live/answer' && req.method === 'POST') return liveStudent(req, env, url, h, 'answer');
+  if (p === '/live/state' && req.method === 'GET' && url.searchParams.get('t')) return liveStudent(req, env, url, h, 'state');
   if (p === '/status' && req.method === 'GET') {
     const token = (url.searchParams.get('t') || '').toLowerCase();
     if (!TOKEN_RE.test(token)) return json({ ok: false, error: 'bad_token' }, 400, h);
@@ -278,7 +434,8 @@ async function route(req, env, url, h) {
     if (!img) return json({ ok: false, error: 'not_found' }, 404, h);
     return new Response(img, { headers: { ...h, 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=600' } });
   }
-  const teacherPaths = ['/submissions', '/photo', '/checkins', '/session', '/moment-put', '/tokmap'];
+  const teacherPaths = ['/submissions', '/photo', '/checkins', '/session', '/moment-put', '/tokmap',
+    '/live/open', '/live/next', '/live/reveal', '/live/close', '/live/state', '/live/results'];
   if (teacherPaths.includes(p)) {
     if (!teacherOk(req, env)) return json({ ok: false, error: 'unauthorized' }, 401, {});
     const since = url.searchParams.get('since') || '';
@@ -291,6 +448,13 @@ async function route(req, env, url, h) {
       return json({ now: new Date().toISOString(), items }, 200, {});
     }
     if (p === '/photo' && req.method === 'GET') return getPhoto(url, env);
+    if (p === '/live/open' && req.method === 'POST') return liveOpen(req, env);
+    if (p === '/live/state' && req.method === 'GET') return liveTeacher(req, env, url, 'state');
+    if (['/live/next', '/live/reveal', '/live/close'].includes(p) && req.method === 'POST') return liveTeacher(req, env, url, p.slice(6));
+    if (p === '/live/results' && req.method === 'GET') {
+      const items = await all(env, 'SELECT room, date, class, token, answered, correct, ts FROM live_results WHERE ts > ? ORDER BY ts', since);
+      return json({ now: new Date().toISOString(), items }, 200, {});
+    }
     if (p === '/session' && req.method === 'PUT') return putSession(req, env);
     if (p === '/moment-put' && req.method === 'PUT') return putMoment(req, env);
     if (p === '/tokmap' && req.method === 'PUT') {
@@ -310,7 +474,8 @@ export default {
     const url = new URL(req.url);
     const h = corsHeaders(req, env);
     const origin = req.headers.get('Origin');
-    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react'].includes(url.pathname);
+    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react', '/live/join', '/live/answer'].includes(url.pathname)
+      || (url.pathname === '/live/state' && url.searchParams.has('t'));
     // CORS: browsers may only call the student endpoints from the Pages origin.
     if (isStudent && origin && origin !== env.ALLOWED_ORIGIN) return json({ ok: false, error: 'origin' }, 403, h);
     if (req.method === 'OPTIONS') return new Response(null, { status: isStudent ? 204 : 404, headers: h });
@@ -334,6 +499,8 @@ export default {
       env.DB.prepare('DELETE FROM reactions WHERE k IN (SELECT k FROM moments WHERE date < ?)').bind(keep),
       env.DB.prepare('DELETE FROM moments WHERE date < ?').bind(keep),
       env.DB.prepare('DELETE FROM counters WHERE day < ?').bind(addDays(day, -2)),
+      env.DB.prepare('DELETE FROM live_rooms WHERE date < ?').bind(keep),
+      env.DB.prepare('DELETE FROM live_results WHERE date < ?').bind(keep),
     ]);
   },
 };
