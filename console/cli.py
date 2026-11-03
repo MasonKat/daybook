@@ -84,6 +84,7 @@ def demo(obj: Ctx, out, force):
         demomod.seed(conn, force=force)
     except demomod.DemoError as e:
         fail(str(e))
+    demomod.write_demo_videos()
     rep = importers.import_screeners(conn, configmod.ROOT / "demo" / "screeners")
     click.echo(f"screeners: {rep.imported} rows imported from {rep.files} rounds; unmatched: {len(rep.unmatched)}")
     for u in rep.unmatched:

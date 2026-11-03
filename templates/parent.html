@@ -1,70 +1,86 @@
 {% extends "base.html" %}
-{% block body %}
-<header class="top">
-  <span class="brand">{{ S.app_name }}</span>
-  <span class="who">{{ me.display_name }} · {{ me.class_name }}</span>
-</header>
-<main class="parent">
-<p class="muted wk">{{ S.parent_week }} · {{ week_label }}</p>
+{% macro week_group(w) %}
+<div class="sep"><span>{{ w.sep }}</span></div>
+<div class="msg">
+  <span class="av amp" aria-hidden="true">AMP</span>
+  <div class="mbody">
+    <span class="sender">{{ S.teacher_name }}</span>
 
-<section class="card">
-  <h2>{{ S.parent_week }}</h2>
-  <ol class="week">
-    {% for d in me.week %}
-    <li class="{{ 'on' if d.done }}{{ ' cls' if d.class_day }}{{ ' fut' if d.future }}">
-      <span class="wd">{{ d.wd }}</span>
-      <span class="dot">{{ '✓' if d.done else ('·' if not d.future else '') }}</span>
-      <span class="tm">{{ d.time }}</span>
-    </li>
-    {% endfor %}
-  </ol>
-  <p class="legend muted"><span class="cls-mark"></span>{{ S.class_day }}</p>
-</section>
+    <section class="card">
+      <h2>{{ S.card_sub_now if w.current else S.card_sub }}<span class="cmeta">{{ w.label }}</span></h2>
+      <ol class="week">
+        {% for d in w.days %}
+        <li class="{{ 'on' if d.done }}{{ ' cls' if d.class_day }}{{ ' fut' if d.future }}">
+          <span class="wd">{{ d.wd }}</span>
+          <span class="dot">{{ '✓' if d.done else ('·' if not d.future else '') }}</span>
+          <span class="tm">{{ d.time }}</span>
+        </li>
+        {% endfor %}
+      </ol>
+      <p class="crow"><span>{{ S.week_count | fmt(k=w.k, n=w.n) }}</span><span class="legend muted"><span class="cls-mark"></span>{{ S.class_day }}</span></p>
+    </section>
 
-<section class="card">
-  <h2>{{ S.parent_tests }}</h2>
-  {% if me.trend %}
-  {% set t = me.trend %}
-  <svg class="trend" viewBox="0 0 {{ t.w }} {{ t.h }}" role="img" aria-label="{{ S.parent_tests }}">
-    {% for gy, gl in t.grid %}
-    <line class="grid" x1="{{ t.x0 }}" x2="{{ t.x1 }}" y1="{{ gy }}" y2="{{ gy }}"/>
-    <text class="axis" x="{{ t.x0 - 6 }}" y="{{ gy + 4 }}" text-anchor="end">{{ gl }}</text>
-    {% endfor %}
-    {% for lx, ll in t.labels %}
-    <text class="axis" x="{{ lx }}" y="{{ t.ylab }}" text-anchor="middle">{{ ll }}</text>
-    {% endfor %}
-    {% for key in ("eff", "reach") %}
-    {% set ln = t.lines[key] %}
-    {% if ln.dots|length > 1 %}<polyline class="ln {{ key }}" points="{{ ln.points }}"/>{% endif %}
-    {% for cx, cy in ln.dots %}<circle class="pt {{ key }}" cx="{{ cx }}" cy="{{ cy }}" r="3.5"/>{% endfor %}
-    {% endfor %}
-  </svg>
-  <ul class="dirs">
-    <li><span class="sw eff"></span>{{ S.parent_eff }} <b class="dir {{ t.lines.eff.dir }}">{{ S['dir_' ~ t.lines.eff.dir] }}</b></li>
-    <li><span class="sw reach"></span>{{ S.parent_reach }} <b class="dir {{ t.lines.reach.dir }}">{{ S['dir_' ~ t.lines.reach.dir] }}</b></li>
-  </ul>
-  {% else %}
-  <p class="muted">{{ S.tests_empty }}</p>
-  {% endif %}
-</section>
+    <section class="card">
+      <h2>{{ S.parent_tests }}</h2>
+      {% if w.trend %}
+      {% set t = w.trend %}
+      <svg class="trend" viewBox="0 0 {{ t.w }} {{ t.h }}" role="img" aria-label="{{ S.parent_tests }}">
+        {% for gy, gl in t.grid %}
+        <line class="grid" x1="{{ t.x0 }}" x2="{{ t.x1 }}" y1="{{ gy }}" y2="{{ gy }}"/>
+        <text class="axis" x="{{ t.x0 - 6 }}" y="{{ gy + 4 }}" text-anchor="end">{{ gl }}</text>
+        {% endfor %}
+        {% for lx, ll in t.labels %}
+        <text class="axis" x="{{ lx }}" y="{{ t.ylab }}" text-anchor="middle">{{ ll }}</text>
+        {% endfor %}
+        {% for key in ("eff", "reach") %}
+        {% set ln = t.lines[key] %}
+        {% if ln.dots|length > 1 %}<polyline class="ln {{ key }}" points="{{ ln.points }}"/>{% endif %}
+        {% for cx, cy in ln.dots %}<circle class="pt {{ key }}" cx="{{ cx }}" cy="{{ cy }}" r="3.5"/>{% endfor %}
+        {% endfor %}
+      </svg>
+      <ul class="dirs">
+        <li><span class="sw eff"></span>{{ S.parent_eff }} <b class="dir {{ t.lines.eff.dir }}">{{ S['dir_' ~ t.lines.eff.dir] }}</b></li>
+        <li><span class="sw reach"></span>{{ S.parent_reach }} <b class="dir {{ t.lines.reach.dir }}">{{ S['dir_' ~ t.lines.reach.dir] }}</b></li>
+      </ul>
+      {% else %}
+      <p class="muted">{{ S.tests_empty }}</p>
+      {% endif %}
+    </section>
 
-<section class="card">
-  <h2>{{ S.parent_attitude }}</h2>
-  <p class="pts"><span>{{ S.week_sum | fmt(n=me.week_sum) }}</span><span>{{ S.cumulative | fmt(n=me.cumulative) }}</span></p>
-  {% set r = me.reward %}
-  {% if r and r.goal > 0 %}
-  <div class="bar" role="img" aria-label="{{ S.class_bar }}">
-    <div class="fill" style="width: {{ '%.1f' % r.pct }}%"></div>
-    {% for m in r.milestone_pcts() %}<span class="ms" style="left: {{ '%.1f' % m }}%"></span>{% endfor %}
+    <section class="card">
+      <h2>{{ S.parent_attitude }}</h2>
+      <p class="pts tnum"><span>{{ S.week_sum | fmt(n=w.week_sum) }}</span><span>{{ S.cumulative | fmt(n=w.cumulative) }}</span></p>
+      {% if w.bar_pct is not none %}
+      <div class="bar" role="img" aria-label="{{ S.class_bar }}">
+        <div class="fill" style="width: {{ '%.1f' % w.bar_pct }}%"></div>
+        {% for m in me.reward.milestone_pcts() %}<span class="ms" style="left: {{ '%.1f' % m }}%"></span>{% endfor %}
+      </div>
+      <p class="muted">{{ S.class_bar }} · {{ S.reward_to_go | fmt(label=me.reward.label, n=w.to_go) }}</p>
+      {% endif %}
+    </section>
+
+    {% if w.note %}
+    <div class="bubble"><span class="bl">{{ S.parent_note }}</span>{{ w.note }}</div>
+    {% endif %}
+    {% if w.time %}<span class="mtime">{{ w.time }}</span>{% endif %}
   </div>
-  <p class="muted">{{ S.class_bar }} · {{ S.reward_to_go | fmt(label=r.label, n=r.to_go) }}</p>
+</div>
+{% endmacro %}
+{% block body %}
+<header class="room-top">
+  <div class="room-title">{{ S.room_title | fmt(name=me.display_name) }}</div>
+  <div class="room-sub">{{ S.parent_week }} · {{ week_label }} · {{ me.class_name }}</div>
+</header>
+<main class="room" id="room">
+  {% if me.room_earlier %}
+  <details class="earlier">
+    <summary>{{ S.earlier }}</summary>
+    {% for w in me.room_earlier %}{{ week_group(w) }}{% endfor %}
+  </details>
   {% endif %}
-</section>
-
-<section class="card">
-  <h2>{{ S.parent_note }}</h2>
-  <p class="note">{{ me.note or S.note_empty }}</p>
-</section>
+  {% for w in me.room_open %}{{ week_group(w) }}{% endfor %}
+  <p class="room-end">{{ S.room_note }} · {{ S.reply_hint }}</p>
+  <footer class="foot" id="foot">{{ S.updated_at | fmt(ts=updated) }}</footer>
 </main>
-<footer class="foot muted">{{ S.updated_at | fmt(ts=updated) }}</footer>
+<script src="/static/app.js" defer></script>
 {% endblock %}

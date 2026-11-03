@@ -64,6 +64,27 @@ One line each. "deferred" = not built in P0, on purpose.
 - Playwright checks run in Node (`tests/e2e/check.cjs`, same runtime as the Worker tests); `make` installs Playwright only if Node cannot already resolve it.
 - Config lives in `daybook.json` (gitignored) or `DAYBOOK_*` environment variables; the teacher token never enters the repo.
 
+## Design pass v1 (2026-11-03, from DESIGN_PROMPT_cloudCC_20261104)
+- Interaction patterns only: no third-party logo, name, trademark colour or copied screen; the lint now fails on `kakao`, `instagram` or `#FEE500` (case-insensitive, Korean words such as 카카오톡 are allowed).
+- Student theme: dark by default, light when the phone asks for light (`prefers-color-scheme: light`); the reels feed and the story viewer are always dark.
+- Tabs moved to a bottom nav (영상 · 오늘 · 내 기록) with our own inline SVG icons; the stories row shows on 영상 and 오늘, not on 내 기록.
+- Stories: 새 영상 (videos added in the last 7 days; hidden when none), 연속, 반 목표 (class total only), 선생님 (latest note; hidden when none). The ring is grey once seen; the seen key is a hash of the story's content, so new content colours it again.
+- Story slides auto-advance every 5 s (none with reduced motion); tap right/left, swipe down, × or Escape; after the last slide the next story opens.
+- 반 목표 story: "다음 단계까지 N점" = the next milestone (or the goal) above the class total; "목표 달성!" once reached.
+- Reels: the YouTube iframe is created only on tap, uses `youtube-nocookie.com`, `referrerpolicy="strict-origin"` (YouTube refuses embeds without a referrer; the origin carries no token) and `autoplay=1` (the tap is the user's action). Opening another reel or leaving the tab removes the iframe. CSP gains `frame-src https://www.youtube-nocookie.com`.
+- A reel without `yt_id` keeps ▶ as a link to `url`; a reel without `thumb` shows a gradient card with the title.
+- Thumbnails need Pillow (new Python dependency): shrunk to 480 px wide, JPEG q70, stepping quality down until ≤ 60 KB; the lint enforces 60 KB for `dist/t/`.
+- Demo videos are written to `demo/videos.demo.json` (gitignored) with dates relative to today, so the 새 영상 story is never empty in the demo; demo thumbnails are abstract synthetic images in `demo/thumbs/`.
+- 오늘 is two steps: choose a photo → preview with 올리기 / 다시 찍기 → upload. The success screen dropped the reward line (it lives in the 반 목표 story).
+- 내 기록 profile: counters 연속 · 제출 (submission days so far) · 누적 점수; one tile per day from the term start (at most 180), newest first, 3 per row; tiles are coloured by status (submitted / class day missed / no class / today open), ♥ = 3 points that day; never a photo.
+- Teacher messages on 내 기록 = every note, oldest first (newest at the bottom), dated by the note's week; no input box.
+- Parent room: one group of report cards per week from the term start, last 8 weeks; the 2 most recent are open, older ones sit in "이전 기록" (`<details>`). Past weeks are dated on their Saturday (the publish day) and carry no time; the current week shows the publish time.
+- Past weeks' cards are computed as of that week's end: submissions, trend (rounds up to then), week sum, cumulative and the class bar (class total then, against today's frozen goal).
+- "이번 주 {k}/{n}회": k = submission days, n = days of that week up to the publish day.
+- The parent page now loads one script (scroll to the bottom on open); it still has no links and no input.
+- The room footer reads "이 방은 주간 기록 전용입니다 · 답장·문의는 카카오톡으로" (both strings from §5).
+- The e2e audit renders every page at 360×740 and 390×844 in light and dark; overflow is measured on scroll containers too, not only the document.
+
 ## Deferred
 - deferred (local agent will add after the clone, before 수능 week): `daybook class cancel <class> <date>` so a closed day does not break streaks.
 - deferred: `export pdf` (the command is a stub that exits 2 with a message).

@@ -6,7 +6,8 @@ in `daybook.sqlite` (gitignored), and on the deployed pages behind unguessable l
 
 ## 0. State at handoff (2026-11-03)
 
-- `make demo` is green from a clean clone (Python 3.12 and 3.13, Node 22): 57 pytest, 10 Worker node tests, 54 e2e checks.
+- `make demo` is green from a clean clone (Python 3.12 and 3.13, Node 22): 64 pytest, 10 Worker node tests, 83 e2e checks.
+- Design pass v1 (11-03): story/reels/profile student page, messenger-room parent page; screenshots in `demo/screenshots/`.
 - Every item of §0.1 is built: P1, P2, and P3 except a real-phone install test. See `DECISIONS.md` for every choice and
   every deferred item.
 - Not done, needs the teacher: the Cloudflare deploy (README, "Teacher deploy steps"), and pushing this repo (below).
@@ -140,16 +141,25 @@ Fallback for any other test (CSV columns `date, student_slug, test_name, n_quizz
 
 The student 영상 tab is rendered at publish from the file named by `videos_path` in `daybook.json` (default
 `videos.json` in the repo, which holds synthetic links). For real links, write `videos.local.json` (gitignored) and set
-`"videos_path": "videos.local.json"`. Schema, nothing else:
+`"videos_path": "videos.local.json"`. Schema (the last two fields are optional):
 
 ```json
-[{"title": "1강 다항식의 연산", "url": "https://masonkat.github.io/q/cv/10-2/1/", "group": "개념 영상", "added": "2026-10-20"}]
+[{"title": "1강 다항식의 연산", "url": "https://masonkat.github.io/q/cv/10-2/1/", "group": "고1 · 개념",
+  "added": "2026-10-20", "yt_id": "<11-character YouTube id>", "thumb": "thumbs/cv-10-2-1.jpg"}]
 ```
 
 - Solution videos use their fixed forwarding address `https://masonkat.github.io/q/<term>/<n>/`.
 - Concept videos use `https://masonkat.github.io/q/cv/<grade-term>/<n>/`; their index is `q/cv/map.json`.
 - Build the list from those existing records with a small local script (outside this repo or under `scripts/`).
-- Groups appear in first-seen order after sorting by `added` (newest first). Only `http(s)` URLs are kept.
+- The feed is newest first by `added`; `group` is the chip on each reel (e.g. "고1 · 개념"). Only `http(s)` URLs are kept.
+- Videos whose `added` is within the last 7 days of a publish also appear in the "새 영상" story.
+- `yt_id`: the YouTube id. With it, tapping ▶ plays the video inside the reel through
+  `https://www.youtube-nocookie.com/embed/<id>`. The iframe is created only on tap and sends only the site origin as
+  the referrer. Without it, ▶ opens `url`.
+- `thumb`: a local image path, relative to the videos JSON file. Publish shrinks it into `dist/t/<id>.jpg`
+  (480 px wide, ≤ 60 KB; needs Pillow, installed by `make`). Download the thumbnails once into a local folder next to
+  `videos.local.json`, never from the page. Without one, the reel shows a gradient card with the title.
+- `demo/videos.demo.json` (written by `daybook demo`) and `demo/thumbs/` are a complete synthetic example.
 
 ## 6. The teacher's Saturday (after the pilot starts Friday 11-06)
 

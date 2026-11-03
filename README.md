@@ -1,9 +1,10 @@
 # DAYBOOK (P0)
 
-**Status (2026-11-03, cloud build):**
+**Status (2026-11-03, cloud build + design pass v1):**
 1. P1 complete and tested: schema + `students_public`, `init`, `demo`, `roster add/list/import`, Worker `/submit` + `/submissions`, student 오늘 tab, `pull`, parent page, `publish` + no-PII lint, `import screeners`, deploy steps.
 2. P2 complete: board + attitude buttons, `score`, class reward bar, `note`, `weekly`, Playwright checks. P3: manifest/icons/standalone, `rotate-tokens`, `export pdf` stub, Worker node tests.
-3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 57 pytest + 10 Worker node tests + 54 Playwright checks at 360 px.
+3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 64 pytest + 10 Worker node tests + 83 Playwright checks (every page at 360 and 390 px, light and dark).
+   Design pass v1: the student page feels like a story/reels/profile app, the parent page like a read-only messenger room (`DECISIONS.md`, "Design pass v1").
 4. Not done here (needs the teacher): the Cloudflare deploy, and a real-phone install test on iPhone Safari / Android Chrome. Deferred items are listed in `DECISIONS.md`.
 5. Real data is attached by the local agents: see `HANDOFF.md`. This repo holds synthetic data only.
 
@@ -21,7 +22,7 @@ and a small Cloudflare Worker receives the photos.
 
 ## Setup (≤ 10 commands)
 
-Needs Python ≥ 3.11 and Node ≥ 20.
+Needs Python ≥ 3.11 (with Pillow, installed by `make`) and Node ≥ 20.
 
 ```bash
 git clone <this private repo> daybook
@@ -145,7 +146,7 @@ Rate limit: `RATE_PER_HOUR` (10) uploads per token per hour → 429. The Worker 
 Manual check against a deployed Worker (replace the URL; the token only needs the right format):
 
 ```bash
-curl -s -F t=abcdefghijklmnopqrstuvwxyz -F photo=@demo/screenshots/student-today.png\;type=image/png https://daybook-worker.example.workers.dev/submit
+curl -s -F t=abcdefghijklmnopqrstuvwxyz -F photo=@demo/screenshots/student-done.png\;type=image/png https://daybook-worker.example.workers.dev/submit
 ```
 
 ```bash
@@ -159,8 +160,11 @@ Locally, `node worker/test/dev_server.mjs` runs the same Worker on http://127.0.
 - `make test` — pytest: schema, tokens, streak/goal/milestones, importers (unmatched rows reported), the no-PII lint
   (seeded phone, `full_name`, `ext_id` each stop publish), pull, the CLI flow, the board.
 - `make test-worker` — node tests: token format, type/size, same-day replacement, R2 replacement, rate limit, CORS, auth.
-- `make e2e` — Playwright at 360×740 on every generated page (0 console errors, no horizontal scroll, ≤ 100 KB,
-  generic title, 0 third-party requests), the upload → 오늘 완료 flow with in-browser shrinking, `/go`, pull →
-  parent ✓, and the board buttons. Screenshots go to `demo/screenshots/`.
+- `make e2e` — Playwright on every generated page at 360×740 and 390×844, light and dark (0 console errors, no
+  horizontal scroll, ≤ 100 KB, generic title, 0 third-party requests, no iframe before a tap), the pick → preview →
+  올리기 → 오늘 완료 flow with in-browser shrinking, stories open/close and seen state, the snap feed (one reel per
+  screen), tap ▶ → nocookie iframe, the 목록 grid, the profile grid, `/go`, pull → parent room ✓ (opens at the
+  bottom), and the board buttons. Screenshots go to `demo/screenshots/`.
 
-Screenshots (synthetic data): `demo/screenshots/student-today.png`, `student-done.png`, `parent.png`, `board.png`.
+Screenshots (synthetic data, 360 px): `demo/screenshots/student-stories.png`, `student-reels.png`, `student-done.png`,
+`student-profile.png`, `parent-light.png`, `parent-dark.png`, `board.png`.

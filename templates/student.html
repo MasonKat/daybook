@@ -4,74 +4,174 @@
 <link rel="apple-touch-icon" href="/static/icon-180.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="{{ S.app_name }}">
 {% endblock %}
 {% block body %}
-<header class="top">
-  <span class="brand">{{ S.app_name }}</span>
-  <span class="who">{{ me.display_name }} · {{ me.class_name }}</span>
+<div class="app">
+<header class="sbar">
+  <span class="wordmark">{{ S.app_name }}</span>
+  <span class="sdate" id="today-date">&nbsp;</span>
+  <span class="av ring sm" title="{{ me.display_name }}"><span>{{ me.initial }}</span></span>
 </header>
-<nav class="tabs" role="tablist">
-  <button type="button" role="tab" id="t-videos" data-tab="videos" aria-selected="false">{{ S.tab_videos }}</button>
-  <button type="button" role="tab" id="t-today" data-tab="today" aria-selected="true">{{ S.tab_today }}</button>
-  <button type="button" role="tab" id="t-me" data-tab="me" aria-selected="false">{{ S.tab_me }}</button>
-</nav>
-<main>
-<section id="tab-videos" class="panel" role="tabpanel" hidden>
-  {% for g in videos %}
-  {% if g.group %}<h2 class="sub">{{ g.group }}</h2>{% endif %}
-  <ul class="videos">
-    {% for v in g["items"] %}
-    <li><a href="{{ v.url }}" target="_blank" rel="noopener noreferrer">{{ v.title }}</a>{% if v.added %}<span class="muted">{{ v.added }}</span>{% endif %}</li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p class="muted">{{ S.videos_empty }}</p>
+
+<div class="stories" id="stories">
+  {% for st in me.stories %}
+  <button type="button" class="story" data-story="{{ st.key }}" data-hash="{{ st.hash }}">
+    <span class="ring"><span class="story-in s-{{ st.key }}" aria-hidden="true">
+      {%- if st.key == 'videos' %}▶{% elif st.key == 'streak' %}<b class="tnum" data-live="streak">{{ st.streak }}</b>{% elif st.key == 'goal' %}★{% else %}“{% endif -%}
+    </span></span>
+    <span class="story-label"{% if st.key == 'streak' %} data-live="streak-label"{% endif %}>{{ st.label }}</span>
+  </button>
   {% endfor %}
+</div>
+
+<main class="s-main" id="s-main">
+<section id="tab-videos" class="panel" role="tabpanel" hidden>
+  {% if videos %}
+  <div class="feedbar">
+    <button type="button" class="toggle" id="grid-toggle" aria-pressed="false" data-grid="{{ S.grid_toggle }}" data-feed="{{ S.feed_toggle }}">{{ S.grid_toggle }}</button>
+  </div>
+  <div class="feed" id="feed">
+    {% for v in videos %}
+    <article class="reel" data-yt="{{ v.yt_id }}">
+      <div class="media">
+        {% if v.thumb %}<img src="{{ v.thumb }}" alt="" loading="lazy" decoding="async">{% else %}<div class="ph"><span>{{ v.title }}</span></div>{% endif %}
+        {% if v.yt_id %}
+        <button type="button" class="play" aria-label="{{ S.play }}"><span aria-hidden="true">▶</span></button>
+        {% else %}
+        <a class="play" href="{{ v.url }}" target="_blank" rel="noopener noreferrer" aria-label="{{ S.watch }}"><span aria-hidden="true">▶</span></a>
+        {% endif %}
+      </div>
+      <div class="meta">
+        {% if v.group %}<span class="chip">{{ v.group }}</span>{% endif %}
+        <h3 class="rt">{{ v.title }}</h3>
+        <a class="watch" href="{{ v.url }}" target="_blank" rel="noopener noreferrer">{{ S.watch }} ›</a>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted pad">{{ S.videos_empty }}</p>
+  {% endif %}
 </section>
 
 <section id="tab-today" class="panel" role="tabpanel">
-  <p class="date" id="today-date">&nbsp;</p>
-  <p class="chip" id="today-set" hidden></p>
+  <p class="chip set-chip" id="today-set" hidden></p>
   <input id="photo" class="vh" type="file" accept="image/*" capture="environment">
-  <div id="st-idle" class="state">
-    <label class="big" for="photo"><span class="cam" aria-hidden="true">📷</span>{{ S.submit_cta }}</label>
-    <p class="muted center">{{ S.today_hint }}</p>
+  <div id="st-idle" class="state center">
+    <label class="plus" for="photo"><span aria-hidden="true">+</span><span class="vh">{{ S.submit_cta }}</span></label>
+    <p class="cta">{{ S.submit_cta }}</p>
+    <p class="muted">{{ S.today_hint }}</p>
   </div>
-  <div id="st-busy" class="state" hidden>
-    <img id="preview" alt="" width="160" height="160">
-    <p class="center">{{ S.uploading }}</p>
+  <div id="st-preview" class="state" hidden>
+    <div class="pv"><img id="preview" alt=""><p class="pv-busy" id="pv-busy" hidden>{{ S.uploading }}</p></div>
+    <div class="pv-actions">
+      <label class="btn ghost" for="photo" id="pv-retake">{{ S.retake_photo }}</label>
+      <button type="button" class="btn primary" id="post">{{ S.post_cta }}</button>
+    </div>
   </div>
-  <div id="st-done" class="state done" hidden>
+  <div id="st-done" class="state done center" hidden>
     <div class="check" aria-hidden="true">✓</div>
     <h1 class="done-title">{{ S.done_title }}</h1>
-    <p class="note-ok" id="d-replaced" hidden>{{ S.replaced }}</p>
+    <p class="muted" id="d-replaced" hidden>{{ S.replaced }}</p>
     <ul class="stats">
       <li id="d-streak"></li>
       <li id="d-class"></li>
-      <li id="d-reward"></li>
     </ul>
-    <label class="small" for="photo">{{ S.retake }}</label>
+    <label class="small" for="photo">{{ S.repost }}</label>
   </div>
-  <div id="st-err" class="state" hidden>
+  <div id="st-err" class="state center" hidden>
     <p class="err" id="err-msg">{{ S.upload_error }}</p>
-    <label class="big" for="photo">{{ S.retry }}</label>
+    <label class="btn primary" for="photo">{{ S.retry }}</label>
   </div>
 </section>
 
 <section id="tab-me" class="panel" role="tabpanel" hidden>
-  <h2 class="sub">{{ S.me_week }}</h2>
-  <ol class="dots" id="me-dots">
-    {% for d in me.week %}
-    <li data-date="{{ d.date }}" class="{{ 'on' if d.done }}{{ ' cls' if d.class_day }}{{ ' fut' if d.future }}"><span class="wd">{{ d.wd }}</span><span class="dot">{{ '✓' if d.done else '·' }}</span></li>
-    {% endfor %}
+  <div class="profile">
+    <span class="av ring lg"><span>{{ me.initial }}</span></span>
+    <div class="pname"><b>{{ me.display_name }}</b><span class="muted">{{ me.class_name }}</span></div>
+  </div>
+  <ul class="counters">
+    <li><b class="tnum" id="c-streak">{{ me.streak }}</b><span>{{ S.count_streak }}</span></li>
+    <li><b class="tnum" id="c-sub">{{ me.n_sub }}</b><span>{{ S.count_sub }}</span></li>
+    <li><b class="tnum">{{ me.cumulative }}</b><span>{{ S.count_points }}</span></li>
+  </ul>
+  <ol class="tiles" id="tiles">
+    {% for t in me.tiles %}<li class="tile {{ t.st }}" data-date="{{ t.date }}"><span class="tl tnum">{{ t.label }}</span><span class="tw">{{ t.wd }}</span>{% if t.heart %}<span class="hrt" title="{{ S.tile_heart }}">♥</span>{% endif %}</li>{% endfor %}
   </ol>
-  <p class="muted" id="me-streak">{{ S.streak_label | fmt(n=me.streak) }}</p>
-  <h2 class="sub">{{ S.me_points }}</h2>
-  <p class="big-num">{{ S.points | fmt(n=me.cumulative) }}</p>
+  <p class="legend"><span class="lg-sw sub"></span>{{ S.tile_sub }}<span class="lg-sw miss"></span>{{ S.tile_miss }}<span class="lg-sw off"></span>{{ S.tile_off }}<span class="hrt">♥</span>{{ S.tile_heart }}</p>
+
+  <h2 class="sec-h">{{ S.teacher_messages }}</h2>
+  <div class="msgs">
+    {% for n in me.notes %}
+    <div class="mrow"><span class="av amp" aria-hidden="true">AMP</span><div class="mcol"><div class="bubble">{{ n.text }}</div><span class="btime">{{ n.week }}</span></div></div>
+    {% else %}
+    <p class="muted">{{ S.messages_empty }}</p>
+    {% endfor %}
+  </div>
+  <p class="muted center hint">{{ S.reply_hint }}</p>
 </section>
 </main>
+
+<nav class="bnav" role="tablist">
+  <button type="button" role="tab" id="t-videos" data-tab="videos" aria-selected="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M10 8.5v7l6-3.5z" class="fillc"/></svg><span>{{ S.tab_videos }}</span></button>
+  <button type="button" role="tab" id="t-today" data-tab="today" aria-selected="true">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/></svg><span>{{ S.tab_today }}</span></button>
+  <button type="button" role="tab" id="t-me" data-tab="me" aria-selected="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5c1.2-4 4.2-6 7.5-6s6.3 2 7.5 6"/></svg><span>{{ S.tab_me }}</span></button>
+</nav>
+</div>
+
+<div class="sv" id="sv" role="dialog" aria-modal="true" hidden>
+  <div class="sv-segs" id="sv-segs"></div>
+  <button type="button" class="sv-x" id="sv-x" aria-label="{{ S.close }}">×</button>
+  <div class="sv-tap prev" id="sv-prev"></div>
+  <div class="sv-tap next" id="sv-next"></div>
+  {% for st in me.stories %}
+  <div class="sv-group" data-story="{{ st.key }}" hidden>
+    {% if st.key == 'videos' %}
+    {% for v in st['items'] %}
+    <div class="slide s-video">
+      <p class="sv-kicker">{{ S.story_new_videos }}</p>
+      {% if v.thumb %}<img src="{{ v.thumb }}" alt="" loading="lazy" decoding="async">{% else %}<div class="ph"><span>{{ v.title }}</span></div>{% endif %}
+      <h2>{{ v.title }}</h2>
+      {% if v.group %}<span class="chip">{{ v.group }}</span>{% endif %}
+      <a class="btn primary sv-link" href="{{ v.url }}" target="_blank" rel="noopener noreferrer">{{ S.watch }}</a>
+    </div>
+    {% endfor %}
+    {% elif st.key == 'streak' %}
+    <div class="slide s-streak">
+      <p class="sv-kicker">{{ S.tab_me }}</p>
+      <p class="big-n tnum" data-live="streak">{{ st.streak }}</p>
+      <p class="big-l" data-live="streak-label">{{ st.label }}</p>
+      <ol class="dots" id="sv-dots">
+        {% for d in me.week %}<li data-date="{{ d.date }}" class="{{ 'on' if d.done }}{{ ' cls' if d.class_day }}{{ ' fut' if d.future }}"><span class="wd">{{ d.wd }}</span><span class="dot">{{ '✓' if d.done else '·' }}</span></li>{% endfor %}
+      </ol>
+    </div>
+    {% elif st.key == 'goal' %}
+    {% set r = me.reward %}
+    <div class="slide s-goal">
+      <p class="sv-kicker">{{ S.story_goal }}</p>
+      <p class="big-l">{{ r.label }}</p>
+      <div class="bar big" role="img" aria-label="{{ S.class_bar }}">
+        <div class="fill" style="width: {{ '%.1f' % r.pct }}%"></div>
+        {% for m in r.milestone_pcts() %}<span class="ms" style="left: {{ '%.1f' % m }}%"></span>{% endfor %}
+      </div>
+      <p class="tnum">{{ S.class_plus | fmt(n=r.total) }}</p>
+      <p class="big-l">{{ S.story_next | fmt(n=st.next) if st.next else S.story_goal_done }}</p>
+    </div>
+    {% else %}
+    <div class="slide s-teacher">
+      <p class="sv-kicker">{{ S.story_teacher }} · {{ st.week }}</p>
+      <blockquote class="quote">{{ st.note }}</blockquote>
+      <p class="muted">{{ S.teacher_name }}</p>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
 <script type="application/json" id="data">{{ me.js | safe }}</script>
 <script src="/static/app.js" defer></script>
 {% endblock %}

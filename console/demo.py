@@ -93,6 +93,34 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
     conn.commit()
 
 
+DEMO_VIDEOS = [
+    # title, group, days ago, yt_id (synthetic, 11 chars), thumb
+    ("11월 1주 프린트 풀이", "고1 · 풀이", 1, "AMPdemo0001", "thumbs/v1.jpg"),
+    ("나머지정리 한 번에 정리", "고1 · 개념", 3, "AMPdemo0002", "thumbs/v2.jpg"),
+    ("10월 4주 프린트 풀이", "고1 · 풀이", 9, "AMPdemo0003", "thumbs/v3.jpg"),
+    ("다항식의 연산 (개념)", "고1 · 개념", 14, "AMPdemo0004", "thumbs/v4.jpg"),
+    ("항등식과 미정계수법", "고1 · 개념", 20, "AMPdemo0005", None),
+    ("기초 연산 점검 영상", "기초 · 개념", 25, None, "thumbs/v5.jpg"),
+]
+
+
+def write_demo_videos(today: date | None = None, out: Path | None = None) -> Path:
+    """demo/videos.demo.json with dates relative to today (gitignored); thumbs are the committed demo/thumbs/*.jpg."""
+    today = today or M.kst_today()
+    out = out or ROOT / "demo" / "videos.demo.json"
+    items = []
+    for i, (title, group, ago, yt, thumb) in enumerate(DEMO_VIDEOS, start=1):
+        v = {"title": title, "url": f"https://example.com/q/demo/{i}/", "group": group,
+             "added": (today - timedelta(days=ago)).isoformat()}
+        if yt:
+            v["yt_id"] = yt
+        if thumb:
+            v["thumb"] = thumb
+        items.append(v)
+    out.write_text(json.dumps(items, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    return out
+
+
 def write_screeners(out: Path | None = None, rng_seed: int = 7) -> list[Path]:
     """(Re)generate demo/screeners/round_<set_id>_<date>.json in the §5.1 format. The files are committed."""
     out = out or ROOT / "demo" / "screeners"

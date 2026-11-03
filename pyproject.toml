@@ -7,7 +7,7 @@ name = "daybook"
 version = "0.1.0"
 description = "Single-teacher student ledger and static parent report generator"
 requires-python = ">=3.11"
-dependencies = ["click>=8.1", "jinja2>=3.1"]
+dependencies = ["click>=8.1", "jinja2>=3.1", "pillow>=10"]
 
 [project.optional-dependencies]
 test = ["pytest>=8"]

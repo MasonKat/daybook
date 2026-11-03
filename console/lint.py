@@ -1,7 +1,8 @@
 """No-PII lint over generated output (BUILD_BRIEF §11/§12).
 
 Errors (publish stops): phone numbers, any student's full_name / ext_id / parent_phone,
-a non-generic <title> or og: tag, third-party resource references, files over 100 KB.
+a non-generic <title> or og: tag, third-party resource references, files over 100 KB,
+thumbnails over 60 KB, brand words (kakao, instagram, #FEE500), an <img> showing a submission photo.
 Warnings (printed only): another student's display name on a per-student page.
 """
 from __future__ import annotations
@@ -21,6 +22,11 @@ RESOURCE_RE = re.compile(
 )
 CSS_URL_RE = re.compile(r"url\(\s*['\"]?\s*((?:https?:)?//[^)'\"]+)", re.I)
 IMPORT_RE = re.compile(r"@import\s+(?:url\()?['\"]?((?:https?:)?//[^)'\";]+)", re.I)
+BRAND_RE = re.compile(r"kakao|instagram|#fee500", re.I)
+IMG_SRC_RE = re.compile(r"<img[^>]*\ssrc\s*=\s*[\"']([^\"']*)", re.I)
+# a submission photo: the Worker's /photo endpoint, a KV photo key, or an R2 key <day>/<token>.<ext>
+PHOTO_SRC_RE = re.compile(r"/photo\b|photo:\d{4}-|\d{4}-\d{2}-\d{2}/[a-z2-7]{26}\.|^blob:|^data:", re.I)
+MAX_IMAGE_BYTES = 60 * 1024
 TEXT_SUFFIXES = {".html", ".htm", ".css", ".js", ".json", ".webmanifest", ".txt", ".svg", ".xml", ""}
 MAX_BYTES = 100 * 1024
 
@@ -80,6 +86,8 @@ def lint_dir(root: Path, students: list[PrivateRow], page_title: str) -> list[Fi
         size = path.stat().st_size
         if size > MAX_BYTES:
             findings.append(Finding("error", rel, "size", f"{size} bytes > {MAX_BYTES}"))
+        if rel.startswith("t/") and size > MAX_IMAGE_BYTES:
+            findings.append(Finding("error", rel, "image_size", f"{size} bytes > {MAX_IMAGE_BYTES}"))
         if path.suffix.lower() not in TEXT_SUFFIXES:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
@@ -98,7 +106,13 @@ def lint_dir(root: Path, students: list[PrivateRow], page_title: str) -> list[Fi
             if rx.search(text):
                 findings.append(Finding("error", rel, "ext_id", f"student id {s.id}"))
 
+        for m in BRAND_RE.finditer(text):
+            findings.append(Finding("error", rel, "brand", m.group(0)))
+
         if path.suffix.lower() in (".html", ".htm"):
+            for src in IMG_SRC_RE.findall(text):
+                if PHOTO_SRC_RE.search(src):
+                    findings.append(Finding("error", rel, "photo_img", src[:60]))
             titles = TITLE_RE.findall(text)
             if not titles:
                 findings.append(Finding("error", rel, "title", "missing <title>"))

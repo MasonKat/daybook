@@ -3,6 +3,6 @@
   "worker_url": "http://127.0.0.1:8788",
   "pages_url": "http://127.0.0.1:8790",
   "teacher_token": "dev-teacher-token",
-  "videos_path": "videos.json",
+  "videos_path": "demo/videos.demo.json",
   "board_poll_seconds": 30
 }

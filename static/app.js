@@ -21,6 +21,7 @@
   var page = document.body.getAttribute('data-page');
   if (page === 'go') go();
   else if (page === 'student') student();
+  else if (page === 'parent') parent();
   else if (page === 'board') board();
 
   /* ------------------------------------------------------------ /go/?set=... */
@@ -30,6 +31,14 @@
     if (tok && TOKEN_RE.test(tok)) {
       location.replace('/s/' + tok + '/' + (set ? '?set=' + encodeURIComponent(set) : '') + '#today');
     }
+  }
+
+  /* ------------------------------------------------------------ parent room: open at the latest week */
+  function parent() {
+    try { history.scrollRestoration = 'manual'; } catch (e) { /* old browsers */ }
+    var toBottom = function () { window.scrollTo(0, document.documentElement.scrollHeight); };
+    toBottom();
+    window.addEventListener('load', toBottom);
   }
 
   /* ------------------------------------------------------------ student page */
@@ -42,8 +51,9 @@
     if (tok) LS.set('daybook.token', tok);
     var set = (new URLSearchParams(location.search).get('set') || '').replace(/[^\w\-]/g, '').slice(0, 80);
     var today = kstDay();
+    var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    /* tabs */
+    /* tabs (bottom nav); the stories row sits on top of 영상 and 오늘 */
     var tabs = ['videos', 'today', 'me'];
     function showTab(name) {
       if (tabs.indexOf(name) < 0) name = 'today';
@@ -51,6 +61,9 @@
         $('tab-' + t).hidden = t !== name;
         $('t-' + t).setAttribute('aria-selected', t === name ? 'true' : 'false');
       });
+      $('stories').hidden = name === 'me';
+      $('s-main').classList.toggle('feed-mode', name === 'videos' && !!$('feed'));
+      if (name !== 'videos') stopVideos();
     }
     tabs.forEach(function (t) {
       $('t-' + t).addEventListener('click', function () {
@@ -60,17 +73,16 @@
     });
     showTab((location.hash || '#today').slice(1));
 
-    /* header of the today tab */
     $('today-date').textContent = Number(today.slice(5, 7)) + '월 ' + Number(today.slice(8, 10)) + '일 (' + WD[weekday(today)] + ')';
     if (set) { $('today-set').textContent = fmt(S.today_set, { set: set }); $('today-set').hidden = false; }
 
     /* known submission days: published + this device + the Worker */
-    var known = {};
+    var published = {}, known = {};
     var LKEY = 'daybook.days.' + tok;
-    (D.subDays || []).forEach(function (d) { known[d] = 1; });
+    (D.subDays || []).forEach(function (d) { published[d] = 1; known[d] = 1; });
     try { (JSON.parse(LS.get(LKEY) || '[]') || []).forEach(function (d) { known[d] = 1; }); } catch (e) { /* ignore */ }
     function remember(days) {
-      (days || []).forEach(function (d) { if (/^\d{4}-\d{2}-\d{2}$/.test(d)) known[d] = 1; });
+      (days || []).forEach(function (d) { if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d <= today) known[d] = 1; });
       var keep = Object.keys(known).filter(function (d) { return d >= addDays(today, -21); }).sort();
       LS.set(LKEY, JSON.stringify(keep));
     }
@@ -90,50 +102,177 @@
       }
       return n + (D.streakPrev || 0);
     }
-    function renderMe() {
-      var lis = $('me-dots').getElementsByTagName('li');
-      for (var i = 0; i < lis.length; i++) {
-        var d = lis[i].getAttribute('data-date');
-        if (known[d]) { lis[i].classList.add('on'); lis[i].querySelector('.dot').textContent = '✓'; }
+    function nSubNow() {
+      var extra = Object.keys(known).filter(function (d) { return d >= D.pub && !published[d]; }).length;
+      return (D.nSub || 0) + extra;
+    }
+    function setText(sel, text) {
+      var els = document.querySelectorAll(sel);
+      for (var i = 0; i < els.length; i++) els[i].textContent = text;
+    }
+    function renderLive() {
+      var n = streakNow();
+      setText('[data-live="streak"]', n);
+      setText('[data-live="streak-label"]', fmt(S.story_streak, { n: n }));
+      $('c-streak').textContent = n;
+      $('c-sub').textContent = nSubNow();
+      /* profile tiles: add the days since publish, then colour every known day */
+      var tiles = $('tiles'), first = tiles.firstElementChild;
+      var top = first ? first.getAttribute('data-date') : addDays(today, -1);
+      for (var d = addDays(top, 1); d <= today; d = addDays(d, 1)) {
+        var li = document.createElement('li');
+        li.className = 'tile off';
+        li.setAttribute('data-date', d);
+        li.innerHTML = '<span class="tl tnum">' + Number(d.slice(5, 7)) + '/' + Number(d.slice(8, 10)) + '</span><span class="tw">' + WD[weekday(d)] + '</span>';
+        tiles.insertBefore(li, tiles.firstElementChild);
       }
-      $('me-streak').textContent = fmt(S.streak_label, { n: streakNow() });
+      var lis = tiles.children;
+      for (var i = 0; i < lis.length; i++) {
+        var day = lis[i].getAttribute('data-date'), wasMiss = lis[i].classList.contains('miss');
+        lis[i].classList.remove('sub', 'open', 'miss', 'off');
+        lis[i].classList.add(known[day] ? 'sub' : day === today ? 'open' : (wasMiss || isClassDay(day)) ? 'miss' : 'off');
+      }
+      var dots = $('sv-dots') ? $('sv-dots').children : [];
+      for (var j = 0; j < dots.length; j++) {
+        if (known[dots[j].getAttribute('data-date')]) { dots[j].classList.add('on'); dots[j].querySelector('.dot').textContent = '✓'; }
+      }
     }
 
-    /* states */
-    var states = ['idle', 'busy', 'done', 'err'];
+    /* ---- stories */
+    var sv = $('sv'), segs = $('sv-segs'), cur = { btn: null, slides: [], i: 0 }, timer = null, y0 = null;
+    var storyBtns = Array.prototype.slice.call(document.querySelectorAll('.story'));
+    storyBtns.forEach(function (b) {
+      if (LS.get('daybook.seen.' + b.getAttribute('data-story')) === b.getAttribute('data-hash')) b.classList.add('seen');
+      b.addEventListener('click', function () { openStory(b); });
+    });
+    function openStory(btn) {
+      var key = btn.getAttribute('data-story');
+      var groups = sv.querySelectorAll('.sv-group');
+      for (var i = 0; i < groups.length; i++) groups[i].hidden = groups[i].getAttribute('data-story') !== key;
+      cur = { btn: btn, slides: sv.querySelectorAll('.sv-group[data-story="' + key + '"] .slide'), i: 0 };
+      segs.innerHTML = '';
+      for (var k = 0; k < cur.slides.length; k++) segs.appendChild(document.createElement('span')).className = 'sv-seg';
+      for (var s = 0; s < segs.children.length; s++) segs.children[s].appendChild(document.createElement('i'));
+      sv.hidden = false;
+      LS.set('daybook.seen.' + key, btn.getAttribute('data-hash'));
+      btn.classList.add('seen');
+      slide(0);
+    }
+    function slide(i) {
+      clearTimeout(timer);
+      if (i < 0) i = 0;
+      if (i >= cur.slides.length) {
+        var next = storyBtns[storyBtns.indexOf(cur.btn) + 1];
+        return next ? openStory(next) : closeStory();
+      }
+      cur.i = i;
+      for (var k = 0; k < cur.slides.length; k++) {
+        cur.slides[k].hidden = k !== i;
+        var seg = segs.children[k];
+        seg.className = 'sv-seg' + (k < i ? ' done' : '');
+        if (k === i) { void seg.offsetWidth; seg.className = 'sv-seg ' + (reduced ? 'done' : 'run'); }
+      }
+      if (!reduced) timer = setTimeout(function () { slide(cur.i + 1); }, 5000);
+    }
+    function closeStory() { clearTimeout(timer); sv.hidden = true; }
+    $('sv-x').addEventListener('click', closeStory);
+    $('sv-prev').addEventListener('click', function () { slide(cur.i - 1); });
+    $('sv-next').addEventListener('click', function () { slide(cur.i + 1); });
+    sv.addEventListener('touchstart', function (e) { y0 = e.touches[0].clientY; }, { passive: true });
+    sv.addEventListener('touchend', function (e) {
+      if (y0 !== null && e.changedTouches[0].clientY - y0 > 80) closeStory();
+      y0 = null;
+    });
+    document.addEventListener('keydown', function (e) {
+      if (sv.hidden) return;
+      if (e.key === 'Escape') closeStory();
+      else if (e.key === 'ArrowRight') slide(cur.i + 1);
+      else if (e.key === 'ArrowLeft') slide(cur.i - 1);
+    });
+
+    /* ---- reels: the iframe is created only on tap (0 third-party requests on load) */
+    var feed = $('feed');
+    function stopVideos() {
+      if (!feed) return;
+      var frames = feed.querySelectorAll('iframe');
+      for (var i = 0; i < frames.length; i++) {
+        var media = frames[i].parentNode;
+        media.removeChild(frames[i]);
+        for (var c = 0; c < media.children.length; c++) media.children[c].hidden = false;
+      }
+    }
+    if (feed) {
+      feed.addEventListener('click', function (e) {
+        var b = e.target.closest('button.play');
+        if (!b) return;
+        var id = b.closest('.reel').getAttribute('data-yt');
+        if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return;
+        stopVideos();
+        var media = b.parentNode, f = document.createElement('iframe');
+        for (var c = 0; c < media.children.length; c++) media.children[c].hidden = true;
+        f.src = 'https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1&playsinline=1&rel=0';
+        f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+        f.allowFullscreen = true;
+        f.referrerPolicy = 'strict-origin';   /* only the origin, never the token path */
+        f.title = b.getAttribute('aria-label') || 'video';
+        media.appendChild(f);
+      });
+      var tg = $('grid-toggle');
+      tg.addEventListener('click', function () {
+        var grid = feed.classList.toggle('grid');
+        tg.setAttribute('aria-pressed', grid ? 'true' : 'false');
+        tg.textContent = tg.getAttribute(grid ? 'data-feed' : 'data-grid');
+        feed.scrollTop = 0;
+      });
+    }
+
+    /* ---- 오늘: pick -> preview -> 올리기 -> done */
+    var states = ['idle', 'preview', 'done', 'err'];
     function show(state) { states.forEach(function (s) { $('st-' + s).hidden = s !== state; }); }
     function showDone(replaced) {
       $('d-replaced').hidden = !replaced;
       $('d-streak').textContent = fmt(S.streak_label, { n: streakNow() });
       $('d-class').textContent = fmt(S.class_plus, { n: D.classTotal || 0 });
-      $('d-reward').textContent = D.rewardLabel ? fmt(S.reward_to_go, { label: D.rewardLabel, n: D.toGo }) : '';
       show('done');
     }
     function showErr(msg) { $('err-msg').textContent = msg; show('err'); }
+    function busy(on) {
+      $('pv-busy').hidden = !on;
+      $('post').disabled = on;
+      $('pv-retake').style.pointerEvents = on ? 'none' : '';
+    }
 
     if (known[today]) showDone(false);
-    renderMe();
+    renderLive();
     if (D.worker && tok) {
       fetch(D.worker + '/status?t=' + tok, { cache: 'no-store' })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) {
           if (!j || !j.days) return;
           remember(j.days);
-          renderMe();
-          if (known[today] && $('st-busy').hidden) showDone(false);
+          renderLive();
+          if (known[today] && $('st-preview').hidden) showDone(false);
         })
         .catch(function () { /* offline: the published data is enough */ });
     }
 
+    var picked = null, pickedUrl = null;
     $('photo').addEventListener('change', function (e) {
       var f = e.target.files && e.target.files[0];
       e.target.value = '';
       if (!f) return;
       if (!D.worker) { showErr(S.no_worker); return; }
-      show('busy');
-      var url = URL.createObjectURL(f);
-      $('preview').src = url;
-      shrink(f)
+      if (pickedUrl) URL.revokeObjectURL(pickedUrl);
+      picked = f;
+      pickedUrl = URL.createObjectURL(f);
+      $('preview').src = pickedUrl;
+      busy(false);
+      show('preview');
+    });
+    $('post').addEventListener('click', function () {
+      if (!picked) return;
+      busy(true);
+      shrink(picked)
         .then(function (blob) {
           var fd = new FormData();
           fd.append('t', tok);
@@ -146,19 +285,20 @@
           return r.json().catch(function () { return {}; }).then(function (j) { j.status = r.status; return j; });
         })
         .then(function (j) {
-          URL.revokeObjectURL(url);
+          busy(false);
           if (j.ok) {
             if (j.day) today = j.day;
             known[today] = 1;
             remember((j.days || []).concat([today]));
-            renderMe();
+            renderLive();
+            picked = null;
             showDone(!!j.already);
           } else {
             showErr(j.status === 429 ? S.upload_rate : S.upload_error);
           }
         })
         .catch(function () {
-          URL.revokeObjectURL(url);
+          busy(false);
           showErr(navigator.onLine === false ? S.upload_offline : S.upload_error);
         });
     });

@@ -16,3 +16,4 @@ worker/.wrangler/
 worker/.dev.vars
 test-results/
 videos.local.json
+demo/videos.demo.json
