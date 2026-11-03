@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex">
+<title>{{ P.letter_title }} · {{ cls.name }}</title>
+<style>
+@page { size: A4; margin: 22mm 20mm; }
+body { font: 11pt/1.75 -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; color: #111; margin: 0; }
+.letter { page-break-after: always; break-after: page; }
+.letter:last-child { page-break-after: auto; break-after: auto; }
+h1 { font-size: 17pt; margin: 0 0 6mm; }
+h2 { font-size: 12pt; margin: 6mm 0 2mm; }
+ul { margin: 0; padding-left: 6mm; }
+.ph { background: #fef3c7; padding: 1mm 2mm; border-radius: 1mm; }
+.sign { margin-top: 10mm; }
+@media screen { body { max-width: 180mm; margin: 10mm auto; } .letter { border-bottom: 1px dashed #ccc; padding-bottom: 10mm; margin-bottom: 10mm; } }
+</style>
+</head>
+<body>
+{% for s in students %}
+<section class="letter">
+  <h1>{{ P.letter_title }}</h1>
+  <p>{{ P.letter_greeting }}</p>
+  <p>{{ P.letter_intro | fmt(name=s.display_name) }}</p>
+  <p class="ph">{{ P.letter_academy }}</p>
+  <h2>{{ P.letter_shows_h }}</h2>
+  <ul>{% for x in P.letter_shows %}<li>{{ x }}</li>{% endfor %}</ul>
+  <h2>{{ P.letter_never_h }}</h2>
+  <ul>{% for x in P.letter_never %}<li>{{ x }}</li>{% endfor %}</ul>
+  <p>{{ P.letter_rhythm }}</p>
+  <p><b>{{ P.letter_link }}</b></p>
+  <p class="ph">{{ P.letter_privacy }}</p>
+  <p class="sign">{{ P.letter_closing }}</p>
+</section>
+{% endfor %}
+</body>
+</html>

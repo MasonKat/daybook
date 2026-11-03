@@ -290,6 +290,12 @@ One line each. "deferred" = not built in P0, on purpose.
 - `docs/운영가이드.md` (plain Korean, short sentences): 수업 전, 수업 중, 수업 끝, 토요일, 학생 추가 · 퇴원 · 링크 재발급, and 문제가 생기면 with the ten likeliest failures. Buttons are named exactly as the screens show them (a test compares them with strings.ko.json).
 - `daybook guide [--out cards/운영가이드.html]`: printable A4 HTML, one routine per page, from a small built-in Markdown subset (no new dependency). No link or token appears on paper.
 
+## G4: printable 안내 cards (2026-11-04)
+- **Standing rule: no printed paper ever carries a token, as text or as a QR.** Links travel only by the teacher's 1:1 KakaoTalk (the F11 안내 문구), so a lost card is never a lost link. A test renders every demo class's cards and letters and asserts there is no token, no link of any kind (`http`, `/s/`, `/p/`), no QR or image, and no full name or student ID.
+- `daybook cards students <class>`: an A4 sheet of cut-out cards, one per active student: the display name, "내 링크는 선생님 카톡으로 받아요", the 홈 화면 추가 steps (iPhone / Android), the 오늘 ritual as three drawn pictures (① 출석 코드 → ② 오늘의 장면 → ③ 과제 끝 찍기), and "링크는 나만 쓰기 · 잃어버리면 선생님께 (새 링크 발급)". Six cards per page.
+- `daybook cards parents <class>`: one warm-formal A4 letter per student (display name only): what the page shows, what it never shows (no ranks or comparisons, no other students, no face or homework photos), the Saturday rhythm, that the link comes by KakaoTalk from the teacher, and the placeholders `{원장·학원 문구}` and `{개인정보 안내 문구}` for the teacher to fill. The wording lives in `strings.ko.json` → `parent_msg.letter_*`, so the tone test covers it (it now also checks list items and headings; the playful-ending rule no longer flags words like 전용).
+- Output goes to `cards/` (gitignored); print from the browser (A4).
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

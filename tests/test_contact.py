@@ -244,16 +244,20 @@ def test_the_planner_never_moves_red_or_need_items(conn, big):
 # ---------------------------------------------------------------- tone (F13.6)
 
 EMOJI = re.compile("[\U0001F000-\U0001FAFF☀-➿⬀-⯿️‍❤♥]")
-PLAYFUL = re.compile(r"[~ㅋㅎㅠㅜ♥♡]|\^\^|!!|\?\?|\.\.\.|ㅎㅎ|요~|용\b|당\b")
+PLAYFUL = re.compile(r"[~ㅋㅎㅠㅜ♥♡]|\^\^|!!|\?\?|\.\.\.|ㅎㅎ|요~|(?:용|당)(?=[.!?~]|\s*$)")   # "-용." / "-당" endings
 
 
 def test_parent_drafts_are_formal_without_emoji_or_playful_endings():
     pm = strings()["parent_msg"]
     assert pm["greeting"].startswith("안녕하세요, {g}. AMP 수학입니다.")
-    for key, text in pm.items():
-        assert not EMOJI.search(text), key
-        assert not PLAYFUL.search(text), key
-        assert "!" not in text, key
+    for key, val in pm.items():
+        for text in (val if isinstance(val, list) else [val]):      # G4: the letter's lists and headings too
+            assert not EMOJI.search(text), key
+            assert not PLAYFUL.search(text), key
+            assert "!" not in text, key
+        if isinstance(val, list) or key.endswith(("_h", "_title")):
+            continue                                                 # headings and list items are noun phrases
+        text = val
         if not key.startswith(("reason_", "why_", "coverage", "_")):
             assert text.rstrip().endswith(("다.", "요.", "다", "요", ")")) or "{" in text[-12:], key
 

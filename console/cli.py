@@ -1057,5 +1057,20 @@ def guide(out):
     click.echo(f"{G.write(out)}  (open it in a browser and print, A4)")
 
 
+@cli.command()
+@click.argument("kind", type=click.Choice(["students", "parents"]))
+@click.argument("class_name")
+@click.option("--out", "out_dir", default="cards", show_default=True, help="Folder (gitignored)")
+@click.pass_obj
+def cards(obj: Ctx, kind, class_name, out_dir):
+    """G4: printable 안내 cards (students: cut-out cards; parents: an A4 letter each). Never a link or a QR on paper."""
+    from . import cards as C
+    try:
+        path = C.write(obj.conn, kind, class_name, out_dir)
+    except (ops.OpError, ValueError) as e:
+        fail(str(e))
+    click.echo(f"{path}  (open it in a browser and print, A4)")
+
+
 if __name__ == "__main__":
     main()
