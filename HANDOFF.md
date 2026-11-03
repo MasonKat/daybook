@@ -9,7 +9,7 @@ in `daybook.sqlite` (gitignored), and on the deployed pages behind unguessable l
 
 ## 0. State at 11-04 (after F6–F14 and G1–G5): what to do before Friday 11-06
 
-`main` is green from a clean clone: 182 pytest, 40 Worker node tests (incl. the class-day budget with an AMP Live round
+`main` is green from a clean clone: 185 pytest, 40 Worker node tests (incl. the class-day budget with an AMP Live round
 and a weekly-test round), the full Playwright check. Built: P0, design v2, F1–F14, hotfix H1–H6, G1 doctor, G2 backup,
 G3 운영 가이드, G4 안내 cards, G5 taste refresh. Every choice is in `DECISIONS.md`. Console schema v8 (migrates by itself);
 Worker v6. The pilot: two Mon/Wed/Fri 고1 classes from Friday 11-06; the weekly test restarts that day (고2 on Saturday).
@@ -93,7 +93,9 @@ Fill `worker_url`, `pages_url`, `teacher_token` in `daybook.json` (gitignored). 
 ## 1b. Taste build for the students (F1)
 
 `scripts\deploy-taste.ps1` (or `make deploy-taste`) reseeds `demo.sqlite`, builds `dist-taste/` with only the demo
-student 콩 and deploys it to the Pages project `daybook-taste`, separate from the real one. It needs only
+student 콩 and deploys it to the Pages project `amp-taste` (https://amp-taste.pages.dev, the teacher's existing classic
+Pages project), separate from the real one; `-Project <name>` (or `make deploy-taste TASTE_PROJECT=<name>`) picks
+another. It needs only
 `npx wrangler login`. Share the printed URL (landing → 학생 화면 보기 / 학부모 화면 보기); nothing a visitor does is sent
 or stored anywhere.
 

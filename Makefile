@@ -68,8 +68,10 @@ taste: setup
 	$(DEMO_ENV) $(BIN)/daybook demo --force --no-publish
 	$(DEMO_ENV) $(BIN)/daybook publish --taste
 
+# the teacher's live taste project (https://amp-taste.pages.dev); override: make deploy-taste TASTE_PROJECT=<name>
+TASTE_PROJECT ?= amp-taste
 deploy-taste: taste
-	cd worker && npx wrangler pages deploy ../dist-taste --project-name daybook-taste --branch main
+	cd worker && npx wrangler pages deploy ../dist-taste --project-name $(TASTE_PROJECT) --branch main
 
 clean:
 	rm -rf dist dist-taste .dist-staging .taste-staging demo.sqlite

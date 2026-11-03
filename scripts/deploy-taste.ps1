@@ -1,7 +1,7 @@
 # F1 taste build: a fresh demo seed (demo.sqlite only, never the real database), only the demo student's pages
-# into dist-taste\, then deploy to the separate Pages project "daybook-taste". Needs `npx wrangler login` once.
-# Run from anywhere:  powershell -ExecutionPolicy Bypass -File scripts\deploy-taste.ps1 [-Project daybook-taste]
-param([string]$Project = 'daybook-taste')
+# into dist-taste\, then deploy to the separate Pages project "amp-taste" (https://amp-taste.pages.dev). Needs `npx wrangler login` once.
+# Run from anywhere:  powershell -ExecutionPolicy Bypass -File scripts\deploy-taste.ps1 [-Project amp-taste]
+param([string]$Project = 'amp-taste')
 # Windows PowerShell 5.1 turns a native command's stderr into a terminating error under 'Stop' (H5):
 # keep 'Continue' and check $LASTEXITCODE after every native command instead.
 $ErrorActionPreference = 'Continue'
