@@ -13,7 +13,8 @@ function Invoke-Step([string]$Label, [scriptblock]$Block) {
     if ($LASTEXITCODE -ne 0) { Write-Host "FAILED: $Label" -ForegroundColor Red; exit $LASTEXITCODE }
 }
 
-Invoke-Step 'pytest' { .\.venv\Scripts\pytest.exe -q }
+# Never pip's generated launchers (antivirus blocks them): python.exe -m pytest / -m console.
+Invoke-Step 'pytest' { .\.venv\Scripts\python.exe -m pytest -q }
 
 Push-Location worker
 try { Invoke-Step 'worker node tests' { node --experimental-sqlite --no-warnings --test 'test/*.test.mjs' } } finally { Pop-Location }
@@ -27,11 +28,11 @@ if ($LASTEXITCODE -ne 0) {
 
 $env:DAYBOOK_DB = 'demo.sqlite'
 $env:DAYBOOK_CONFIG = 'demo\daybook.demo.json'
-$env:DAYBOOK_BIN = (Resolve-Path '.venv\Scripts\daybook.exe').Path
+$env:DAYBOOK_PY = (Resolve-Path '.venv\Scripts\python.exe').Path   # the e2e runs `python -m console`
 try {
     if ($Screenshots) { Invoke-Step 'e2e (Playwright) + screenshots' { node tests\e2e\check.cjs --screenshots } }
     else { Invoke-Step 'e2e (Playwright)' { node tests\e2e\check.cjs } }
 } finally {
-    Remove-Item Env:DAYBOOK_DB, Env:DAYBOOK_CONFIG, Env:DAYBOOK_BIN -ErrorAction SilentlyContinue
+    Remove-Item Env:DAYBOOK_DB, Env:DAYBOOK_CONFIG, Env:DAYBOOK_PY -ErrorAction SilentlyContinue
 }
 Write-Host 'all checks passed' -ForegroundColor Green

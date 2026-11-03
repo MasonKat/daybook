@@ -3,7 +3,7 @@
 **Status (2026-11-04: P0, design v2, F1–F9, hotfix H1–H6, F10 videos per class, F11 members in the Teacher tab, F12 insights, F13 parent-contact desk, F14 weekly-test report):**
 1. P1 complete and tested: schema + `students_public`, `init`, `demo`, `roster add/list/import`, Worker `/submit` + `/submissions`, student 오늘 tab, `pull`, parent page, `publish` + no-PII lint, `import screeners`, deploy steps.
 2. P2 complete: board + attitude buttons, `score`, class reward bar, `note`, `weekly`, Playwright checks. P3: manifest/icons/standalone, `rotate-tokens`, `export pdf` stub, Worker node tests.
-3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 180 pytest + 40 Worker node tests (incl. the class-day budget with a Live round) + the Playwright end-to-end check (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
+3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 182 pytest + 40 Worker node tests (incl. the class-day budget with a Live round) + the Playwright end-to-end check (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
    Design v2: shorts reels + 강의 cards, story rings with content, status-coloured profile tiles, one weekly report per parent message.
 4. Features: taste build (콩, `make deploy-taste`), 출석 with a 4-digit code, 오늘 한 줄, 오늘의 장면 + reactions, 휴강, QR sheet, class band, term report, note drafts,
    the Teacher tab (no terminal on Saturdays), AMP Live (cooperative in-class rounds), the answer-card spike, an offline-capable student page.
@@ -30,6 +30,10 @@ and a small Cloudflare Worker receives the photos.
     tests/     pytest + e2e/check.cjs (Playwright)              dist/   generated (gitignored)
 
 ## Setup (≤ 10 commands)
+
+**Windows:** run every `daybook …` command below as `.venv\Scripts\python.exe -m console …` (and tests as
+`.venv\Scripts\python.exe -m pytest`). Antivirus (Norton on the teacher's laptop) blocks pip's generated launcher
+executables. `scripts\*.ps1` already do this. Mac/Linux: `daybook …` (or `python -m console …`).
 
 Needs Python ≥ 3.11 (Pillow and segno are installed by `make`) and Node ≥ 22 (the local Worker tests use `node:sqlite`).
 

@@ -10,7 +10,9 @@
  * - daybook pull + publish -> the ✓ and time show on the parent page and on the board
  * - board: an attitude button writes the score and moves the class bar
  * - screenshots (390 px) into demo/screenshots/
- * Env: DAYBOOK_BIN (default .venv/bin/daybook), DAYBOOK_DB (demo.sqlite), DAYBOOK_CONFIG (demo/daybook.demo.json)
+ * Env: DAYBOOK_PY (a python that has `console`: runs `python -m console`; the default on Windows is .venv's python.exe,
+ *      because antivirus blocks pip's generated launcher), DAYBOOK_BIN (a `daybook` executable; the default elsewhere is
+ *      .venv/bin/daybook), DAYBOOK_DB (demo.sqlite), DAYBOOK_CONFIG (demo/daybook.demo.json)
  */
 'use strict';
 const fs = require('fs');
@@ -51,8 +53,12 @@ const env = { ...process.env, DAYBOOK_DB: path.join(TMP, 'e2e.sqlite'), DAYBOOK_
 const TASTE_OUT = path.join(TMP, 'dist-taste');
 const WIN = process.platform === 'win32';
 const VENV_BIN = path.join(ROOT, '.venv', WIN ? 'Scripts' : 'bin');
-const DAYBOOK = process.env.DAYBOOK_BIN || path.join(VENV_BIN, WIN ? 'daybook.exe' : 'daybook');
 const PYTHON = path.join(VENV_BIN, WIN ? 'python.exe' : 'python');
+// [command, ...leading args]: `python -m console` (DAYBOOK_PY, and always on Windows), else the `daybook` entry point
+const DAYBOOK_CMD = process.env.DAYBOOK_PY ? [process.env.DAYBOOK_PY, '-m', 'console']
+  : process.env.DAYBOOK_BIN ? [process.env.DAYBOOK_BIN]
+  : WIN ? [PYTHON, '-m', 'console'] : [path.join(VENV_BIN, 'daybook')];
+const dbCmd = (args) => [DAYBOOK_CMD[0], [...DAYBOOK_CMD.slice(1), ...args]];
 
 let failures = 0;
 function check(cond, msg) {
@@ -116,7 +122,7 @@ const workerGet = async (p) => {
   const r = await fetch(WORKER + p, { headers: { 'X-Teacher-Token': TEACHER } });
   return p.startsWith('/photo') ? Buffer.from(await r.arrayBuffer()) : r.json();
 };
-const daybook = (...args) => execFileSync(DAYBOOK, args, { env: { ...env, PYTHONIOENCODING: 'utf-8' }, cwd: ROOT, encoding: 'utf-8' });
+const daybook = (...args) => execFileSync(...dbCmd(args), { env: { ...env, PYTHONIOENCODING: 'utf-8' }, cwd: ROOT, encoding: 'utf-8' });
 
 /* ---------- page audit */
 const VIEWPORTS = [{ width: 360, height: 740 }, { width: 390, height: 844 }];
@@ -201,7 +207,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
       '--open', kst(-3600e3), '--close', kst(2 * 86400e3));
     check(/주간 테스트/.test(radd) && /round\(s\) accepted/.test(radd), `daybook round add: the round is open and sent to the Worker as a hash`);
     const MTEXT = '다 같이 찾은 꼭짓점';
-    const mAdd = (answer) => { try { return execFileSync(DAYBOOK, ['moment', 'add', CLASS_ON, '--photo', path.join(cfgCopy.moments_dir, '_demo_src', 'm3.jpg'), '--text', MTEXT],
+    const mAdd = (answer) => { try { return execFileSync(...dbCmd(['moment', 'add', CLASS_ON, '--photo', path.join(cfgCopy.moments_dir, '_demo_src', 'm3.jpg'), '--text', MTEXT]),
       { env: { ...env, PYTHONIOENCODING: 'utf-8' }, cwd: ROOT, input: answer, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }); } catch (e) { return 'EXIT ' + e.status + ' ' + e.stdout; } };
     check(/^EXIT [12] /.test(mAdd('n\n')), 'daybook moment add: answering N to the faces/names check posts nothing');
     check(/EXIF removed\) sent to the Worker/.test(mAdd('y\n')), 'daybook moment add: y → EXIF stripped, sent to the Worker for the same-day view');
@@ -584,7 +590,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     }
 
     console.log('\n[6] board (127.0.0.1): live ✓, attitude buttons write and move the bar');
-    board = spawn(DAYBOOK, ['board', CLASS_ON, '--port', String(BOARD_PORT)], { env, cwd: ROOT, stdio: 'ignore' });
+    board = spawn(...dbCmd(['board', CLASS_ON, '--port', String(BOARD_PORT)]), { env, cwd: ROOT, stdio: 'ignore' });
     await waitFor(BOARD + '/api/state');
     const bctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const bp = await bctx.newPage();

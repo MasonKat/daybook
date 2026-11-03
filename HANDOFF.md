@@ -1,12 +1,15 @@
 # HANDOFF — for the local agents (real data)
 
+**Windows: every `daybook …` command in this file is `.venv\Scripts\python.exe -m console …`** (antivirus blocks pip's
+generated launcher; `scripts\*.ps1` and the e2e already run the module). Mac/Linux keep `daybook`.
+
 The cloud build used synthetic data only. Real students, phones, scores and notes exist only on the teacher's laptop,
 in `daybook.sqlite` (gitignored), and on the deployed pages behind unguessable links. Never commit `daybook.sqlite`,
 `daybook.json`, `dist/`, a real roster CSV or real screener snapshots. Never deploy to GitHub Pages.
 
 ## 0. State at 11-04 (after F6–F14 and G1–G5): what to do before Friday 11-06
 
-`main` is green from a clean clone: 180 pytest, 40 Worker node tests (incl. the class-day budget with an AMP Live round
+`main` is green from a clean clone: 182 pytest, 40 Worker node tests (incl. the class-day budget with an AMP Live round
 and a weekly-test round), the full Playwright check. Built: P0, design v2, F1–F14, hotfix H1–H6, G1 doctor, G2 backup,
 G3 운영 가이드, G4 안내 cards, G5 taste refresh. Every choice is in `DECISIONS.md`. Console schema v8 (migrates by itself);
 Worker v6. The pilot: two Mon/Wed/Fri 고1 classes from Friday 11-06; the weekly test restarts that day (고2 on Saturday).
@@ -62,8 +65,9 @@ On Windows (no `make`), in PowerShell from the repo folder:
 powershell -ExecutionPolicy Bypass -File scripts\demo.ps1
 ```
 
-`scripts\check.ps1` reruns the checks and `scripts\deploy-pages.ps1` is `make deploy-pages`. Use `.venv\Scripts\daybook.exe`
-wherever this file says `.venv/bin/daybook`. No `PYTHONUTF8` is needed any more.
+`scripts\check.ps1` reruns the checks and `scripts\deploy-pages.ps1` is `make deploy-pages`. On Windows write `.venv\Scripts\python.exe -m console`
+wherever this file says `daybook` or `.venv/bin/daybook` (never pip's generated launcher exe: Norton blocks it and can kill
+the terminal). No `PYTHONUTF8` is needed any more.
 
 (Proves the toolchain works; uses `demo.sqlite`, not the real DB.) Then, after the README deploy steps:
 
@@ -213,7 +217,7 @@ else "{M/D} 과제". The lint stops publish if a raw id (`Adaptive_…`, `round_
 
 ## 6. The teacher's Saturday (after the pilot starts Friday 11-06)
 
-Without a terminal (F6): start the board once (`.venv\Scripts\daybook.exe board 고1A`, or a desktop shortcut to it),
+Without a terminal (F6): start the board once (`.venv\Scripts\python.exe -m console board 고1A`, or a desktop shortcut to it),
 open http://127.0.0.1:8787/teacher and use 가져오기 → 이번 주 한 줄 → 발행 → 배포 → 주간 메시지 복사. Set
 `"pages_project"` in daybook.json if the Pages project is not called `daybook`. The same steps in a terminal:
 

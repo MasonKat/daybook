@@ -301,6 +301,10 @@ One line each. "deferred" = not built in P0, on purpose.
 - Demo data for it: 고1A gets a self-study block to 21:00 and 콩's submissions carry a 푼 문제 count.
 - New screenshots: `taste-review.png`, `taste-weekly-test.png`, `taste-parent.png` (plus `weekly-test.png`); all screenshots were re-taken. The local agent redeploys amp-taste.pages.dev (`make deploy-taste`).
 
+## H1–H2 (Windows, 2026-11-04, from the local agent)
+- **H1: no generated launcher on Windows.** Norton on the teacher's laptop blocks pip's generated `.exe` launchers (the first run after `pip install -e` killed the terminal). `console/__main__.py` makes `python -m console` the CLI; every Windows caller uses `.venv\Scripts\python.exe -m console …`: `scripts\demo.ps1` (the install check imports `console` instead of testing for an exe), `check.ps1` (also `python.exe -m pytest`, since pytest's launcher is the same kind of file), `deploy-pages.ps1`, `deploy-taste.ps1`, and the e2e (`DAYBOOK_PY`, and on Windows by default; `DAYBOOK_BIN` still accepted). The board and Teacher tab start no DAYBOOK subprocess (발행, backup and doctor run in-process; 배포 runs `npx wrangler`). README, HANDOFF and the 운영 가이드 write Windows commands as `.venv\Scripts\python.exe -m console …`. No `.ps1` wrapper: under Windows 11's default execution policy an unsigned `.ps1` does not run without `-ExecutionPolicy Bypass`, so the explicit form is the one that always works. Mac/Linux keep the `daybook` entry point. `tests/test_no_launcher.py` fails if a launcher name appears in the scripts, the e2e, the console code or the docs.
+- **H2:** the refusal test accepts, on Windows only, a connection reset instead of the 403/413 for the Origin, Host and too-big cases (paths only an attacker or a broken client hits); Linux stays strict, and every case asserts the refused request changed nothing (no attitude row, no event).
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

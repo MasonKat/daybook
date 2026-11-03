@@ -6,7 +6,7 @@ param([string]$Project = 'daybook')
 $ErrorActionPreference = 'Continue'
 Set-Location (Split-Path -Parent $PSScriptRoot)
 
-.\.venv\Scripts\daybook.exe publish
+.\.venv\Scripts\python.exe -m console publish
 if ($LASTEXITCODE -ne 0) { Write-Host 'publish stopped: nothing was deployed' -ForegroundColor Red; exit $LASTEXITCODE }
 Push-Location worker
 try {

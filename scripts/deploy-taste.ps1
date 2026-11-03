@@ -10,11 +10,11 @@ Set-Location (Split-Path -Parent $PSScriptRoot)
 $env:DAYBOOK_DB = 'demo.sqlite'
 $env:DAYBOOK_CONFIG = 'demo\daybook.demo.json'
 try {
-    .\.venv\Scripts\daybook.exe init
+    .\.venv\Scripts\python.exe -m console init
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    .\.venv\Scripts\daybook.exe demo --force --no-publish
+    .\.venv\Scripts\python.exe -m console demo --force --no-publish
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    .\.venv\Scripts\daybook.exe publish --taste
+    .\.venv\Scripts\python.exe -m console publish --taste
     if ($LASTEXITCODE -ne 0) { Write-Host 'taste publish stopped: nothing was deployed' -ForegroundColor Red; exit $LASTEXITCODE }
 } finally {
     Remove-Item Env:DAYBOOK_DB, Env:DAYBOOK_CONFIG -ErrorAction SilentlyContinue
