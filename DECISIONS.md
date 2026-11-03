@@ -309,6 +309,12 @@ One line each. "deferred" = not built in P0, on purpose.
 - `daybook demo --force` cleared a hand-written table list that predated F13/F14 and failed on a foreign key (contacts, rounds, test_reports, insights …). The order is now derived from the schema itself (`PRAGMA foreign_key_list`, children before parents; `events` is kept: it is append-only and holds the demo marker). A test fills every table, re-seeds twice and runs `PRAGMA foreign_key_check`; another checks the order covers every table, child before parent.
 - The taste build deploys to the teacher's existing classic Pages project **`amp-taste`** (https://amp-taste.pages.dev) by default: `scripts\deploy-taste.ps1 [-Project <name>]`, `make deploy-taste [TASTE_PROJECT=<name>]`. (Earlier entries that name `daybook-taste` describe the old default.)
 
+## F15.1: watch signals (2026-11-04, from the local agent)
+- Only a video the student tapped is measured. The page talks to the youtube-nocookie iframe through the player's own postMessage protocol (`enablejsapi=1&origin=…`, a `listening` handshake, `infoDelivery` / `onStateChange` messages). **The YouTube IFrame API script is never loaded into the page**: it would run with the page's origin, and the page's URL carries the student's token. Still 0 third-party requests before a tap.
+- Watched seconds = real playback only (a jump of more than 3 s is a seek, not watching); percent = the furthest point reached. ONE record per (token, video, day) is sent on pause, end, leaving the page (`sendBeacon`) or closing the video, and only when it changed: never a heartbeat stream. The Worker keeps the larger seconds and the larger percent (`POST /watch`, 60 per token per hour; the console pulls `GET /watches`; rows expire with the other records). Taste build: kept on the phone only. Only YouTube videos can be measured; a link opened in a new tab is not.
+- "Watched" means at least 10 seconds. The student profile shows "이번 주 본 영상 n개" (their own); the parent card shows "이번 주 해설·개념 영상 n개 시청" (a count; `"parent_shows_videos": false` hides it). Teacher tab → 영상: per class and video, students who watched / average % / minutes; per student this week's videos (laptop only).
+- Worker v7 (doctor asks for a redeploy when older). The budget test now includes 3 watch records per student per day.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

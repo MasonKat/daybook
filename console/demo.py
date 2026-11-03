@@ -154,8 +154,23 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
         if cname == KONG["class"]:
             _seed_kong(conn, cid, sess, today, rng)
     _seed_contacts(conn, today, rng)
+    _seed_watches(conn, today, rng)
     log_event(conn, "demo_seed", {"today": today.isoformat()})
     conn.commit()
+
+
+def _seed_watches(conn: sqlite3.Connection, today: date, rng: random.Random) -> None:
+    """F15.1/F15.2: synthetic watch signals for the untagged demo videos (YouTube ids), so the Teacher tab's 영상, the
+    students' counts and a class 인기 ring have something to show. Every student watched the newest short this week."""
+    vids = ["AMPshort001", "AMPshort002", "AMPshort003", "AMPdemo0003"]
+    for r in conn.execute("SELECT id FROM students ORDER BY id").fetchall():
+        for k, v in enumerate(vids):
+            if k and rng.random() < 0.55:
+                continue
+            day = today - timedelta(days=rng.randint(0, 6) if k == 0 else rng.randint(0, 12))
+            sec = rng.randint(25, 60) if v.startswith("AMPshort") else rng.randint(120, 1200)
+            conn.execute("INSERT OR IGNORE INTO watches (student_id, video_id, day, sec, pct, ts) VALUES (?, ?, ?, ?, ?, ?)",
+                         (r["id"], v, day.isoformat(), sec, rng.randint(35, 100), "2026-01-01T00:00:00.000Z"))
 
 
 def M_(hhmm: str) -> int:

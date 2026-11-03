@@ -219,8 +219,48 @@
 
     /* ---- 영상: shorts (reels) and long videos; the iframe is created only on tap (0 third-party requests on load) */
     var vtab = $('tab-videos'), feed = $('feed'), longs = $('longs');
+    /* F15.1 watch signals: only for a video the student tapped. The page speaks the iframe's own postMessage protocol
+       (enablejsapi=1); no YouTube script is ever loaded into this page (it carries the student's token). One record per
+       video and day, sent on pause / end / leaving the page / closing the video: never a heartbeat stream. */
+    var W = null, WKEY_T = 'daybook.watch.taste';
+    var YT_ORIGIN = 'https://www.youtube-nocookie.com';
+    function watchFlush(beacon) {
+      if (!W || W.sec < 1) return;
+      var sec = Math.round(W.sec), pct = W.dur > 0 ? Math.min(100, Math.round(100 * W.maxPos / W.dur)) : 0;
+      if (sec === W.sentSec && pct === W.sentPct) return;
+      W.sentSec = sec; W.sentPct = pct;
+      if (TASTE || !D.worker) {   /* taste: kept on the phone only */
+        try { var m = JSON.parse(LS.get(WKEY_T) || '{}'); m[W.v] = Math.max(m[W.v] || 0, sec); LS.set(WKEY_T, JSON.stringify(m)); } catch (e) { /* ignore */ }
+        return;
+      }
+      var fd = new FormData();
+      fd.append('t', tok); fd.append('v', W.v); fd.append('sec', String(sec)); fd.append('pct', String(pct));
+      if (beacon && navigator.sendBeacon) { navigator.sendBeacon(D.worker + '/watch', fd); return; }
+      fetch(D.worker + '/watch', { method: 'POST', body: fd, keepalive: true }).catch(function () { /* offline: lost, fine */ });
+    }
+    window.addEventListener('message', function (e) {
+      if (!W || e.origin !== YT_ORIGIN || !W.frame || e.source !== W.frame.contentWindow) return;
+      var d; try { d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch (x) { return; }
+      if (!d || !d.event) return;
+      var info = d.info || {};
+      if (d.event === 'onStateChange') info = { playerState: d.info };
+      if (typeof info.duration === 'number' && info.duration > 0) W.dur = info.duration;
+      if (typeof info.playerState === 'number') {
+        W.playing = info.playerState === 1;
+        if (info.playerState === 2 || info.playerState === 0) watchFlush(false);   /* paused or ended */
+      }
+      if (typeof info.currentTime === 'number') {
+        var dt = info.currentTime - W.pos;
+        if (W.playing && dt > 0 && dt < 3) W.sec += dt;                          /* real playback, not a seek */
+        W.pos = info.currentTime;
+        W.maxPos = Math.max(W.maxPos, info.currentTime);
+      }
+    });
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') watchFlush(true); });
     function stopVideos() {
       if (!vtab) return;   /* showTab() runs before this section is wired */
+      watchFlush(false);
+      W = null;
       var frames = vtab.querySelectorAll('iframe');
       for (var i = 0; i < frames.length; i++) {
         var media = frames[i].parentNode;
@@ -236,7 +276,11 @@
       stopVideos();
       var media = b.parentNode, f = document.createElement('iframe');
       for (var c = 0; c < media.children.length; c++) media.children[c].hidden = true;
-      f.src = 'https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1&playsinline=1&rel=0';
+      f.src = YT_ORIGIN + '/embed/' + id + '?autoplay=1&playsinline=1&rel=0&enablejsapi=1&origin=' + encodeURIComponent(location.origin);
+      W = { v: id, frame: f, sec: 0, pos: 0, maxPos: 0, dur: 0, playing: false, sentSec: 0, sentPct: 0 };
+      f.addEventListener('load', function () {   /* ask the player to report its state to this page */
+        try { f.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), YT_ORIGIN); } catch (e) { /* ignore */ }
+      });
       f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
       f.allowFullscreen = true;
       f.referrerPolicy = 'strict-origin';   /* only the origin, never the token path */

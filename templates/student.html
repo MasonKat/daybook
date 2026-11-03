@@ -177,6 +177,7 @@
     <li><b class="tnum">{{ me.cumulative }}</b><span>{{ S.count_points }}</span></li>
   </ul>
   {% if me.solved_week is not none %}<p class="muted solved-me tnum" id="solved-me">{{ S.solved_me | fmt(n=me.solved_week) }}</p>{% endif %}
+  {% if me.videos_week %}<p class="muted solved-me tnum" id="videos-me">{{ S.videos_me | fmt(n=me.videos_week) }}</p>{% endif %}
   {% if me.months|length > 1 %}
   <div class="highlights" id="highlights">
     {% for m in me.months %}<button type="button" class="hl-b" data-month="{{ m.key }}"><span class="ring"><span class="hl-in tnum">{{ m.n }}</span></span><span class="hl-l">{{ m.label }}</span></button>{% endfor %}

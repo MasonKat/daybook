@@ -427,6 +427,23 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     await shot(page, 'student-long.png');
     await page.locator('#longs .lcard').first().locator('button.play').click();
     check(/youtube-nocookie\.com\/embed\//.test(await page.locator('#longs .lcard').first().locator('iframe').getAttribute('src') || ''), 'tapping ▶ on a long card plays it inline');
+    {   // F15.1: the player's own postMessage reports (simulated: no network to YouTube here) -> ONE record on pause
+      const src = await page.locator('#longs .lcard').first().locator('iframe').getAttribute('src');
+      check(/enablejsapi=1/.test(src) && !(await page.evaluate(() => [...document.scripts].some((x) => /youtube/.test(x.src)))),
+        'the player is driven through postMessage; no YouTube script is loaded into the page');
+      const vId = src.match(/embed\/([A-Za-z0-9_-]{11})/)[1];
+      await page.evaluate(async () => {
+        const f = document.querySelector('#longs .lcard iframe');
+        const send = (o) => window.dispatchEvent(new MessageEvent('message', { data: JSON.stringify(o), origin: 'https://www.youtube-nocookie.com', source: f.contentWindow }));
+        send({ event: 'infoDelivery', info: { duration: 600, playerState: 1, currentTime: 0 } });
+        for (let t = 1; t <= 30; t++) send({ event: 'infoDelivery', info: { currentTime: t } });
+        send({ event: 'infoDelivery', info: { currentTime: 300 } });                 // a seek: not counted as watching
+        send({ event: 'onStateChange', info: 2 });                                   // pause -> one record
+        await new Promise((r) => setTimeout(r, 400));
+      });
+      const ws = (await workerGet('/watches')).items.filter((i) => i.token === pick.student_token && i.v === vId);
+      check(ws.length === 1 && ws[0].sec === 30 && ws[0].pct === 50, `pause sends one watch record (sec ${ws[0] && ws[0].sec}, ${ws[0] && ws[0].pct}%)`);
+    }
 
     await page.click('#t-me');
     check(await page.isHidden('#stories'), 'stories row hidden on 내 기록');

@@ -18,7 +18,7 @@ from . import models as M
 from .config import Config
 from .db import SCHEMA_VERSION
 
-MIN_WORKER_VERSION = 6        # check-ins, 장면/Live, 푼 문제 수, 주간 테스트 reports, /tokmap-info
+MIN_WORKER_VERSION = 7        # check-ins, 장면/Live, 푼 문제 수, 주간 테스트 reports, /tokmap-info, /watch
 OK, WARN, FAIL = "✓", "⚠", "✗"
 REDEPLOY = "redeploy: cd worker && npx wrangler deploy"
 

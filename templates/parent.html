@@ -50,6 +50,12 @@
       {% if w.focus %}<p class="rline">{% for f in w.focus %}<span class="chip">{{ f }}</span> {% endfor %}</p>{% endif %}
     </div>
   </div>
+  {% if w.videos %}
+  <div class="rrow">
+    <span class="rk">{{ S.row_videos }}</span>
+    <div class="rv"><p class="rline tnum" id="pvideos"><b>{{ S.parent_videos | fmt(n=w.videos) }}</b></p></div>
+  </div>
+  {% endif %}
   {% if w.solved is not none %}
   <div class="rrow">
     <span class="rk">{{ S.row_solved }}</span>

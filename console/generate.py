@@ -17,6 +17,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from . import lint as lintmod
+from . import watch as W
 from . import models as M
 from .config import ROOT, Config, strings
 from .db import log_event, now_utc_iso
@@ -165,7 +166,10 @@ def _video_item(p: Path, v: dict) -> dict | None:
             "added": str(v.get("added", "")), "yt_id": yt, "thumb_src": thumb_src, "kind": kind,
             "duration": dur if re.fullmatch(r"\d{1,2}(:\d{2}){1,2}", dur) else "",
             "thumb": f"/t/{vid}.jpg" if thumb_src else "",
-            "classes": _tags(v.get("classes")), "grades": _tags(v.get("grades")), "pin": v.get("pin") is True}
+            "classes": _tags(v.get("classes")), "grades": _tags(v.get("grades")), "pin": v.get("pin") is True,
+            # F15.2: YouTube's own counters, filled by the local agent; the Teacher tab shows them, pages never do
+            "views": v.get("views") if isinstance(v.get("views"), int) else None,
+            "views_7d": v.get("views_7d") if isinstance(v.get("views_7d"), int) else None}
 
 
 def video_for(v: dict, cls) -> bool:
@@ -392,6 +396,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
     published_at = _publish_times(conn)
     show_late = bool(cfg.extra.get("show_late", False))
     show_lines = bool(cfg.extra.get("parent_shows_reflection", False))   # off by default: students write honestly
+    show_videos = bool(cfg.extra.get("parent_shows_videos", True))       # F15.1: the parent card's 영상 count
 
     students = []
     only = " AND slug = ?" if taste else ""
@@ -530,6 +535,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                     ritual.append({"wd": x["wd"], "in": t_in, "out": x["time"], "late": late, "line": line})
             wsum = _sum_upto(att, wm, cut)
             solved = _solved(subs, wm, cut)
+            wk_videos = len(W.watched_ids(conn, s["id"], wm, cut)) if show_videos else 0      # F15.1: a count only
             wk_ins = [r for r in insights if wm.isoformat() <= r["date"] <= we.isoformat()]
             ins_line = scrub(wk_ins[-1]["parent_line"]) if wk_ins else ""
             ins_focus = ([f for f in (scrub(x) for x in json.loads(wk_ins[-1]["focus"] or "[]")) if f]
@@ -548,7 +554,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                 "dir_eff": trend["lines"]["eff"].dir if trend else "",
                 "dir_reach": trend["lines"]["reach"].dir if trend else "",
                 "week_sum": wsum, "cumulative": _sum_upto(att, None, cut), "solved": solved,
-                "insight": ins_line, "focus": ins_focus,
+                "insight": ins_line, "focus": ins_focus, "videos": wk_videos,
                 "bar_pct": (min(100.0, 100.0 * total_then / rw.goal) if rw and rw.goal > 0 and current else None),
                 "to_go": max(0, rw.goal - total_then) if rw else 0,
                 "note": wk_notes[-1]["text"] if wk_notes else "",
@@ -608,6 +614,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "lines": lines[:30],
             "bio": S["bio"].format(cls=cls["name"] if cls else "", n=len(sub_days)),
             "solved_week": _solved(subs, mon, today),
+            "videos_week": len(W.watched_ids(conn, s["id"], mon, today)),
             "shorts": my_shorts,
             "longs": my_longs,
             "hours": class_hours(cls, S),

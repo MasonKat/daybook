@@ -45,6 +45,10 @@ test('a full class day stays under 30 % of every free daily limit', async () => 
       rf.append('reasons', '계산실수,시간부족'); rf.append('wishlist', '풀이 영상'); rf.append('metaphor', '마라톤');
       assert.equal((await student('/report', rf)).ok, true);
     }
+    for (let k = 0; k < 3; k++) {                                              // F15.1: 3 videos watched, one record each
+      const wf = new FormData(); wf.append('t', t); wf.append('v', `AMPvideo00${k}`); wf.append('sec', '240'); wf.append('pct', '80');
+      assert.equal((await student('/watch', wf)).ok, true);
+    }
     for (let up = 0; up < (t.endsWith('cz') ? 2 : 1); up++) {
       const sf = new FormData(); sf.append('t', t); sf.append('line', '오늘 한 줄'); sf.append('chip', 'ok');
       sf.append('photo', new File([new Uint8Array(200000)], 'p.jpg', { type: 'image/jpeg' }));
@@ -73,7 +77,7 @@ test('a full class day stays under 30 % of every free daily limit', async () => 
     await tpost('/live/reveal', { room });
   }
   await tpost('/live/close', { room });
-  await teacher('/submissions'); await teacher('/checkins'); await teacher('/live/results'); await teacher('/reports');   // Saturday-style pull
+  await teacher('/submissions'); await teacher('/checkins'); await teacher('/live/results'); await teacher('/reports'); await teacher('/watches');   // Saturday-style pull
 
   const kv = env.SUBMISSIONS.ops, d1 = env.DB.usage;
   const dO = env.LIVE.usage;

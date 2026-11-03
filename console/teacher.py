@@ -427,3 +427,12 @@ def backup_now(db_path: str, cfg: Config) -> dict:
         return {"ok": True, "message": f"backup: {r.path.name} (integrity {r.integrity})", "path": str(r.path)}
     except (B.BackupError, OSError) as e:
         return {"ok": False, "message": f"warning: backup failed ({e})", "error": str(e)}
+
+
+# ---------------------------------------------------------------- F15.1 / F15.2: 영상 (watch signals, laptop only)
+
+def videos_view(conn: sqlite3.Connection, cfg: Config, day: date, days: int = 7) -> dict:
+    from . import watch as W
+    view = W.teacher_view(conn, generate.load_videos(cfg), day, 14 if days == 14 else 7)
+    view["text"] = W.report_text(view)
+    return view

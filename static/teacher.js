@@ -500,5 +500,38 @@
     api('/api/teacher/backup', {}).then(function (j) { $('dr-msg').textContent = j.ok ? j.message : (j.error || ''); });
   };
 
+  /* ------------------------------------------------------------ F15.1/F15.2: 영상 (class numbers; per student = teacher only) */
+  var VV = S.v, vvText = '';
+  function loadVideos(days) {
+    api('/api/teacher/videos?days=' + days).then(function (j) {
+      $('vv-range').textContent = j.from + ' ~ ' + j.to; vvText = j.text;
+      var box = $('vv-rows'); box.innerHTML = '';
+      j.classes.forEach(function (c) {
+        box.appendChild(el('h3', {}, c.name));
+        var t = el('table', { 'class': 'ttable vv' }), tb = el('tbody');
+        if (!c.videos.length) box.appendChild(el('p', { 'class': 'muted' }, VV.none));
+        c.videos.forEach(function (v) {
+          var tr = el('tr', { 'data-v': v.id });
+          tr.appendChild(el('td', {}, (v.id === c.popular ? '🔥 ' : '') + v.title));
+          tr.appendChild(el('td', { 'class': 'tnum' }, fmt(VV.students, { n: v.students, t: c.active })));
+          tr.appendChild(el('td', { 'class': 'tnum' }, fmt(VV.avg, { p: v.avg_pct }) + ' · ' + fmt(VV.minutes, { m: v.minutes })));
+          tr.appendChild(el('td', { 'class': 'tnum muted' }, typeof v.views === 'number' || typeof v.views_7d === 'number'
+            ? fmt(VV.views, { a: (v.views || 0).toLocaleString('ko-KR'), w: (v.views_7d || 0).toLocaleString('ko-KR') }) : ''));
+          tb.appendChild(tr);
+        });
+        t.appendChild(tb); if (c.videos.length) box.appendChild(t);
+        var det = el('details'); det.appendChild(el('summary', {}, VV.per_student));
+        var ul = el('ul', { 'class': 'tlist' });
+        c.students.forEach(function (s) { ul.appendChild(el('li', {}, s.display_name + ' · ' + s.n + (s.titles.length ? ' · ' + s.titles.join(', ') : ''))); });
+        det.appendChild(ul); box.appendChild(det);
+      });
+    });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('#t-videos [data-days]'), function (b) {
+    b.onclick = function () { loadVideos(Number(b.getAttribute('data-days'))); };
+  });
+  $('vv-copy').onclick = function () { copy(vvText, $('vv-copy')); };
+  loadVideos(7);
+
   loadRoster(); loadNotes(); loadMoments(); loadWeekly();
 })();

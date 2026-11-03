@@ -134,6 +134,16 @@ CREATE TABLE IF NOT EXISTS insights (       -- F12: a student-safe slice of the 
     PRIMARY KEY (student_id, round)
 );
 
+CREATE TABLE IF NOT EXISTS watches (         -- F15.1: our own watch signals, pulled from the Worker
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    video_id   TEXT NOT NULL,                  -- videos.json id (the YouTube id for embeddable videos)
+    day        TEXT NOT NULL,                  -- KST day
+    sec        INTEGER NOT NULL,               -- the most seconds watched that day
+    pct        INTEGER NOT NULL,               -- the furthest point reached, % of the video
+    ts         TEXT NOT NULL,
+    PRIMARY KEY (student_id, video_id, day)
+);
+
 CREATE TABLE IF NOT EXISTS class_bonus (  -- F7: class-wide points (AMP Live: >= 80 % of the class correct)
     id         INTEGER PRIMARY KEY,
     class_id   INTEGER NOT NULL REFERENCES classes(id),

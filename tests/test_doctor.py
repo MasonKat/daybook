@@ -20,7 +20,7 @@ def cfg(tmp_path, **kw):
                   path=str(tmp_path / "daybook.json"), extra={"backup_dir": str(tmp_path / "bk"), **kw})
 
 
-def worker(conn, version=6, d1=True, tokmap=None, health_error=None, info_status=None):
+def worker(conn, version=D.MIN_WORKER_VERSION, d1=True, tokmap=None, health_error=None, info_status=None):
     def fetch(path):
         if path == "/health":
             if health_error:

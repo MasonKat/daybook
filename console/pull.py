@@ -88,6 +88,7 @@ class PullReport:
     checkins: int = 0
     live: int = 0
     reports: int = 0
+    watches: int = 0
 
 
 def _token_map(conn: sqlite3.Connection) -> dict[str, int]:
@@ -144,6 +145,25 @@ def apply_items(conn: sqlite3.Connection, items: list[dict]) -> PullReport:
             log_event(conn, "submission_update", payload)
             rep.updated += 1
     return rep
+
+
+def apply_watches(conn: sqlite3.Connection, items: list[dict]) -> int:
+    """F15.1: watch signals -> watches (one row per student, video and day; the larger value wins)."""
+    tokens = _token_map(conn)
+    n = 0
+    for it in items:
+        sid = tokens.get(it.get("token", ""))
+        try:
+            v, day, sec, pct = str(it["v"]), str(it["day"]), int(it["sec"]), int(it["pct"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if sid is None or not (0 <= sec <= 36000 and 0 <= pct <= 100):
+            continue
+        conn.execute("""INSERT INTO watches (student_id, video_id, day, sec, pct, ts) VALUES (?, ?, ?, ?, ?, ?)
+                        ON CONFLICT (student_id, video_id, day) DO UPDATE SET sec = MAX(watches.sec, excluded.sec),
+                          pct = MAX(watches.pct, excluded.pct), ts = excluded.ts""", (sid, v, day, sec, pct, it.get("ts", "")))
+        n += 1
+    return n
 
 
 def apply_checkins(conn: sqlite3.Connection, items: list[dict], rep: PullReport) -> None:
@@ -204,6 +224,11 @@ def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None =
         rep.reports = n_new + n_upd
     except PullError:
         pass  # an older Worker without weekly-test reports
+    try:
+        wt = json.loads(fetch("/watches" + (f"?since={urllib.parse.quote(since)}" if since else "")))
+        rep.watches = apply_watches(conn, wt.get("items", []))
+    except PullError:
+        pass  # an older Worker without watch signals
     now = datetime.fromisoformat(body.get("now", datetime.now(timezone.utc).isoformat()).replace("Z", "+00:00"))
     next_since = (now - MARGIN).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     if photos_dir:
@@ -221,6 +246,6 @@ def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None =
                 pass  # expired (7-day retention) or missing
     log_event(conn, "pull", {"since": since, "next_since": next_since, "fetched": rep.fetched, "new": rep.new,
                              "updated": rep.updated, "unknown_tokens": rep.unknown_tokens,
-                             "checkins": rep.checkins, "live": rep.live, "reports": rep.reports})
+                             "checkins": rep.checkins, "live": rep.live, "reports": rep.reports, "watches": rep.watches})
     conn.commit()
     return rep

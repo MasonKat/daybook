@@ -11,8 +11,9 @@ const TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/heic': 'heic', '
 const CHIPS = new Set(['ok', 'confused', 'rewatch']);
 const RID_RE = /^[a-f0-9]{16}$/;
 // G1: bumped with every feature the console relies on (doctor warns when the deployed Worker is older):
-// 1 base, 2 출석, 3 장면 + Live, 4 푼 문제 수, 5 주간 테스트 reports, 6 /health version + /tokmap-info
-export const WORKER_VERSION = 6;
+// 1 base, 2 출석, 3 장면 + Live, 4 푼 문제 수, 5 주간 테스트 reports, 6 /health version + /tokmap-info, 7 /watch
+export const WORKER_VERSION = 7;
+const VID_RE = /^[A-Za-z0-9_-]{6,20}$/;
 const REASONS = ['개념탈락', '계산실수', '정보이해부족', '시간부족'];   // F14: the teacher's Notion "Reasoning" options
 const REACTIONS = ['fire', 'clap', 'mind'];
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -52,6 +53,10 @@ export const SCHEMA = [
      hardest TEXT, reasons TEXT, wishlist TEXT, metaphor TEXT, ts TEXT NOT NULL, updated TEXT NOT NULL,
      n INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (rid, token))`,
   'CREATE INDEX IF NOT EXISTS reports_updated ON reports (updated)',
+  // F15.1 watch signals: one row per (token, video, day), the largest seconds / percent seen (never a heartbeat stream)
+  `CREATE TABLE IF NOT EXISTS watches (token TEXT NOT NULL, v TEXT NOT NULL, day TEXT NOT NULL, class TEXT NOT NULL,
+     sec INTEGER NOT NULL, pct INTEGER NOT NULL, ts TEXT NOT NULL, updated TEXT NOT NULL, PRIMARY KEY (token, v, day))`,
+  'CREATE INDEX IF NOT EXISTS watches_updated ON watches (updated)',
 ];
 const ready = new WeakMap();   // per database binding: create the tables once (no-op afterwards)
 function init(env) {
@@ -241,6 +246,29 @@ async function openRounds(env, token, now) {
   return rows.map((r) => ({ r: r.rid, n: r.n, label: r.label || '', until: r.open_until,
     mine: r.updated ? { incorrect: split(r.incorrect).map(Number), missed: split(r.missed).map(Number), hardest: split(r.hardest).map(Number),
       reasons: split(r.reasons), wishlist: r.wishlist || '', metaphor: r.metaphor || '', updated: r.updated } : null }));
+}
+
+// ---------------------------------------------------------------- F15.1 watch signals
+async function watch(req, env, h) {
+  const now = Date.now(), day = seoulDay(now), iso = new Date(now).toISOString();
+  let form;
+  try { form = await req.formData(); } catch { return json({ ok: false, error: 'bad_form' }, 400, h); }
+  const token = String(form.get('t') || '').toLowerCase(), v = String(form.get('v') || '');
+  if (!TOKEN_RE.test(token)) return json({ ok: false, error: 'bad_token' }, 400, h);
+  const sec = Number(form.get('sec')), pct = Number(form.get('pct'));
+  if (!VID_RE.test(v) || !Number.isInteger(sec) || sec < 0 || sec > 36000 || !Number.isInteger(pct) || pct < 0 || pct > 100) {
+    return json({ ok: false, error: 'bad_watch' }, 200, h);
+  }
+  const rl = `rw:${token}:${Math.floor(now / 3600e3)}`;
+  if ((await peek(env, rl)) >= num(env.WATCHES_PER_HOUR, 60)) return json({ ok: false, error: 'rate_limited' }, 200, h);
+  const cls = await classOf(env, token);
+  if (!cls) return json({ ok: false, error: 'unknown_token' }, 200, h);
+  await bump(env, rl, day);
+  // the largest value wins: a second viewing the same day never adds up, a short one never lowers it
+  await run(env, `INSERT INTO watches (token, v, day, class, sec, pct, ts, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT (token, v, day) DO UPDATE SET sec = MAX(watches.sec, excluded.sec), pct = MAX(watches.pct, excluded.pct),
+      updated = excluded.updated, class = excluded.class`, token, v, day, cls, sec, pct, iso, iso);
+  return json({ ok: true }, 200, h);
 }
 
 // ---------------------------------------------------------------- 출석 (F2)
@@ -508,6 +536,7 @@ async function route(req, env, url, h) {
   if (p === '/checkin' && req.method === 'POST') return checkin(req, env, h);
   if (p === '/react' && req.method === 'POST') return react(req, env, h);
   if (p === '/report' && req.method === 'POST') return report(req, env, h);
+  if (p === '/watch' && req.method === 'POST') return watch(req, env, h);
   if (p === '/live/join' && req.method === 'POST') return liveStudent(req, env, url, h, 'join');
   if (p === '/live/answer' && req.method === 'POST') return liveStudent(req, env, url, h, 'answer');
   if (p === '/live/state' && req.method === 'GET' && url.searchParams.get('t')) return liveStudent(req, env, url, h, 'state');
@@ -540,7 +569,7 @@ async function route(req, env, url, h) {
     return new Response(img, { headers: { ...h, 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=600' } });
   }
   const teacherPaths = ['/submissions', '/photo', '/checkins', '/session', '/moment-put', '/tokmap',
-    '/live/open', '/live/next', '/live/reveal', '/live/close', '/live/state', '/live/results', '/rounds', '/reports', '/tokmap-info'];
+    '/live/open', '/live/next', '/live/reveal', '/live/close', '/live/state', '/live/results', '/rounds', '/reports', '/tokmap-info', '/watches'];
   if (teacherPaths.includes(p)) {
     if (!teacherOk(req, env)) return json({ ok: false, error: 'unauthorized' }, 401, {});
     const since = url.searchParams.get('since') || '';
@@ -563,6 +592,10 @@ async function route(req, env, url, h) {
     if (p === '/reports' && req.method === 'GET') {
       const items = await all(env, `SELECT rid, token, incorrect, missed, hardest, reasons, wishlist, metaphor, ts, updated, n
         FROM reports WHERE updated > ? ORDER BY updated`, since);
+      return json({ now: new Date().toISOString(), items }, 200, {});
+    }
+    if (p === '/watches' && req.method === 'GET') {
+      const items = await all(env, 'SELECT token, v, day, sec, pct, ts, updated FROM watches WHERE updated > ? ORDER BY updated', since);
       return json({ now: new Date().toISOString(), items }, 200, {});
     }
     if (p === '/rounds' && req.method === 'PUT') return putRounds(req, env);
@@ -598,7 +631,7 @@ export default {
     const url = new URL(req.url);
     const h = corsHeaders(req, env);
     const origin = req.headers.get('Origin');
-    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react', '/report', '/live/join', '/live/answer'].includes(url.pathname)
+    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react', '/report', '/watch', '/live/join', '/live/answer'].includes(url.pathname)
       || (url.pathname === '/live/state' && url.searchParams.has('t'));
     // CORS: browsers may only call the student endpoints from the Pages origin.
     if (isStudent && origin && origin !== env.ALLOWED_ORIGIN) return json({ ok: false, error: 'origin' }, 403, h);
@@ -626,6 +659,7 @@ export default {
       env.DB.prepare('DELETE FROM live_rooms WHERE date < ?').bind(keep),
       env.DB.prepare('DELETE FROM live_results WHERE date < ?').bind(keep),
       env.DB.prepare('DELETE FROM reports WHERE updated < ?').bind(keep + 'T00:00:00.000Z'),
+      env.DB.prepare('DELETE FROM watches WHERE day < ?').bind(keep),
     ]);
   },
 };

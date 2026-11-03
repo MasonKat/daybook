@@ -7,7 +7,7 @@
 <main class="teacher">
 <nav class="tnav">
   <a href="#t-doctor">{{ S.g_doctor }}</a><a href="#t-need">{{ S.c_need }}</a><a href="#t-plan">{{ S.c_plan }}</a><a href="#t-status">{{ S.c_status }}</a>
-  <a href="#t-good">{{ S.c_good }}</a><a href="#t-rounds">{{ S.r_title }}</a>
+  <a href="#t-good">{{ S.c_good }}</a><a href="#t-rounds">{{ S.r_title }}</a><a href="#t-videos">{{ S.v_title }}</a>
   <a href="#t-roster">{{ S.t_roster }}</a><a href="#t-notes">{{ S.t_notes }}</a><a href="#t-import">{{ S.t_import }}</a>
   <a href="#t-moments">{{ S.t_moments }}</a><a href="#t-publish">{{ S.t_publish }}</a><a href="#t-weekly">{{ S.t_weekly }}</a>
 </nav>
@@ -64,6 +64,15 @@
   </div>
   <div class="trow"><button type="button" class="btn primary sm" id="rf-save">{{ S.t_save }}</button>
     <button type="button" class="btn ghost sm" id="rf-new">{{ S.r_add }}</button> <span class="muted" id="rf-msg"></span></div>
+</section>
+
+<section class="card" id="t-videos">
+  <h2>{{ S.v_title }} <span class="muted" id="vv-range"></span></h2>
+  <p class="muted">{{ S.v_hint }}</p>
+  <div class="trow"><button type="button" class="btn ghost sm" data-days="7">{{ S.v_week }}</button>
+    <button type="button" class="btn ghost sm" data-days="14">{{ S.v_report }}</button>
+    <button type="button" class="btn ghost sm" id="vv-copy">{{ S.t_copy }}</button></div>
+  <div id="vv-rows"></div>
 </section>
 
 <section class="card" id="t-policy">
@@ -178,7 +187,7 @@
   <div id="weekly-rows"></div>
 </section>
 </main>
-<script type="application/json" id="data">{{ {"S": {"saved": S.t_saved, "copy": S.t_copy, "copied": S.t_copied, "student": S.t_student_link, "parent": S.t_parent_link, "save": S.t_save, "need": S.board_moment_need, "running": S.t_running, "confirm_deploy": S.t_confirm_deploy, "all": S.m_all, "m": {"move": S.m_move, "leave": S.m_leave, "ret": S.m_return, "rotate": S.m_rotate,
+<script type="application/json" id="data">{{ {"S": {"saved": S.t_saved, "copy": S.t_copy, "copied": S.t_copied, "student": S.t_student_link, "parent": S.t_parent_link, "save": S.t_save, "need": S.board_moment_need, "running": S.t_running, "confirm_deploy": S.t_confirm_deploy, "all": S.m_all, "v": {"students": S.v_students, "avg": S.v_avg, "minutes": S.v_minutes, "views": S.v_views, "hot": S.v_hot, "none": S.v_none, "per_student": S.v_per_student}, "m": {"move": S.m_move, "leave": S.m_leave, "ret": S.m_return, "rotate": S.m_rotate,
   "rotate_confirm": S.m_rotate_confirm, "intro_p": S.m_intro_p, "intro_s": S.m_intro_s, "left": S.m_left, "new_links": S.m_new_links,
   "counts": S.m_counts, "status": {"new": S.m_status_new, "updated": S.m_status_updated, "unchanged": S.m_status_unchanged, "skipped": S.m_status_skipped}}, "r": {"open": S.r_open_now, "closed": S.r_closed, "upcoming": S.r_upcoming, "edit": S.r_edit,
   "close": S.r_close_now, "export": S.r_export, "confirm_close": S.r_confirm_close, "add": S.r_add, "progress": S.r_progress}, "c": {

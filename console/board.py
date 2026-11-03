@@ -288,6 +288,8 @@ def make_handler(board: Board):
                     return self._json(T.class_flags(conn, board.cfg, board.class_id, day))
                 if path == "/api/teacher/solved":
                     return self._json({"rows": T.solved_rows(conn, board.class_id, day)})
+                if path == "/api/teacher/videos":             # F15.1/F15.2
+                    return self._json(T.videos_view(conn, board.cfg, day, int((q.get("days") or ["7"])[0] or 7)))
                 if path == "/api/teacher/rounds":             # F14
                     return self._json(T.rounds_view(conn))
                 if path == "/api/teacher/round":
