@@ -1,0 +1,191 @@
+# HANDOFF — for the local agents (real data)
+
+The cloud build used synthetic data only. Real students, phones, scores and notes exist only on the teacher's laptop,
+in `daybook.sqlite` (gitignored), and on the deployed pages behind unguessable links. Never commit `daybook.sqlite`,
+`daybook.json`, `dist/`, a real roster CSV or real screener snapshots. Never deploy to GitHub Pages.
+
+## 0. State at handoff (2026-11-03)
+
+- `make demo` is green from a clean clone (Python 3.12 and 3.13, Node 22): 57 pytest, 10 Worker node tests, 54 e2e checks.
+- Every item of §0.1 is built: P1, P2, and P3 except a real-phone install test. See `DECISIONS.md` for every choice and
+  every deferred item.
+- Not done, needs the teacher: the Cloudflare deploy (README, "Teacher deploy steps"), and pushing this repo (below).
+
+### Push this repo
+The cloud session had no `daybook` repository attached, so the commits are local to the session's container.
+The teacher creates an empty **private** GitHub repo (e.g. `MasonKat/daybook`), attaches it to the cloud session
+(or allows the session to add it), and the cloud agent pushes `main`. If you receive a git bundle instead:
+
+```bash
+git clone daybook-p0.bundle daybook
+```
+
+```bash
+cd daybook && git remote set-url origin git@github.com:MasonKat/daybook.git && git push -u origin main
+```
+
+## 1. First-time setup on the laptop
+
+```bash
+make demo
+```
+
+(Proves the toolchain works; uses `demo.sqlite`, not the real DB.) Then, after the README deploy steps:
+
+```bash
+cp daybook.example.json daybook.json
+```
+
+Fill `worker_url`, `pages_url`, `teacher_token` in `daybook.json` (gitignored). Then:
+
+```bash
+.venv/bin/daybook init
+```
+
+```bash
+.venv/bin/daybook class add 고1A --term 2026-11-02..2027-02-26 --days 화,금 --reward "피자 파티"
+```
+
+- `--term` is `START..END`: it defines the scheduled class days (streak) and the reward goal.
+- `--days` takes `월 화 수 목 금 토 일` or `mon..sun`, comma separated.
+- The goal is computed at the first publish as active students × remaining sessions × 2.4 and then frozen;
+  `--goal N` fixes it by hand, and `class edit 고1A --goal 0` recomputes it.
+
+## 2. Import the roster
+
+Export the teacher's roster database as CSV. Expected columns: `Name, Student ID, Status, Number, Phone Number,
+School` (`Archive` may be present; it is ignored). Then:
+
+```bash
+.venv/bin/daybook roster import <export>.csv --map mappings/roster.json --class 고1A
+```
+
+`mappings/roster.json` format:
+
+```json
+{
+  "encoding": "utf-8-sig",
+  "columns": {"Name": "full_name", "Student ID": "ext_id", "Status": "active", "Phone Number": "parent_phone"},
+  "active_values": ["재원"]
+}
+```
+
+- `columns`: CSV header → DAYBOOK field. The fields are `full_name` (required), `ext_id`, `active` and `parent_phone`.
+  Unlisted columns are dropped.
+- `active_values`: the `Status` values meaning "active"; anything else imports as inactive (no page is published).
+- If the export uses other headers or another active label, edit the mapping, not the code.
+- The CSV holds several classes: filter it per class first, or import once and move students with
+  `daybook roster edit <slug> --class <name>`.
+- Re-running is safe. Rows match by `Student ID`, else by an unambiguous name. Tokens never change on re-import.
+- **Display names:** the default is the given name (last 2 characters of a 3-character Korean name).
+  - A 2- or 4-character name, or a non-Korean one, keeps the whole name. The import warns about it, and publish
+    refuses it (the full name must never be published).
+  - Fix it with `daybook roster edit <slug> --display <given name>`.
+- Slugs (the handle used in CLI commands) equal the display name, e.g. `daybook note 가람 …`. Check them with:
+
+```bash
+.venv/bin/daybook roster list 고1A
+```
+
+## 3. Send the links (once per student)
+
+Publish and deploy once first (`make deploy-pages`), so the links exist before anyone opens them.
+
+```bash
+.venv/bin/daybook roster list 고1A --links
+```
+
+Send each student their `/s/<token>/` link and each parent their `/p/<token>/` link privately (1:1). Ask each
+student to open their link once on their phone, then "홈 화면에 추가" (Safari share menu / Chrome menu). Handout QR
+codes must only ever encode `https://<pages>/go/?set=<set_id>`; `daybook session start 고1A --set <set_id>` prints
+that URL. A lost or leaked link is replaced with:
+
+```bash
+.venv/bin/daybook roster rotate-tokens 고1A --student <slug>
+```
+
+## 4. Weekly screener rounds → `tests`
+
+The existing chain stays as the test input: Google Form → make.com → Notion "Screeners Tracker" → `analyze_round.py`.
+DAYBOOK reads one local JSON snapshot per round; nothing in this repo talks to Notion, Google or make.com.
+
+- **Files:** one per round, named `round_<set_id>_<YYYY-MM-DD>.json`, in one folder (outside the repo).
+- **Top-level keys:** `set_id, date, n_students, n_quizzes, set_pressure_index, concept_difficulty, top_challenging,
+  reason_distribution, students`. Only `set_id`, `date`, `n_quizzes` and `students` are read.
+- **`students[]` keys:** `student` (ext_id or name), `name`, `correct`, `wrong`, `blank`, `blank_rate`, `commitment`,
+  `reach_ceiling`, `archetype`, `top_reason`.
+- **Stored as:** `tests.date` = `date`, `test_name` = `set_id`, `n_quizzes` (top level), `correct`, `wrong`, `blank`,
+  `reach` = `reach_ceiling`, `efficiency` = correct / (correct + wrong) (1.0 if nothing attempted),
+  `persona` = `archetype`, `top_reason`.
+- **Matching:** `student` → `ext_id`, else `name` → full name. Unmatched or ambiguous rows are printed and skipped,
+  never invented: check the printed list every Saturday.
+- **Scale:** the parent trend draws `reach` and `efficiency` on 0–100 % and assumes both are 0..1. If
+  `reach_ceiling` uses another scale, convert it when writing the snapshot. Direction thresholds: 0.03 (reach) and
+  0.01 (efficiency), the local scripts' values (`console/models.py`).
+- If `analyze_round.py` writes another shape, add a small converter on the local side that writes this format
+  (see the synthetic `demo/screeners/`). Do not change the importer to read Notion.
+
+```bash
+.venv/bin/daybook import screeners <folder with round_*.json>
+```
+
+Fallback for any other test (CSV columns `date, student_slug, test_name, n_quizzes, correct, wrong, blank`; example
+`mappings/tests.example.csv`):
+
+```bash
+.venv/bin/daybook import tests <file>.csv
+```
+
+## 5. Videos: the `videos.json` merge point
+
+The student 영상 tab is rendered at publish from the file named by `videos_path` in `daybook.json` (default
+`videos.json` in the repo, which holds synthetic links). For real links, write `videos.local.json` (gitignored) and set
+`"videos_path": "videos.local.json"`. Schema, nothing else:
+
+```json
+[{"title": "1강 다항식의 연산", "url": "https://masonkat.github.io/q/cv/10-2/1/", "group": "개념 영상", "added": "2026-10-20"}]
+```
+
+- Solution videos use their fixed forwarding address `https://masonkat.github.io/q/<term>/<n>/`.
+- Concept videos use `https://masonkat.github.io/q/cv/<grade-term>/<n>/`; their index is `q/cv/map.json`.
+- Build the list from those existing records with a small local script (outside this repo or under `scripts/`).
+- Groups appear in first-seen order after sorting by `added` (newest first). Only `http(s)` URLs are kept.
+
+## 6. The teacher's Saturday (after the pilot starts Friday 11-06)
+
+```bash
+.venv/bin/daybook pull
+```
+
+```bash
+.venv/bin/daybook import screeners <round folder>
+```
+
+```bash
+.venv/bin/daybook note <slug> 2026-W45 "한 줄"
+```
+
+```bash
+make deploy-pages
+```
+
+- `make deploy-pages` runs `daybook publish` first.
+- If the no-PII lint stops it, it prints the file and the kind (phone, full_name, ext_id, title, …).
+  - Fix the source, usually a note, with a new `note` (the latest one is shown) or `roster edit --display`.
+  - Then run it again. `dist/` is not changed by a failed publish.
+- `daybook weekly 고1A` prints a paste-ready message per student with the parent link.
+- Pages lag up to a week by design. The student's 오늘 완료 is immediate, because it comes from the Worker.
+
+In class (P2, from the week after the pilot): `daybook board 고1A` → http://127.0.0.1:8787 (attitude 1·2·3, live ✓,
+"대신 제출"). Without the board: `daybook score 고1A <date> <slug> <0-3>` and `daybook submit <slug> --source paper`.
+
+## 7. Safety checklist for the local side
+
+- `git status` must never show `daybook.sqlite`, `daybook.json`, `dist/`, a roster CSV, screener snapshots or
+  `videos.local.json`.
+- Back up `daybook.sqlite` to a private place (it contains full names and phone numbers). `events` is append-only and
+  is the audit log.
+- The Worker keeps photos 7 days and records 14 days; `daybook pull --photos <private folder>` downloads photos if the
+  teacher wants them (keep them out of the repo).
+- To check a real-phone install (deferred here), open a student link on an iPhone (Safari → 공유 → 홈 화면에 추가) and
+  on Android (Chrome → 홈 화면에 추가). It should open standalone on the 오늘 tab.
