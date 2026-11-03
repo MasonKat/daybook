@@ -499,3 +499,11 @@ def practice_set(conn: sqlite3.Connection, body: dict) -> dict:
         return {"ok": True, "mode": practice.set_mode(conn, str(body.get("mode", "")))}
     except ValueError as e:
         raise TeacherError(str(e)) from e
+
+
+# ---------------------------------------------------------------- F16.4: 측정
+
+def metrics_view(conn: sqlite3.Connection, cfg: Config, class_name: str | None, day: date) -> dict:
+    from . import metrics as MT
+    rows = MT.weekly(conn, cfg, class_name or None, 8, day)
+    return {"columns": MT.COLUMNS, "rows": rows}

@@ -1138,5 +1138,48 @@ def push_count(obj: Ctx):
         click.echo(f"  {name}: students {v.get('s', 0)}, parents {v.get('p', 0)}")
 
 
+# ---------------------------------------------------------------- F16.4: metrics (class level) and the meeting log
+
+@cli.group()
+def metrics():
+    """Class-level weekly metrics (never one row per student)."""
+
+
+@metrics.command("weekly")
+@click.option("--class", "class_name", default=None, help="One class (default: all classes together)")
+@click.option("--weeks", type=int, default=8, show_default=True)
+@click.option("--date", "d", default=None)
+@click.option("--out", "out_dir", default="reports", show_default=True, help="Folder (gitignored)")
+@click.pass_obj
+def metrics_weekly(obj: Ctx, class_name, weeks, d, out_dir):
+    """reports/metrics_<YYYY-Www>.csv: lateness, records, contact coverage, retention, test trend, auxiliaries."""
+    from . import metrics as MT
+    day = parse_date(d)
+    try:
+        rows = MT.weekly(obj.conn, obj.cfg, class_name, weeks, day)
+    except ops.OpError as e:
+        fail(str(e))
+    path = MT.write_csv(rows, Path(out_dir) / f"metrics_{M.iso_week(day)}{('_' + class_name) if class_name else ''}.csv")
+    click.echo(f"{path}  ({len(rows)} weeks)")
+
+
+@cli.group()
+def meeting():
+    """A tiny meeting log (F16.4: student-led conferences)."""
+
+
+@meeting.command("log")
+@click.argument("slug")
+@click.option("--kind", type=click.Choice(["slc", "other"]), default="slc", show_default=True)
+@click.option("--date", "d", default=None)
+@click.pass_obj
+def meeting_log(obj: Ctx, slug, kind, d):
+    from . import metrics as MT
+    conn = obj.conn
+    MT.log_meeting(conn, ops.get_student(conn, slug)["id"], kind, parse_date(d))
+    conn.commit()
+    click.echo("logged")
+
+
 if __name__ == "__main__":
     main()

@@ -7,7 +7,7 @@
 <main class="teacher">
 <nav class="tnav">
   <a href="#t-doctor">{{ S.g_doctor }}</a><a href="#t-need">{{ S.c_need }}</a><a href="#t-plan">{{ S.c_plan }}</a><a href="#t-status">{{ S.c_status }}</a>
-  <a href="#t-good">{{ S.c_good }}</a><a href="#t-rounds">{{ S.r_title }}</a><a href="#t-videos">{{ S.v_title }}</a><a href="#t-push">{{ S.n_title }}</a>
+  <a href="#t-good">{{ S.c_good }}</a><a href="#t-rounds">{{ S.r_title }}</a><a href="#t-videos">{{ S.v_title }}</a><a href="#t-push">{{ S.n_title }}</a><a href="#t-metrics">{{ S.mt_title }}</a>
   <a href="#t-roster">{{ S.t_roster }}</a><a href="#t-notes">{{ S.t_notes }}</a><a href="#t-import">{{ S.t_import }}</a>
   <a href="#t-moments">{{ S.t_moments }}</a><a href="#t-publish">{{ S.t_publish }}</a><a href="#t-weekly">{{ S.t_weekly }}</a>
 </nav>
@@ -92,6 +92,13 @@
     <button type="button" class="btn primary sm" id="np-send">{{ S.n_send }}</button>
   </div>
   <p class="tmsg" id="np-msg" aria-live="polite"></p>
+</section>
+
+<section class="card" id="t-metrics">
+  <h2>{{ S.mt_title }}</h2>
+  <p class="muted">{{ S.mt_hint }}</p>
+  <div class="trow"><select id="mt-class" aria-label="{{ S.m_class }}"><option value="">{{ S.n_all }}</option></select></div>
+  <div class="tscroll"><table class="ttable mt"><thead id="mt-head"></thead><tbody id="mt-rows"></tbody></table></div>
 </section>
 
 <section class="card" id="t-policy">

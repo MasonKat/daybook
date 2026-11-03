@@ -581,5 +581,23 @@
     });
   };
 
+  /* ------------------------------------------------------------ F16.4: 측정 (class level, last 8 weeks) */
+  function loadMetrics() {
+    var c = $('mt-class').value;
+    api('/api/teacher/metrics' + (c ? '?class=' + encodeURIComponent(c) : '')).then(function (j) {
+      var head = $('mt-head'), body = $('mt-rows'); head.innerHTML = ''; body.innerHTML = '';
+      var hr = el('tr'); j.columns.forEach(function (k) { if (k !== 'class') hr.appendChild(el('th', {}, k)); }); head.appendChild(hr);
+      j.rows.forEach(function (r) {
+        var tr = el('tr'); j.columns.forEach(function (k) { if (k !== 'class') tr.appendChild(el('td', { 'class': 'tnum' }, String(r[k]))); });
+        body.appendChild(tr);
+      });
+    });
+  }
+  $('mt-class').onchange = loadMetrics;
+  setTimeout(function () {
+    var sel = $('mt-class'); classesAll.forEach(function (c) { sel.appendChild(el('option', { value: c.name }, c.name)); });
+    loadMetrics();
+  }, 400);
+
   loadRoster(); loadNotes(); loadMoments(); loadWeekly();
 })();

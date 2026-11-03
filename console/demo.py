@@ -155,6 +155,9 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
             _seed_kong(conn, cid, sess, today, rng)
     _seed_contacts(conn, today, rng)
     _seed_watches(conn, today, rng)
+    for r in conn.execute("SELECT id FROM students ORDER BY id LIMIT 2").fetchall():        # F16.4: two SLCs this week
+        conn.execute("INSERT INTO meetings (student_id, day, kind, ts) VALUES (?, ?, 'slc', ?)",
+                     (r["id"], today.isoformat(), "2026-01-01T00:00:00.000Z"))
     log_event(conn, "demo_seed", {"today": today.isoformat()})
     conn.commit()
 

@@ -294,6 +294,11 @@ def make_handler(board: Board):
                     return self._json(T.class_flags(conn, board.cfg, board.class_id, day))
                 if path == "/api/teacher/solved":
                     return self._json({"rows": T.solved_rows(conn, board.class_id, day)})
+                if path == "/api/teacher/metrics":            # F16.4
+                    try:
+                        return self._json(T.metrics_view(conn, board.cfg, (q.get("class") or [""])[0], day))
+                    except ops.OpError as e:
+                        return self._json({"ok": False, "error": str(e)}, 404)
                 if path == "/api/teacher/practice":           # F16
                     return self._json(T.practice_view(conn, board.cfg))
                 if path == "/api/teacher/push":               # F15.3

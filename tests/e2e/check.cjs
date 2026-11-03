@@ -743,6 +743,10 @@ print(c.execute("SELECT COUNT(*), SUM(correct) FROM effort WHERE source = 'live'
     await tpage.click('#np-send');
     await tpage.waitForFunction(() => /보냄|22:00/.test(document.getElementById('np-msg').textContent), null, { timeout: 8000 }).catch(() => {});
     check(/보냄 \d+/.test(await tpage.textContent('#np-msg')), `알림 보내기: ${await tpage.textContent('#np-msg')}`);
+    // F16.4: 측정: 8 weeks of class-level numbers, no student rows
+    await tpage.waitForSelector('#mt-rows tr', { timeout: 8000 }).catch(() => {});
+    check((await tpage.locator('#mt-rows tr').count()) === 8 && /late_rate/.test(await tpage.textContent('#mt-head')),
+      `측정: ${await tpage.locator('#mt-rows tr').count()} weeks of class-level metrics`);
     // F15.1/F15.2: 영상 (class numbers, per student behind a fold); the 2주 리포트 as text
     await tpage.waitForSelector('#vv-rows h3', { timeout: 5000 }).catch(() => {});
     check((await tpage.locator('#vv-rows h3').count()) === 4 && /🔥/.test(await tpage.textContent('#vv-rows')) && /\d+\/\d+명/.test(await tpage.textContent('#vv-rows')),

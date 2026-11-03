@@ -424,6 +424,8 @@
   "cw_comparison": "다른 학생과 비교",
   "cw_hedge": "얼버무림",
   "cw_jargon": "전문 용어",
+  "mt_title": "측정",
+  "mt_hint": "반 단위 숫자만 (학생별 행 없음). 최근 8주. 파일: daybook metrics weekly.",
   "parent_msg": {
     "_note": "Parent-facing drafts (F13.6): warm and formal, no emoji, never playful. reason_* lines are for the teacher only.",
     "greeting": "안녕하세요, {g}. AMP 수학입니다.",
