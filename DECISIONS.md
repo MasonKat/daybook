@@ -334,6 +334,10 @@ One line each. "deferred" = not built in P0, on purpose.
 - `"brand": {"mascot": "brand/mascot.png", "mascot_public": false}` in daybook.json. `brand/` is gitignored: the academy's own image never enters the repo. At publish it is reduced to a ≤ 96 px PNG (transparency kept, ≤ 30 KB) at `/b/mascot.png` and shown small next to the wordmark on student and parent pages; the local board shows it inline. No file, nothing shown. The taste build shows it only with `mascot_public: true`.
 - The demo draws a neutral placeholder (a rounded square with a circle) into `brand/demo-mascot.png`; it is not a character and the demo config keeps it out of the taste build.
 
+## F16: practice_mode (korea default, manitoba opt-in) (2026-11-04)
+- The teacher's classes are Korean students in a Korean hagwon; Manitoba (Canada) norms are the teacher's personal practice. `practice_mode` is `korea` by default (daybook.json may set the starting value) and the Teacher tab's "캐나다 연습 모드" switch stores the mode in the local database (`settings`), logged in events. **Rule for every item: when a Canadian norm is the opposite of normal Korean hagwon practice, it goes behind `practice_mode = manitoba`, never into the default.**
+- **F16.1:** korea keeps the original design: the projected board names today's 3-point students (public praise by name; 1–2 points never appear by name; only positive things are public). manitoba: no names on the projected view (the section is not rendered and `/api/state` carries none); "선생님 보기" shows them to the teacher. Attitude stays a private tap and the class reward bar stays in both modes; parent pages keep the weekly sum and the cumulative only.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

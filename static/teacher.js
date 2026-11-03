@@ -556,5 +556,17 @@
   };
   setTimeout(loadPush, 300);   /* after the roster has loaded the class list */
 
+  /* ------------------------------------------------------------ F16: 캐나다 연습 모드 (local switch, logged in events) */
+  function showPractice(mode) {
+    $('pm-toggle').checked = mode === 'manitoba';
+    $('pm-help-k').hidden = mode === 'manitoba'; $('pm-help-m').hidden = mode !== 'manitoba';
+  }
+  api('/api/teacher/practice').then(function (j) { showPractice(j.mode); });
+  $('pm-toggle').onchange = function () {
+    api('/api/teacher/practice', { mode: $('pm-toggle').checked ? 'manitoba' : 'korea' }).then(function (j) {
+      if (j.ok) { showPractice(j.mode); loadNotes(); }
+    });
+  };
+
   loadRoster(); loadNotes(); loadMoments(); loadWeekly();
 })();

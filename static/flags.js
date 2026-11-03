@@ -13,6 +13,7 @@
       if (b.getAttribute('aria-pressed') !== 'true') return;
       box.innerHTML = '';
       box.appendChild(el('p', 'muted', D.hint));
+      if (j.three) box.appendChild(el('p', '', D.three + ' · ' + (j.three.join(', ') || '–')));   /* F16.1 manitoba */
       if (!j.flags.length) box.appendChild(el('p', 'muted', D.none));
       j.flags.forEach(function (f) {
         var d = el('div', 'tvf ' + f.level);

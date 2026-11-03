@@ -144,6 +144,20 @@ CREATE TABLE IF NOT EXISTS watches (         -- F15.1: our own watch signals, pu
     PRIMARY KEY (student_id, video_id, day)
 );
 
+CREATE TABLE IF NOT EXISTS settings (        -- F16: small local switches (e.g. practice_mode), every change in events
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    ts    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS meetings (        -- F16.4: student-led conferences and other meetings (a tiny log)
+    id         INTEGER PRIMARY KEY,
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    day        TEXT NOT NULL,
+    kind       TEXT NOT NULL CHECK (kind IN ('slc', 'other')),
+    ts         TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS class_bonus (  -- F7: class-wide points (AMP Live: >= 80 % of the class correct)
     id         INTEGER PRIMARY KEY,
     class_id   INTEGER NOT NULL REFERENCES classes(id),

@@ -101,6 +101,10 @@ class Board:
             (self.day.isoformat(), self.session_id, self.session_id, self.class_id)).fetchall()
         reward = M.reward_for(conn, cls, self.day)
         three = [r["display_name"] for r in rows if r["points"] == 3]
+        # F16.1: korea (default): today's 3-point names are public praise on the projected board, as designed (1-2 points
+        # never appear by name). manitoba practice mode: no names on the projected view; "선생님 보기" shows them.
+        from . import practice
+        show_three = not practice.manitoba(conn, self.cfg)
         hm = lambda ts: M.utc_iso_to_kst(ts).strftime("%H:%M") if ts else ""   # noqa: E731
         students = [{"id": r["id"], "display_name": r["display_name"], "done": r["ts"] is not None, "time": hm(r["ts"]),
                      "points": r["points"], "ck": hm(r["ck"]),
@@ -108,7 +112,7 @@ class Board:
                                                     r["reflection"] or "") if x)} for r in rows]
         arrivals = [{"initial": r["display_name"][:1], "time": hm(r["ck"])}
                     for r in sorted((r for r in rows if r["ck"]), key=lambda r: r["ck"])]
-        return {"cls": cls, "students": students, "reward": reward, "three": three, "arrivals": arrivals,
+        return {"cls": cls, "students": students, "reward": reward, "three": three, "show_three": show_three, "arrivals": arrivals,
                 "code": sess["code"] or "", "start": sess["start_time"] or ""}
 
     def state_json(self, conn) -> dict:
@@ -120,7 +124,8 @@ class Board:
                          for s in st["students"]},
             "pct": r.pct,
             "togo": self.S["reward_to_go"].format(label=r.label, n=r.to_go),
-            "three": ", ".join(st["three"]) if st["three"] else self.S["board_none"],
+            "three": (", ".join(st["three"]) if st["three"] else self.S["board_none"]) if st["show_three"] else "",
+            "show_three": st["show_three"],
             "arrivals": st["arrivals"],
             "reactions": self.reactions_text,
             "moments": conn.execute("SELECT COUNT(*) FROM moments WHERE session_id = ?", (self.session_id,)).fetchone()[0],
@@ -205,7 +210,7 @@ class Board:
         tpl = generate.env().get_template("board.html")
         from . import brand
         return tpl.render(S=self.S, page="board", mascot=brand.data_uri(self.cfg), cls=st["cls"], students=st["students"], reward=st["reward"],
-                          three=st["three"], poll=self.poll, code=st["code"], start=st["start"], arrivals=st["arrivals"],
+                          three=st["three"], show_three=st["show_three"], poll=self.poll, code=st["code"], start=st["start"], arrivals=st["arrivals"],
                           reactions=self.reactions_text, poll_seconds=self.cfg.board_poll_seconds,
                           js=generate.json_script({"refresh": max(2, min(self.cfg.board_poll_seconds, 10)),
                                                    "need": self.S["board_moment_need"], "rxLabel": self.S["board_reactions"]}))
@@ -289,6 +294,8 @@ def make_handler(board: Board):
                     return self._json(T.class_flags(conn, board.cfg, board.class_id, day))
                 if path == "/api/teacher/solved":
                     return self._json({"rows": T.solved_rows(conn, board.class_id, day)})
+                if path == "/api/teacher/practice":           # F16
+                    return self._json(T.practice_view(conn, board.cfg))
                 if path == "/api/teacher/push":               # F15.3
                     return self._json(T.push_view(conn, board.cfg))
                 if path == "/api/teacher/videos":             # F15.1/F15.2
@@ -333,6 +340,8 @@ def make_handler(board: Board):
                         return self._json(T.cancel(conn, cls, body))
                     if self.path == "/api/teacher/publish":
                         return self._json(T.publish(conn, board.cfg, db_path=board.db_path))
+                    if self.path == "/api/teacher/practice":             # F16
+                        return self._json(T.practice_set(conn, body))
                     if self.path == "/api/teacher/push-send":            # F15.3
                         return self._json(T.push_send(conn, board.cfg, body))
                     if self.path == "/api/teacher/backup":               # G2

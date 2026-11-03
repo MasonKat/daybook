@@ -4,7 +4,7 @@
   <span class="brand">{% if mascot %}<img class="mascot" src="{{ mascot }}" alt="" width="24" height="24">{% endif %}{{ S.board_title }} · {{ cls.name }}</span>
   <a class="who tlink" href="/live">AMP Live</a>
   <a class="who tlink" href="/teacher">{{ S.board_teacher }}</a>
-  <button type="button" class="who tlink tv" id="tv-toggle" aria-pressed="false" data-s="{{ {"need": S.c_need, "notice": S.c_notice, "none": S.board_flags_none, "hint": S.board_flags_hint} | tojson | forceescape }}">{{ S.board_teacher_view }}</button>
+  <button type="button" class="who tlink tv" id="tv-toggle" aria-pressed="false" data-s="{{ {"need": S.c_need, "notice": S.c_notice, "none": S.board_flags_none, "hint": S.board_flags_hint, "three": S.board_three} | tojson | forceescape }}">{{ S.board_teacher_view }}</button>
   <span class="who" id="b-poll">{{ S.board_poll_on | fmt(n=poll_seconds) if poll else S.board_poll_off }}</span>
 </header>
 <main class="board">
@@ -43,10 +43,12 @@
   <div class="row2"><button type="button" class="btn primary" id="m-post">{{ S.board_moment }}</button><span class="muted" id="m-msg"></span></div>
   <p class="rxsum muted" id="b-rx">{% if reactions %}{{ S.board_reactions }} · {{ reactions }}{% endif %}</p>
 </section>
+{% if show_three %}
 <section class="card">
   <h2>{{ S.board_three }}</h2>
   <p id="b-three">{{ three|join(', ') if three else S.board_none }}</p>
 </section>
+{% endif %}
 </main>
 <script type="application/json" id="data">{{ js | safe }}</script>
 <script src="/static/app.js" defer></script>

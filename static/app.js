@@ -1110,7 +1110,7 @@
       }
       $('b-fill').style.width = st.pct.toFixed(1) + '%';
       $('b-togo').textContent = st.togo;
-      $('b-three').textContent = st.three;
+      if ($('b-three')) $('b-three').textContent = st.three;   /* F16.1: absent in manitoba practice mode */
       if (st.reactions && $('b-rx')) $('b-rx').textContent = (D.rxLabel || '') + ' · ' + st.reactions;
       if (st.arrivals) {
         var a = $('b-arrivals');

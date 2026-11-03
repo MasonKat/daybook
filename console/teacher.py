@@ -195,8 +195,15 @@ def contacts(conn: sqlite3.Connection, cfg: Config, cls: sqlite3.Row, day: date)
 def class_flags(conn: sqlite3.Connection, cfg: Config, class_id: int, day: date) -> dict:
     """The board's "선생님 보기" toggle: this class's flags, names and reasons only (never on the projected view)."""
     from . import contact as C
-    return {"flags": [{"display_name": f["display_name"], "level": f["level"], "rules": f["rules"]}
-                      for f in C.flags(conn, cfg, day, class_id)]}
+    from . import practice
+    out = {"flags": [{"display_name": f["display_name"], "level": f["level"], "rules": f["rules"]}
+                     for f in C.flags(conn, cfg, day, class_id)]}
+    if practice.manitoba(conn, cfg):        # F16.1: the 3-point names, off the projected view, for the teacher only
+        sess = conn.execute("SELECT id FROM sessions WHERE class_id = ? AND date = ?", (class_id, day.isoformat())).fetchone()
+        out["three"] = [r[0] for r in conn.execute("""SELECT s.display_name FROM attitude a JOIN students_public s ON s.id = a.student_id
+                                                       WHERE a.session_id = ? AND a.points = 3 ORDER BY s.id""",
+                                                    (sess["id"] if sess else -1,))]
+    return out
 
 
 def contact_log(conn: sqlite3.Connection, body: dict) -> dict:
@@ -462,3 +469,18 @@ def push_send(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
     except P.PushError as e:
         raise TeacherError(str(e)) from e
     return {"ok": True, **r}
+
+
+# ---------------------------------------------------------------- F16: practice mode (local switch, logged)
+
+def practice_view(conn: sqlite3.Connection, cfg: Config) -> dict:
+    from . import practice
+    return {"mode": practice.mode(conn, cfg)}
+
+
+def practice_set(conn: sqlite3.Connection, body: dict) -> dict:
+    from . import practice
+    try:
+        return {"ok": True, "mode": practice.set_mode(conn, str(body.get("mode", "")))}
+    except ValueError as e:
+        raise TeacherError(str(e)) from e
