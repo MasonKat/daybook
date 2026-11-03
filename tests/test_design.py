@@ -69,8 +69,9 @@ def test_student_stories_tiles_and_messages(conn, cfg, klass, tmp_path):
     cfg.videos_path = str(tmp_path / "none.json")
     assert generate.publish(conn, cfg, tmp_path / "dist", today=TODAY, now=NOW).ok
     html = (tmp_path / "dist" / "s" / s["student_token"] / "index.html").read_text(encoding="utf-8")
-    keys = re.findall(r'class="story" data-story="(\w+)"', html)
-    assert keys == ["streak", "goal", "teacher"]                # no new videos in this config
+    keys = re.findall(r'class="story" data-story="(\w+)" data-hash="\w+">', html)   # visible rings only
+    assert keys == ["streak", "goal", "teacher"]                # no new videos, no moments in this config
+    assert re.search(r'data-story="moments" data-hash="\w+" hidden>', html)     # the 장면 ring waits for a live moment
     assert html.index("첫 메시지") < html.index("둘째 메시지")     # newest at the bottom
     tiles = re.findall(r'<li class="tile (\w+)" data-date="([\d-]+)"', html)
     assert tiles[0] == ("open", "2026-11-06")                  # newest first, today open

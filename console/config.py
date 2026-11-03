@@ -16,6 +16,7 @@ class Config:
     teacher_token: str = ""      # same value as the Worker secret TEACHER_TOKEN
     videos_path: str = "videos.json"
     assignments_path: str = "assignments.json"   # optional {set_id: label}; students never see a raw set id
+    moments_dir: str = "moments"                  # local store of 오늘의 장면 images (gitignored)
     board_poll_seconds: int = 30
     extra: dict = field(default_factory=dict)
 
@@ -39,6 +40,7 @@ def load(path: str | Path | None = None) -> Config:
         teacher_token=data.get("teacher_token", ""),
         videos_path=data.get("videos_path", "videos.json"),
         assignments_path=data.get("assignments_path", "assignments.json"),
+        moments_dir=data.get("moments_dir", "moments"),
         board_poll_seconds=int(data.get("board_poll_seconds", 30)),
         extra={k: v for k, v in data.items()},
     )

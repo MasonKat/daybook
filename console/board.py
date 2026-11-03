@@ -45,6 +45,44 @@ class Board:
     def conn(self) -> sqlite3.Connection:
         return dbmod.connect(self.db_path)
 
+    reactions_text = ""
+
+    def refresh_reactions(self, fetch) -> None:
+        """Totals of this class's moments (anonymous counters) for the board, e.g. "11/3 🔥 9 👏 3"."""
+        try:
+            items = json.loads(fetch(f"/moments?class={ops.class_key(self.class_id)}")).get("items", [])
+        except (PullError, ValueError):
+            return
+        parts = []
+        for m in items[-3:]:
+            c = m.get("counts") or {}
+            d = m.get("date", "")
+            tot = " ".join(f"{self.S['react_' + r]} {c.get(r, 0)}" for r in ("fire", "clap", "mind") if c.get(r))
+            if tot:
+                parts.append(f"{int(d[5:7])}/{int(d[8:10])} {tot}")
+        self.reactions_text = " · ".join(parts)
+
+    def add_moment(self, conn, body: dict) -> str:
+        import base64
+        from . import moments as mm
+        from .pull import http_put_json
+        push = None
+        if self.cfg.worker and self.cfg.teacher_token:
+            push = lambda payload: http_put_json(self.cfg, "/moment-put", payload)   # noqa: E731
+        raw = str(body.get("image") or "")
+        raw = raw.split(",", 1)[1] if raw.startswith("data:") else raw
+        try:
+            data = base64.b64decode(raw, validate=True)
+        except ValueError as e:
+            raise mm.MomentError("not an image") from e
+        cls = conn.execute("SELECT * FROM classes WHERE id = ?", (self.class_id,)).fetchone()
+        try:
+            mm.add_moment(conn, self.cfg, cls, self.day, data, str(body.get("text") or ""),
+                          confirmed=body.get("confirm") is True, push=push)
+        except PullError:
+            return self.S["board_moment_ok"] + " (Worker 미연결: 토요일 발행 후 보여요)"
+        return self.S["board_moment_ok"]
+
     def state(self, conn: sqlite3.Connection) -> dict:
         cls = conn.execute("SELECT * FROM classes WHERE id = ?", (self.class_id,)).fetchone()
         sess = conn.execute("SELECT * FROM sessions WHERE id = ?", (self.session_id,)).fetchone()
@@ -78,6 +116,8 @@ class Board:
             "togo": self.S["reward_to_go"].format(label=r.label, n=r.to_go),
             "three": ", ".join(st["three"]) if st["three"] else self.S["board_none"],
             "arrivals": st["arrivals"],
+            "reactions": self.reactions_text,
+            "moments": conn.execute("SELECT COUNT(*) FROM moments WHERE session_id = ?", (self.session_id,)).fetchone()[0],
         }
 
     def page(self) -> str:
@@ -85,15 +125,19 @@ class Board:
             st = self.state(conn)
         tpl = generate.env().get_template("board.html")
         return tpl.render(S=self.S, page="board", cls=st["cls"], students=st["students"], reward=st["reward"],
-                          three=st["three"], poll=self.poll, code=st["code"], start=st["start"], arrivals=st["arrivals"], poll_seconds=self.cfg.board_poll_seconds,
-                          js=generate.json_script({"refresh": max(2, min(self.cfg.board_poll_seconds, 10))}))
+                          three=st["three"], poll=self.poll, code=st["code"], start=st["start"], arrivals=st["arrivals"],
+                          reactions=self.reactions_text, poll_seconds=self.cfg.board_poll_seconds,
+                          js=generate.json_script({"refresh": max(2, min(self.cfg.board_poll_seconds, 10)),
+                                                   "need": self.S["board_moment_need"], "rxLabel": self.S["board_reactions"]}))
 
     def poll_loop(self, stop: threading.Event) -> None:
         fetch = http_fetch(self.cfg)
+        self.refresh_reactions(fetch)
         while not stop.wait(self.cfg.board_poll_seconds):
             try:
                 with self.lock, self.conn() as conn:
                     pull(conn, fetch)
+                self.refresh_reactions(fetch)
             except PullError as e:
                 print(f"board: pull failed: {e}")
 
@@ -140,7 +184,19 @@ def make_handler(board: Board):
                 return self._json({"ok": False, "error": "origin"}, 403)
             try:
                 n = int(self.headers.get("Content-Length") or 0)
+                if n > 25 * 1024 * 1024:
+                    return self._json({"ok": False, "error": "too_big"}, 413)
                 body = json.loads(self.rfile.read(n) or b"{}")
+                if self.path == "/api/moment":
+                    from .moments import MomentError
+                    with board.lock, board.conn() as conn:
+                        try:
+                            msg = board.add_moment(conn, body)
+                        except MomentError as e:
+                            return self._json({"ok": False, "error": str(e)}, 400)
+                        st = board.state_json(conn)
+                        st["message"] = msg
+                        return self._json(st)
                 sid = int(body["student_id"])
             except (ValueError, KeyError, json.JSONDecodeError):
                 return self._json({"ok": False, "error": "bad_request"}, 400)

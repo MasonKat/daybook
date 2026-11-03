@@ -51,7 +51,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const kstToday = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 
 /* ---------- static server for dist/ (Pages-like: dir/ -> dir/index.html) */
-const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png',
+const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.png': 'image/png', '.jpg': 'image/jpeg',
   '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.txt': 'text/plain' };
 function staticServer(root = DIST, port = PAGES_PORT) {
   return http.createServer((req, res) => {
@@ -181,6 +181,11 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     const started = daybook('session', 'start', CLASS_ON, '--at', nowHM);
     const CODE = (started.match(/오늘의 코드: (\d{4})/) || [])[1];
     check(!!CODE && /sent to the Worker/.test(started), `daybook session start ${CLASS_ON} --at ${nowHM}: code drawn and sent to the Worker`);
+    const MTEXT = 'e2e 오늘의 장면';
+    const mAdd = (answer) => { try { return execFileSync(DAYBOOK, ['moment', 'add', CLASS_ON, '--photo', path.join(ROOT, 'demo', 'moments-store', '_demo_src', 'm3.jpg'), '--text', MTEXT],
+      { env: { ...env, PYTHONIOENCODING: 'utf-8' }, cwd: ROOT, input: answer, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }); } catch (e) { return 'EXIT ' + e.status + ' ' + e.stdout; } };
+    check(/^EXIT [12] /.test(mAdd('n\n')), 'daybook moment add: answering N to the faces/names check posts nothing');
+    check(/EXIF removed\) sent to the Worker/.test(mAdd('y\n')), 'daybook moment add: y → EXIF stripped, sent to the Worker for the same-day view');
     const tok = pick.student_token;
 
     console.log('\n[2] student 오늘 tab: photo -> shrink -> Worker -> 오늘 완료');
@@ -193,6 +198,11 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     const foreignBefore = [];
     page.on('request', (r) => { const u = r.url(); if (!u.startsWith(PAGES) && !u.startsWith(WORKER) && !u.startsWith('blob:') && !u.startsWith('data:')) foreignBefore.push(u); });
     await page.route(/youtube-nocookie\.com/, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>stub</title>' }));
+    const momentReqStates = [];
+    await page.route(/127\.0\.0\.1:8788\/moments\?/, async (route) => {
+      momentReqStates.push(await route.request().frame().evaluate(() => document.readyState).catch(() => 'unknown'));
+      route.continue();
+    });
     await page.goto(`${PAGES}/s/${tok}/?set=Adaptive_Screeners_3S_Nov06_G10#today`, { waitUntil: 'networkidle' });
     check((await page.textContent('#r-title')) === '오늘 수업' && await page.isVisible('#steps') && await page.isVisible('#st-checkin') && await page.isHidden('#st-idle'),
       'class day: the ritual starts with ① 출석');
@@ -205,7 +215,25 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     await page.waitForSelector('#st-idle:not([hidden])', { timeout: 5000 }).catch(() => {});
     check(await page.isHidden('#pad') && /^\d\d:\d\d$/.test(await page.textContent('#sp-ck-v')) && await page.isVisible('#st-idle .plus'),
       `the right code checks in (출석 ${await page.textContent('#sp-ck-v')}) and moves on to ② 과제 끝`);
-    check((await page.textContent('#cta')) === '과제 끝 · 찍고 가자', 'step ② reads "과제 끝 · 찍고 가자"');
+    check((await page.textContent('#cta')) === '과제 끝 · 찍고 가자', 'step ③ reads "과제 끝 · 찍고 가자"');
+    await page.waitForSelector(`.sv-group[data-story="moments"] .slide .mtext:text("${MTEXT}")`, { state: 'attached', timeout: 5000 }).catch(() => {});
+    check(momentReqStates.length > 0 && momentReqStates.every((x) => x === 'complete'), `live moments are fetched only after load (${momentReqStates.join(',')})`);
+    check(await page.locator(`.sv-group[data-story="moments"] .slide`, { hasText: MTEXT }).count() === 1 && await page.isVisible('.story[data-story="moments"]'),
+      'the 오늘의 장면 ring holds today\'s live moment');
+    await page.click('#sp-m');
+    await page.waitForSelector('#sv:not([hidden])');
+    const liveSlide = page.locator('.sv-group[data-story="moments"] .slide', { hasText: MTEXT });
+    while (await liveSlide.isHidden()) { await page.click('#sv-next'); await page.waitForTimeout(60); }
+    await page.waitForFunction((t) => { const s = Array.from(document.querySelectorAll('.s-moment')).find((x) => x.textContent.includes(t)); return s && s.querySelector('img').src.startsWith('blob:'); }, MTEXT, { timeout: 5000 }).catch(() => {});
+    await liveSlide.locator('.rx[data-r="fire"]').click();
+    await page.waitForFunction(() => document.querySelector('.s-moment:not([hidden]) .rx[data-r="fire"] .rc').textContent === '1', null, { timeout: 5000 }).catch(() => {});
+    await liveSlide.locator('.rx[data-r="clap"]').click();
+    await page.waitForTimeout(300);
+    const rx = await liveSlide.locator('.reacts').innerText();
+    check(/🔥\s*1/.test(rx) && !/👏\s*\d/.test(rx), `a reaction counts once per student (${rx.replace(/\s+/g, ' ')})`);
+    await page.screenshot({ path: path.join(SHOTS, 'student-moment.png') });
+    await page.keyboard.press('Escape');
+    check((await page.textContent('#sp-m-v')) === '🔥', 'step ② 장면 shows the reaction');
     const setText = await page.textContent('#today-set');
     check(/^\d{1,2}\/\d{1,2} 과제$/.test(setText) && !/Adaptive|_G\d/.test(setText), `?set= shows a clean label, never the raw id ("${setText}")`);
     const png = path.join(require('os').tmpdir(), 'daybook-e2e-photo.png');
@@ -224,7 +252,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     check(/연속 \d+일/.test(await page.textContent('#d-streak')), `streak shown: ${await page.textContent('#d-streak')}`);
     check(/반 누적 \+\d+/.test(await page.textContent('#d-class')), `class total shown: ${await page.textContent('#d-class')}`);
     check(await page.isVisible('#st-done label.small'), '"다시 올리기" offered');
-    check(/^출석 \d\d:\d\d → 끝 \d\d:\d\d$/.test(await page.textContent('#d-day')), `day summary "${await page.textContent('#d-day')}"`);
+    check(/^출석 \d\d:\d\d → 장면 🔥 → 끝 \d\d:\d\d$/.test(await page.textContent('#d-day')), `day summary "${await page.textContent('#d-day')}"`);
     check(/^오늘의 한 장 · \d+\/\d+ 기록됨 \d\d:\d\d$/.test(await page.textContent('#d-shot')), `"${await page.textContent('#d-shot')}" (no photo)`);
     await page.waitForTimeout(250);
     await page.screenshot({ path: path.join(SHOTS, 'student-done.png') });
@@ -405,6 +433,8 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
         check(/^주간 리포트 · \d{1,2}월 \d주 \(\d+\/\d+–\d+\/\d+\)$/.test((await last.locator('.report h2').innerText()).trim()), `title "${(await last.locator('.report h2').innerText()).trim()}"`);
         check(/업데이트 \d{4}-\d\d-\d\d \d\d:\d\d/.test(await pp.textContent('footer')), 'footer update time');
         check(/(상승|유지|조정)/.test(await last.innerText()) && /이번 주 \+\d+ · 누적 \d+점/.test(await last.innerText()) && await last.locator('.bar .fill').count() === 1, 'tests with direction words, attitude +week / cumulative, class bar');
+        const ms = await last.locator('.mstrip li').count();
+        check(ms >= 1 && ms <= 3 && !(await last.innerText()).includes('🔥'), `parent report: "이번 주 수업 장면" strip with ${ms} moment(s), no reaction counts`);
         check(await last.locator('.bubble').count() === 1 && /\d\d:\d\d/.test(await last.locator('.mtime').innerText()), 'teacher line as a separate bubble, time under the message');
         check(await pp.locator('input, textarea').count() === 0 && (await pp.textContent('.room-end')).includes('이 방은 주간 기록 전용입니다'), 'no input bar; room note at the bottom');
         await pp.locator('details.past > summary').last().click();
@@ -429,6 +459,9 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     check(/출석 \d\d:\d\d/.test(await row.locator('.ck').innerText()), 'the row shows the pulled 출석 time');
     check((await row.locator('.bline').innerText()).includes(LINE), 'the board shows the student\'s line to the teacher');
     check(daybook('lines', CLASS_ON).includes(LINE), '`daybook lines` shows it in the console');
+    await bp.waitForTimeout(500);
+    const bstate = await (await fetch(BOARD + '/api/state')).json();
+    check(/🔥 1/.test(bstate.reactions || ''), `the board shows the anonymous reaction totals (${bstate.reactions})`);
     const otherId = await bp.locator('.row').filter({ has: bp.locator('button.ckfor') }).first().getAttribute('data-id');
     const other = bp.locator(`.row[data-id="${otherId}"]`);
     await other.locator('button.ckfor').click();

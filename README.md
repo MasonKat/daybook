@@ -3,7 +3,7 @@
 **Status (2026-11-03, cloud build + design pass v1):**
 1. P1 complete and tested: schema + `students_public`, `init`, `demo`, `roster add/list/import`, Worker `/submit` + `/submissions`, student 오늘 tab, `pull`, parent page, `publish` + no-PII lint, `import screeners`, deploy steps.
 2. P2 complete: board + attitude buttons, `score`, class reward bar, `note`, `weekly`, Playwright checks. P3: manifest/icons/standalone, `rotate-tokens`, `export pdf` stub, Worker node tests.
-3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 87 pytest + 19 Worker node tests + 128 Playwright checks (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
+3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 92 pytest + 22 Worker node tests + 136 Playwright checks (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
    Design v2: shorts reels + 강의 cards, story rings with content, status-coloured profile tiles, one weekly report per parent message.
 4. Not done here (needs the teacher): the Cloudflare deploy, and a real-phone install test on iPhone Safari / Android Chrome. Deferred items are listed in `DECISIONS.md`.
 5. Real data is attached by the local agents: see `HANDOFF.md`. This repo holds synthetic data only.
@@ -63,6 +63,7 @@ Then follow `HANDOFF.md` (classes, roster import, links).
 | once | `daybook roster import roster.csv --map mappings/roster.json --class 고1A` | students from the roster export |
 | once | `daybook roster list 고1A --links` | each student's and parent's link, to send privately |
 | in class (P2) | `daybook board 고1A` → open http://127.0.0.1:8787 | live ✓, attitude 1·2·3, class bar, "대신 제출" |
+| in class | `daybook moment add 고1A --photo board.jpg --text "…"` (or the board) | 오늘의 장면: EXIF stripped, ≤ 1080 px, ≤ 200 KB, asks the faces/names check |
 | in class | `daybook session start 고1A --at 18:00 [--set <set_id>]` | draws 오늘의 코드 for 출석 and sends it to the Worker; prints the handout QR URL `…/go/?set=<set_id>` (no token) |
 | Saturday | `daybook pull` | new submissions from the Worker |
 | Saturday | `daybook import screeners <dir>` | the screener round snapshots → `tests` (unmatched rows are listed) |
@@ -160,6 +161,9 @@ history. `dist/` and `*.sqlite` are gitignored. Every page sends `noindex` and h
 | PUT | `/session` | `X-Teacher-Token` | `{class, date, code, open_from, open_until, start, tokmap}`: today's 출석 code and window (class = an opaque key) |
 | POST | `/checkin` | Pages origin only | form `t`, `code` → `{ok, ts, already}` or `{ok: false, error: bad_code\|closed\|no_class_today\|rate_limited}` |
 | GET | `/checkins?since=<iso>` | `X-Teacher-Token` | `{now, items: [{token, class, day, ts}]}` |
+| PUT | `/moment-put` | `X-Teacher-Token` | `{class, date, n (1–3), text, image (base64 JPEG ≤ 200 KB)}`: 오늘의 장면 for the same-day view |
+| GET | `/moments?t=<token>` · `/moment?t=&k=` | Pages origin, own class only | moments (text, date, counts, own reaction) · the JPEG |
+| POST | `/react` | Pages origin, own class only | form `t`, `k`, `r` (fire\|clap\|mind) → `{counts, mine, already}`; one per token per moment |
 | GET | `/photo?key=<key>` | `X-Teacher-Token` | the photo bytes |
 
 One record per token per Seoul day; a second upload the same day replaces the photo and keeps the first `ts`.

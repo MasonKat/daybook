@@ -59,6 +59,12 @@
       {% endif %}
     </div>
   </div>
+  {% if w.moments %}
+  <div class="mwrap">
+    <p class="rk">{{ S.moments_strip }}</p>
+    <ul class="mstrip">{% for m in w.moments %}<li><img src="{{ m.src }}" alt="" loading="lazy" decoding="async"><span>{{ m.text }}</span></li>{% endfor %}</ul>
+  </div>
+  {% endif %}
 </section>
 {% if w.note %}<div class="bubble"><span class="bl">{{ S.parent_note }}</span>{{ w.note }}</div>{% endif %}
 {% endmacro %}

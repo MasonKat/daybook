@@ -105,6 +105,7 @@ def demo(obj: Ctx, out, force, no_publish):
     except demomod.DemoError as e:
         fail(str(e))
     demomod.write_demo_videos()
+    click.echo(f"moments: {demomod.seed_moments(conn, obj.cfg)} synthetic class scenes")
     rep = importers.import_screeners(conn, configmod.ROOT / "demo" / "screeners")
     click.echo(f"screeners: {rep.imported} rows imported from {rep.files} rounds; unmatched: {len(rep.unmatched)}")
     for u in rep.unmatched:
@@ -347,6 +348,50 @@ def session_start(obj: Ctx, class_name, d, at, set_id, topic, new_code):
     if set_id:
         base = obj.cfg.pages or "https://<pages>"
         click.echo(f"handout QR URL (no token): {base}/go/?set={set_id}")
+
+
+@cli.group()
+def moment():
+    """오늘의 장면: the class highlight (photo + one line), up to 3 per session."""
+
+
+@moment.command("add")
+@click.argument("class_name")
+@click.option("--photo", required=True, type=click.Path(exists=True, dir_okay=False))
+@click.option("--text", default="", help="One line, up to 60 characters")
+@click.option("--date", "d", default=None)
+@click.pass_obj
+def moment_add(obj: Ctx, class_name, photo, text, d):
+    """EXIF stripped, <= 1080 px, <= 200 KB; asks the faces/names check before anything is stored or sent."""
+    from . import moments as mm
+    from .pull import http_put_json
+    conn = obj.conn
+    cls = ops.get_class(conn, class_name)
+    answer = click.prompt(mm.GATE, default="N", show_default=False)
+    push = None
+    if obj.cfg.worker and obj.cfg.teacher_token:
+        push = lambda payload: http_put_json(obj.cfg, "/moment-put", payload)   # noqa: E731
+    try:
+        row = mm.add_moment(conn, obj.cfg, cls, parse_date(d), Path(photo).read_bytes(), text,
+                            confirmed=answer.strip().lower() == "y", push=push)
+    except mm.MomentError as e:
+        fail(str(e))
+    except PullError as e:
+        click.echo(f"stored locally; not sent to the Worker ({e}): it will show after Saturday's publish", err=True)
+        return
+    size = mm.image_path(obj.cfg, row["image_key"]).stat().st_size
+    click.echo(f"moment {row['image_key']} ({size // 1024} KB, EXIF removed)" + (" sent to the Worker" if push else ""))
+
+
+@moment.command("list")
+@click.argument("class_name")
+@click.pass_obj
+def moment_list(obj: Ctx, class_name):
+    conn = obj.conn
+    cls = ops.get_class(conn, class_name)
+    for r in conn.execute("""SELECT m.*, se.date FROM moments m JOIN sessions se ON se.id = m.session_id
+                             WHERE m.class_id = ? ORDER BY se.date DESC, m.id""", (cls["id"],)):
+        click.echo(f"{r['date']}  {r['image_key']}\t{r['text'] or ''}")
 
 
 @cli.command("lines")

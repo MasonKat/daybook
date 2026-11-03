@@ -133,5 +133,18 @@
   "my_lines": "내 한 줄",
   "day_class": "출석 {in} → 끝 {out}",
   "day_study": "끝 {out}",
-  "lines_empty": "아직 남긴 한 줄이 없어요."
+  "lines_empty": "아직 남긴 한 줄이 없어요.",
+  "story_moments": "오늘의 장면",
+  "step_moment": "장면",
+  "moments_strip": "이번 주 수업 장면",
+  "react_fire": "🔥",
+  "react_clap": "👏",
+  "react_mind": "🤯",
+  "day_class_m": "출석 {in} → 장면 {m} → 끝 {out}",
+  "board_moment": "장면 올리기",
+  "board_moment_text": "한 줄 (60자까지)",
+  "board_moment_gate": "학생 얼굴·이름·문제집 원문 전체가 보이지 않나요?",
+  "board_moment_need": "확인란에 체크해야 올라가요",
+  "board_moment_ok": "장면을 올렸어요",
+  "board_reactions": "지난 장면 반응"
 }

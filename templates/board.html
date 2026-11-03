@@ -31,6 +31,14 @@
   </li>
   {% endfor %}
 </ul>
+<section class="card mbox">
+  <h2>{{ S.board_moment }}</h2>
+  <input id="m-file" type="file" accept="image/*" capture="environment">
+  <input id="m-text" type="text" maxlength="60" placeholder="{{ S.board_moment_text }}">
+  <label class="gate"><input id="m-gate" type="checkbox"> <span>{{ S.board_moment_gate }}</span></label>
+  <div class="row2"><button type="button" class="btn primary" id="m-post">{{ S.board_moment }}</button><span class="muted" id="m-msg"></span></div>
+  <p class="rxsum muted" id="b-rx">{% if reactions %}{{ S.board_reactions }} · {{ reactions }}{% endif %}</p>
+</section>
 <section class="card">
   <h2>{{ S.board_three }}</h2>
   <p id="b-three">{{ three|join(', ') if three else S.board_none }}</p>

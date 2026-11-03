@@ -131,6 +131,57 @@ async function checkin(req, env, h) {
   return json({ ok: true, already: false, ts: rec.ts, day }, 200, h);
 }
 
+// ---- 오늘의 장면 (F4): class-wide moments, read by token (own class only), anonymous reaction counters.
+const MKEY_RE = /^[a-z0-9]{1,12}:\d{4}-\d{2}-\d{2}:[1-3]$/;
+const REACTIONS = ['fire', 'clap', 'mind'];
+
+async function putMoment(req, env) {
+  let b;
+  try { b = await req.json(); } catch { return json({ ok: false, error: 'bad_json' }, 400, {}); }
+  const { class: cls, date, n, text, image } = b || {};
+  const k = `${cls}:${date}:${n}`;
+  if (!MKEY_RE.test(k) || typeof image !== 'string' || image.length > 300000) return json({ ok: false, error: 'bad_moment' }, 400, {});
+  let bytes;
+  try { bytes = Uint8Array.from(atob(image), (c) => c.charCodeAt(0)); } catch { return json({ ok: false, error: 'bad_image' }, 400, {}); }
+  if (bytes.length > 200 * 1024 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return json({ ok: false, error: 'bad_image' }, 400, {});
+  const meta = { k, date, n: Number(n), text: String(text || '').slice(0, 60), ts: new Date().toISOString() };
+  await env.SUBMISSIONS.put(`moment:${k}`, bytes.buffer, { expirationTtl: 14 * DAY, metadata: meta });
+  return json({ ok: true, k }, 200, {});
+}
+
+async function counts(env, k) {
+  return (await env.SUBMISSIONS.get(`rc:${k}`, 'json')) || { fire: 0, clap: 0, mind: 0 };
+}
+
+async function listMoments(env, cls) {
+  const out = [];
+  let cursor;
+  do {
+    const page = await env.SUBMISSIONS.list({ prefix: `moment:${cls}:`, cursor });
+    for (const key of page.keys) if (key.metadata) out.push(key.metadata);
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  out.sort((a, b) => (a.k < b.k ? -1 : 1));
+  return Promise.all(out.map(async (m) => ({ ...m, counts: await counts(env, m.k) })));
+}
+
+async function react(req, env, h) {
+  let form;
+  try { form = await req.formData(); } catch { return json({ ok: false, error: 'bad_form' }, 400, h); }
+  const token = String(form.get('t') || '').toLowerCase(), k = String(form.get('k') || ''), r = String(form.get('r') || '');
+  if (!TOKEN_RE.test(token) || !MKEY_RE.test(k) || !REACTIONS.includes(r)) return json({ ok: false, error: 'bad_request' }, 400, h);
+  const cls = await classOf(env, token);
+  if (!cls || !k.startsWith(cls + ':') || !(await env.SUBMISSIONS.get(`moment:${k}`, 'arrayBuffer'))) return json({ ok: false, error: 'not_found' }, 404, h);
+  const mine = `react:${k}:${token}`, prev = await env.SUBMISSIONS.get(mine);
+  const c = await counts(env, k);
+  if (!prev) {            // one reaction per token per moment; the first one counts
+    c[r] += 1;
+    await env.SUBMISSIONS.put(mine, r, { expirationTtl: 14 * DAY });
+    await env.SUBMISSIONS.put(`rc:${k}`, JSON.stringify(c), { expirationTtl: 14 * DAY });
+  }
+  return json({ ok: true, mine: prev || r, already: !!prev, counts: c }, 200, h);
+}
+
 async function listByPrefix(url, env, prefix) {
   const since = url.searchParams.get('since') || '';
   const items = [];
@@ -174,7 +225,7 @@ export default {
     const url = new URL(req.url);
     const h = corsHeaders(req, env);
     const origin = req.headers.get('Origin');
-    const isStudent = url.pathname === '/submit' || url.pathname === '/status' || url.pathname === '/checkin';
+    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react'].includes(url.pathname);
     // CORS: browsers may only call the student endpoints from the Pages origin.
     if (isStudent && origin && origin !== env.ALLOWED_ORIGIN) return json({ ok: false, error: 'origin' }, 403, h);
     if (req.method === 'OPTIONS') return new Response(null, { status: isStudent ? 204 : 404, headers: h });
@@ -189,9 +240,37 @@ export default {
       return json({ ok: true, day, days, checkin_ts: ck ? ck.ts : null, class_today: !!sess, start: sess ? sess.start : null }, 200, h);
     }
     if (url.pathname === '/checkin' && req.method === 'POST') return checkin(req, env, h);
-    if (url.pathname === '/session' || url.pathname === '/checkins') {
+    if (url.pathname === '/react' && req.method === 'POST') return react(req, env, h);
+    if ((url.pathname === '/moments' || url.pathname === '/moment') && req.method === 'GET') {
+      // a student token reads only its own class; the teacher token may name a class
+      const token = (url.searchParams.get('t') || '').toLowerCase();
+      let cls = null;
+      if (TOKEN_RE.test(token)) {
+        cls = await classOf(env, token);
+        if (!cls && url.pathname === '/moments') return json({ ok: true, items: [] }, 200, h);   // no class known yet: nothing to show
+        if (cls) {
+          const mine = {};
+          if (url.pathname === '/moments') {
+            const list = await listMoments(env, cls);
+            await Promise.all(list.map(async (m) => { mine[m.k] = await env.SUBMISSIONS.get(`react:${m.k}:${token}`); }));
+            return json({ ok: true, items: list.map((m) => ({ ...m, mine: mine[m.k] || null })) }, 200, h);
+          }
+        }
+      } else if (teacherOk(req, env) && CLASS_RE.test(url.searchParams.get('class') || '')) {
+        cls = url.searchParams.get('class');
+        if (url.pathname === '/moments') return json({ ok: true, items: await listMoments(env, cls) }, 200, {});
+      }
+      if (!cls) return json({ ok: false, error: 'not_found' }, 404, h);
+      const k = url.searchParams.get('k') || '';
+      if (!MKEY_RE.test(k) || !k.startsWith(cls + ':')) return json({ ok: false, error: 'not_found' }, 404, h);
+      const img = await env.SUBMISSIONS.get(`moment:${k}`, 'arrayBuffer');
+      if (!img) return json({ ok: false, error: 'not_found' }, 404, h);
+      return new Response(img, { headers: { ...h, 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=600' } });
+    }
+    if (url.pathname === '/session' || url.pathname === '/checkins' || url.pathname === '/moment-put') {
       if (!teacherOk(req, env)) return json({ ok: false, error: 'unauthorized' }, 401, {});
       if (url.pathname === '/session' && req.method === 'PUT') return putSession(req, env);
+      if (url.pathname === '/moment-put' && req.method === 'PUT') return putMoment(req, env);
       if (url.pathname === '/checkins' && req.method === 'GET') {
         const items = (await listByPrefix(url, env, 'checkin:')).sort((a, b) => (a.ts < b.ts ? -1 : 1));
         return json({ now: new Date().toISOString(), items }, 200, {});

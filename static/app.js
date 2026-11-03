@@ -181,6 +181,7 @@
       sv.hidden = false;
       LS.set('daybook.seen.' + key, btn.getAttribute('data-hash'));
       btn.classList.add('seen');
+      if (key === 'moments' && momentToday()) { LS.set('daybook.mseen.' + tok + '.' + today, '1'); renderRitual(); }
       slide(0);
     }
     function slide(i) {
@@ -287,6 +288,22 @@
       $('sp-end-v').textContent = known[today] ? (LS.get(TKEY + today) || (today === D.pub ? D.todayTime : '') || '✓') : '';
       ck.classList.toggle('now', classToday && !ckTime);
       en.classList.toggle('now', !!(classToday && ckTime && !known[today]));
+      var mm = $('sp-m'), tm = momentToday(), mv = momentMark();
+      mm.classList.toggle('off', !tm);
+      mm.classList.toggle('ok', !!(tm && mv));
+      $('sp-m-v').textContent = tm ? mv : '–';
+    }
+    /* ② 오늘의 장면: today's moment (any baked one in the taste build), seen or reacted */
+    function momentSlides() { return Array.prototype.slice.call(document.querySelectorAll('.sv-group[data-story="moments"] .slide')); }
+    function momentToday() {
+      var sl = momentSlides().filter(function (x) { return TASTE || x.getAttribute('data-k').indexOf(':' + today + ':') > 0; });
+      return sl.length ? sl[sl.length - 1].getAttribute('data-k') : '';
+    }
+    function momentMark() {
+      var k = momentToday();
+      if (!k) return '';
+      var r = LS.get('daybook.react.' + tok + '.' + k);
+      return r ? S['react_' + r] : (LS.get('daybook.mseen.' + tok + '.' + today) ? '✓' : '');
     }
     function idleState() { return classToday && !ckTime ? 'checkin' : 'idle'; }
 
@@ -328,6 +345,110 @@
         .catch(function () { padBusy = false; digits = ''; padRender(S.ck_error, true); });
     }
     $('ck-open').addEventListener('click', padOpen);
+    $('sp-m').addEventListener('click', function () {
+      var b = document.querySelector('.story[data-story="moments"]');
+      if (b && !b.hidden && momentSlides().length) b.click();
+    });
+
+    /* ---- reactions: anonymous class counters, one per student per moment (the first one counts) */
+    function setCounts(k, counts, mine) {
+      var box = document.querySelector('.reacts[data-k="' + k + '"]');
+      if (!box) return;
+      var bs = box.querySelectorAll('.rx');
+      for (var i = 0; i < bs.length; i++) {
+        var r = bs[i].getAttribute('data-r');
+        if (counts) bs[i].querySelector('.rc').textContent = counts[r] ? counts[r] : '';
+        bs[i].setAttribute('aria-pressed', mine === r ? 'true' : 'false');
+      }
+    }
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('.rx');
+      if (!b) return;
+      var k = b.closest('.reacts').getAttribute('data-k'), r = b.getAttribute('data-r'), RK = 'daybook.react.' + tok + '.' + k;
+      var done = function (mine, counts) { LS.set(RK, mine); setCounts(k, counts, mine); renderRitual(); };
+      if (LS.get(RK)) return;   /* already reacted: one per moment */
+      if (TASTE) {
+        var c = {}; c[r] = 1;
+        return done(r, c);
+      }
+      var fd = new FormData();
+      fd.append('t', tok); fd.append('k', k); fd.append('r', r);
+      fetch(D.worker + '/react', { method: 'POST', body: fd })
+        .then(function (x) { return x.json(); })
+        .then(function (j) { if (j && j.ok) done(j.mine, j.counts); })
+        .catch(function () { /* offline: try again later */ });
+    });
+    momentSlides().forEach(function (sl) {
+      var k = sl.getAttribute('data-k'), mine = LS.get('daybook.react.' + tok + '.' + k);
+      if (mine) { var c = {}; if (TASTE) c[mine] = 1; setCounts(k, TASTE ? c : null, mine); }
+    });
+
+    /* ---- live moments: fetched from our own Worker only after the page has loaded */
+    window.addEventListener('load', function () {
+      if (!D.worker || !tok || TASTE) return;
+      fetch(D.worker + '/moments?t=' + tok, { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          if (!j || !j.items) return;
+          var group = document.querySelector('.sv-group[data-story="moments"]'), ring = document.querySelector('.story[data-story="moments"]');
+          var added = [];
+          j.items.forEach(function (m) {
+            if (m.date < (D.momentsFrom || D.weekStart)) return;
+            if (!group.querySelector('.slide[data-k="' + m.k + '"]')) {
+              group.appendChild(buildMoment(m));
+              added.push(m.k);
+              loadMomentImage(m.k);
+            }
+            setCounts(m.k, m.counts, m.mine);
+            if (m.mine) LS.set('daybook.react.' + tok + '.' + m.k, m.mine);
+          });
+          if (added.length) {
+            var h = ring.getAttribute('data-hash') + ':' + added.join(',');
+            ring.setAttribute('data-hash', h);
+            ring.classList.toggle('seen', LS.get('daybook.seen.moments') === h);
+          }
+          if (momentSlides().length) ring.hidden = false;
+          renderRitual();
+        })
+        .catch(function () { /* offline: the published moments are enough */ });
+    });
+    function buildMoment(m) {
+      var sl = document.createElement('div'), d = m.date;
+      sl.className = 'slide s-moment';
+      sl.setAttribute('data-k', m.k);
+      sl.hidden = true;
+      var kick = document.createElement('p');
+      kick.className = 'sv-kicker';
+      kick.textContent = S.story_moments + ' · ' + Number(d.slice(5, 7)) + '/' + Number(d.slice(8, 10)) + ' (' + WD[weekday(d)] + ')';
+      var img = document.createElement('img');
+      img.className = 'mimg'; img.alt = '';
+      sl.appendChild(kick); sl.appendChild(img);
+      if (m.text) { var t = document.createElement('p'); t.className = 'mtext'; t.textContent = m.text; sl.appendChild(t); }
+      var box = document.createElement('div');
+      box.className = 'reacts'; box.setAttribute('data-k', m.k);
+      ['fire', 'clap', 'mind'].forEach(function (r) {
+        var b = document.createElement('button'), e1 = document.createElement('span'), c = document.createElement('span');
+        b.type = 'button'; b.className = 'rx'; b.setAttribute('data-r', r); b.setAttribute('aria-pressed', 'false');
+        e1.textContent = S['react_' + r]; c.className = 'rc tnum';
+        b.appendChild(e1); b.appendChild(document.createTextNode(' ')); b.appendChild(c);
+        box.appendChild(b);
+      });
+      sl.appendChild(box);
+      return sl;
+    }
+    function loadMomentImage(k) {
+      fetch(D.worker + '/moment?t=' + tok + '&k=' + encodeURIComponent(k))
+        .then(function (r) { return r.ok ? r.blob() : null; })
+        .then(function (b) {
+          if (!b) return;
+          var url = URL.createObjectURL(b);
+          var img = document.querySelector('.slide[data-k="' + k + '"] img');
+          if (img) img.src = url;
+          var ring = $('ring-moments');
+          if (ring) { ring.innerHTML = ''; var ri = document.createElement('img'); ri.alt = ''; ri.src = url; ring.appendChild(ri); }
+        })
+        .catch(function () {});
+    }
     $('keys').addEventListener('click', function (e) {
       var b = e.target.closest('button');
       if (!b || padBusy) return;
@@ -347,7 +468,9 @@
       var t = LS.get(TKEY + today) || (today === D.pub ? D.todayTime : '');
       var md = Number(today.slice(5, 7)) + '/' + Number(today.slice(8, 10));
       $('d-shot').textContent = t ? fmt(S.recorded_at, { date: md, t: t }) : fmt(S.recorded, { date: md });
-      $('d-day').textContent = classToday ? fmt(S.day_class, { 'in': ckTime || '–', out: t || '✓' }) : fmt(S.day_study, { out: t || '✓' });
+      var mk = momentMark();
+      $('d-day').textContent = !classToday ? fmt(S.day_study, { out: t || '✓' })
+        : mk ? fmt(S.day_class_m, { 'in': ckTime || '–', m: mk, out: t || '✓' }) : fmt(S.day_class, { 'in': ckTime || '–', out: t || '✓' });
       $('d-replaced').hidden = !replaced;
       $('d-streak').textContent = fmt(S.streak_label, { n: streakNow() });
       $('d-class').textContent = fmt(S.class_plus, { n: D.classTotal || 0 });
@@ -530,6 +653,7 @@
       $('b-fill').style.width = st.pct.toFixed(1) + '%';
       $('b-togo').textContent = st.togo;
       $('b-three').textContent = st.three;
+      if (st.reactions && $('b-rx')) $('b-rx').textContent = (D.rxLabel || '') + ' · ' + st.reactions;
       if (st.arrivals) {
         var a = $('b-arrivals');
         if (st.arrivals.length) {
@@ -551,6 +675,24 @@
       else if (b.classList.contains('subfor')) post('/api/submit-for', { student_id: id }).then(apply);
       else if (b.classList.contains('ckfor')) post('/api/checkin-for', { student_id: id }).then(apply);
     });
+    var mPost = $('m-post');
+    if (mPost) {
+      mPost.addEventListener('click', function () {
+        var f = $('m-file').files && $('m-file').files[0];
+        if (!$('m-gate').checked) { $('m-msg').textContent = D.need || '확인란에 체크해야 올라가요'; return; }
+        if (!f) return;
+        var rd = new FileReader();
+        mPost.disabled = true;
+        rd.onload = function () {
+          post('/api/moment', { image: rd.result, text: $('m-text').value, confirm: true }).then(function (st) {
+            mPost.disabled = false;
+            $('m-msg').textContent = st.message || st.error || '';
+            if (st.ok !== false) { $('m-file').value = ''; $('m-text').value = ''; $('m-gate').checked = false; apply(st); }
+          }).catch(function () { mPost.disabled = false; });
+        };
+        rd.readAsDataURL(f);
+      });
+    }
     setInterval(function () {
       fetch('/api/state', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(apply).catch(function () {});
     }, (D.refresh || 10) * 1000);

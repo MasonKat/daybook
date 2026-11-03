@@ -130,7 +130,12 @@ body[data-page="student"] .app { display: flex; flex-direction: column; height: 
 /* ---------- 오늘: the ritual (출석 → 과제 끝) */
 .rhead { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); margin-top: var(--s2); }
 .rtitle { font-size: 18px; margin: 0; }
-.steps { list-style: none; padding: 0; margin: var(--s3) 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); }
+.steps { list-style: none; padding: 0; margin: var(--s3) 0 0; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.steps li { padding: 6px 8px !important; flex-wrap: wrap; row-gap: 0; min-width: 0; }
+.steps .sl { white-space: nowrap; }
+.steps .sv2 { white-space: nowrap; font-size: 12px; }
+#sp-m { cursor: pointer; }
+.steps li.off { opacity: .5; }
 .steps li { display: flex; align-items: center; gap: 6px; background: var(--card); border-radius: 999px; padding: 6px 10px; font-size: 13px; min-height: 36px; }
 .steps .sn { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: var(--line); font-size: 11px; font-weight: 800; flex: none; }
 .steps .sl { font-weight: 700; }
@@ -355,3 +360,21 @@ body[data-page="student"][data-taste] .app { height: calc(100dvh - 24px); }
 .wordmark.big { font-size: 56px; margin: 0; }
 .taste-land .lead { font-size: 17px; font-weight: 600; margin: 0 0 var(--s3); }
 .btn.wide { width: 100%; max-width: 320px; min-height: 52px; font-size: 17px; }
+
+/* ---------- 오늘의 장면 (F4) */
+.s-moments { background: var(--grad); font-size: 22px; }
+.slide .mimg { width: 100%; max-width: 440px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--s4); }
+.mtext { margin: 0; font-size: 18px; font-weight: 700; max-width: 440px; }
+.reacts { position: relative; z-index: 2; display: flex; gap: 10px; }
+.rx { min-width: 76px; min-height: 48px; border-radius: 999px; border: 1px solid #2a3344; background: #111722; color: #f2f4f8; font: 700 18px var(--font); cursor: pointer; }
+.rx[aria-pressed="true"] { background: #f2f4f8; color: #0b0f17; border-color: #f2f4f8; }
+.rx .rc { font-size: 14px; }
+.mwrap { padding-top: var(--s2); border-top: 1px solid var(--line); margin-top: var(--s2); }
+.mstrip { list-style: none; padding: 0; margin: 6px 0 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.mstrip li { min-width: 0; font-size: 11px; color: var(--muted); }
+.mstrip img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; background: var(--line); margin-bottom: 3px; }
+.mbox { margin-top: var(--s3); }
+.mbox .gate { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; margin: 6px 0; }
+.mbox input[type=text] { width: 100%; min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); font: 15px var(--font); padding: 0 10px; }
+.mbox .row2 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.rxsum { font-size: 14px; }

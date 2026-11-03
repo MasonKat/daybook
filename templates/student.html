@@ -17,8 +17,10 @@
 
 <div class="stories" id="stories">
   {% for st in me.stories %}
-  <button type="button" class="story" data-story="{{ st.key }}" data-hash="{{ st.hash }}">
-    {% if st.key == 'streak' %}
+  <button type="button" class="story" data-story="{{ st.key }}" data-hash="{{ st.hash }}"{% if st.hidden %} hidden{% endif %}>
+    {% if st.key == 'moments' %}
+    <span class="ring"><span class="story-in s-moments" id="ring-moments">{% if st.thumb %}<img src="{{ st.thumb }}" alt="" decoding="async">{% else %}<span aria-hidden="true">🎬</span>{% endif %}</span></span>
+    {% elif st.key == 'streak' %}
     <span class="ring prog" style="--p: {{ st.pct }}"><span class="story-in s-streak"><b class="tnum" data-live="streak">{{ st.streak }}</b></span></span>
     {% elif st.key == 'videos' %}
     <span class="ring"><span class="story-in s-videos">{% if st.thumb %}<img src="{{ st.thumb }}" alt="" decoding="async">{% else %}<span aria-hidden="true">▶</span>{% endif %}</span></span>
@@ -95,7 +97,8 @@
   <div class="rhead"><h1 class="rtitle" id="r-title">{{ S.ritual_study }}</h1><p class="chip set-chip" id="today-set" hidden></p></div>
   <ol class="steps" id="steps" hidden>
     <li id="sp-ck"><span class="sn">1</span><span class="sl">{{ S.step_checkin }}</span><span class="sv2" id="sp-ck-v"></span></li>
-    <li id="sp-end"><span class="sn">2</span><span class="sl">{{ S.step_end }}</span><span class="sv2" id="sp-end-v"></span></li>
+    <li id="sp-m" role="button" tabindex="0"><span class="sn">2</span><span class="sl">{{ S.step_moment }}</span><span class="sv2" id="sp-m-v"></span></li>
+    <li id="sp-end"><span class="sn">3</span><span class="sl">{{ S.step_end }}</span><span class="sv2" id="sp-end-v"></span></li>
   </ol>
   <input id="photo" class="vh" type="file" accept="image/*" capture="environment">
   <div id="st-checkin" class="state center" hidden>
@@ -206,7 +209,16 @@
   <div class="sv-tap next" id="sv-next"></div>
   {% for st in me.stories %}
   <div class="sv-group" data-story="{{ st.key }}" hidden>
-    {% if st.key == 'videos' %}
+    {% if st.key == 'moments' %}
+    {% for m in st['items'] %}
+    <div class="slide s-moment" data-k="{{ m.k }}">
+      <p class="sv-kicker">{{ S.story_moments }} · {{ m.label }}</p>
+      <img class="mimg" src="{{ m.src }}" alt="" loading="lazy" decoding="async">
+      {% if m.text %}<p class="mtext">{{ m.text }}</p>{% endif %}
+      <div class="reacts" data-k="{{ m.k }}">{% for r in ("fire", "clap", "mind") %}<button type="button" class="rx" data-r="{{ r }}" aria-pressed="false"><span aria-hidden="true">{{ S['react_' ~ r] }}</span> <span class="rc tnum"></span></button>{% endfor %}</div>
+    </div>
+    {% endfor %}
+    {% elif st.key == 'videos' %}
     {% for v in st['items'] %}
     <div class="slide s-video">
       <p class="sv-kicker">{{ S.story_new_videos }}</p>

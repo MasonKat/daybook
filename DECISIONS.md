@@ -129,7 +129,19 @@ One line each. "deferred" = not built in P0, on purpose.
 - The done screen is the day summary: "출석 18:02 → 끝 20:55" on a class day ("끝 20:55" otherwise), 오늘의 한 장, 연속, 반 누적. "장면" joins it with F4.
 - Demo: sessions start at 18:00 with a code; students who usually come get check-ins at 17:40–18:09 (some by 출석 처리); 콩 has a check-in for every past class day and six reviews.
 
+## F4: 오늘의 장면 (2026-11-03)
+- Schema v4: `moments (id, class_id, session_id, ts, text, image_key)`, at most 3 per session; images live in `moments_dir` (default `moments/`, gitignored), never in git.
+- On the laptop, before anything is stored or sent: `ImageOps.exif_transpose` then a fresh RGB copy (all EXIF/GPS/ICC dropped), long edge ≤ 1080 px, JPEG quality stepped down to ≤ 200 KB. The gate "학생 얼굴·이름·문제집 원문 전체가 보이지 않나요? (y/N)" defaults to N; only y stores (CLI prompt; a checkbox on the board that the server also requires).
+- Same day: the console PUTs the JPEG (base64) to `/moment-put`, stored as `moment:<class key>:<date>:<n>` with a 14-day TTL. A student token reads only its own class (`GET /moments?t=` → metadata + counts + its own reaction; `GET /moment?t=&k=` → the JPEG, shown through a blob URL so the CSP stays `img-src 'self' blob: data:`). The page asks only after `load`.
+- Saturday publish bakes the moments as 720 px ≤ 100 KB copies into `dist/m/<class key>/<date>_<n>.jpg` (the class key, never the name). The student story shows the moments of the last 7 days; the parent report shows up to 3 per week ("이번 주 수업 장면"), without reaction counts.
+- Reactions 🔥 👏 🤯: anonymous class counters (`POST /react`), one per token per moment, the first tap counts; students see the totals; the board shows the latest totals ("지난 장면 반응"). No names, no comments, no ranking.
+- The ritual is ① 출석 → ② 장면 → ③ 과제 끝 on class days. Step ② is done when the student opened today's moment (✓) or reacted (the emoji); without a moment today it shows "–" and never blocks. The day summary reads "출석 18:02 → 장면 🔥 → 끝 20:55". In the taste build step ② uses the newest baked moment and reactions stay in the browser.
+- The board uploads a file (on a laptop that is a file or the camera app's photo); a live webcam capture is deferred.
+- `/moments` for a token whose class is unknown answers an empty list (not 404), so the student console stays clean.
+- Demo: two synthetic chalkboard scenes on each class's latest class day and one on the class day before (with synthetic EXIF, so the stripping runs in every demo).
+
 ## Deferred
+- deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred (local agent will add after the clone, before 수능 week): `daybook class cancel <class> <date>` so a closed day does not break streaks.
 - deferred: `export pdf` (the command is a stub that exits 2 with a message).
 - deferred: class median band on the parent trend.

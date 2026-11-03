@@ -29,7 +29,7 @@ JS_STRINGS = ("done_title", "streak_label", "class_plus", "reward_to_go", "uploa
               "upload_rate", "upload_offline", "replaced", "no_worker", "today_set", "set_default", "weekdays", "story_streak",
               "recorded_at", "recorded", "ritual_class", "ritual_study", "study_cta", "end_cta", "ck_done", "ck_bad",
               "ck_closed", "ck_none", "ck_rate", "ck_error", "chip_ok", "chip_confused", "chip_rewatch", "day_class",
-              "day_study")
+              "day_study", "day_class_m", "story_moments", "react_fire", "react_clap", "react_mind")
 YT_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 WEEKDAYS_FULL = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
 PARENT_WEEKS = 8      # weeks kept in the parent room
@@ -255,6 +255,17 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         class_att[cid] = [(date.fromisoformat(r["date"]), r["points"]) for r in conn.execute(
             """SELECT se.date, a.points FROM attitude a JOIN sessions se ON se.id = a.session_id
                JOIN students_public s ON s.id = a.student_id WHERE s.class_id = ? AND s.active = 1""", (cid,))]
+    from .ops import class_key
+    class_moments: dict[int, list[dict]] = {}
+    for r in conn.execute("""SELECT m.*, se.date FROM moments m JOIN sessions se ON se.id = m.session_id
+                             WHERE se.date <= ? ORDER BY se.date, m.id""", (today.isoformat(),)):
+        lst = class_moments.setdefault(r["class_id"], [])
+        n = sum(1 for x in lst if x["date"] == r["date"]) + 1
+        ck = class_key(r["class_id"])
+        d0 = date.fromisoformat(r["date"])
+        lst.append({"date": r["date"], "n": n, "k": f"{ck}:{r['date']}:{n}", "text": r["text"] or "",
+                    "src": f"/m/{ck}/{r['date']}_{n}.jpg", "image_key": r["image_key"],
+                    "label": f"{d0.month}/{d0.day} ({wk[d0.weekday()]})"})
     new_videos = [v for v in videos if v["added"] and v["added"] >= (today - timedelta(days=6)).isoformat()]
     shorts = [v for v in videos if v["kind"] == "short"]
     longs = [v for v in videos if v["kind"] == "long"]
@@ -321,8 +332,12 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             d -= timedelta(days=1)
         week_k = sum(1 for x in week if x["done"])
 
-        # stories (own data only)
+        # stories (own data only; 오늘의 장면 is class-wide, never another student's)
         stories = []
+        week_moments = [m for m in class_moments.get(s["class_id"], [])
+                        if (today - timedelta(days=6)).isoformat() <= m["date"] <= today.isoformat()]
+        stories.append({"key": "moments", "label": S["story_moments"], "items": week_moments,
+                        "thumb": week_moments[-1]["src"] if week_moments else "", "hidden": not week_moments})
         if new_videos:
             stories.append({"key": "videos", "label": S["story_new_videos"], "items": new_videos,
                             "thumb": newest_thumb})
@@ -339,6 +354,8 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             content = {k: v for k, v in st_.items() if k not in ("label", "streak", "pct", "thumb")}
             if st_["key"] == "videos":
                 content = [v["id"] for v in st_["items"]]
+            if st_["key"] == "moments":
+                content = [m["k"] for m in st_["items"]]
             st_["hash"] = _hash([st_["key"], content, rw.total if st_["key"] == "goal" and rw else 0])
 
         # parent room: one report message per week (last PARENT_WEEKS weeks), newest open, earlier ones one line
@@ -396,6 +413,8 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                 "to_go": max(0, rw.goal - total_then) if rw else 0,
                 "note": wk_notes[-1]["text"] if wk_notes else "",
                 "ritual": ritual,
+                "moments": [m for m in class_moments.get(s["class_id"], [])
+                            if wm.isoformat() <= m["date"] <= we.isoformat()][:3],
             })
             wm += timedelta(weeks=1)
 
@@ -415,6 +434,8 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "toGo": rw.to_go if rw else 0,
             "weekStart": mon.isoformat(),
             "stories": {st_["key"]: st_["hash"] for st_ in stories},
+            "moments": [m["k"] for m in week_moments],
+            "momentsFrom": (today - timedelta(days=6)).isoformat(),
             "sets": set_labels(conn, cfg, s["class_id"]),
             "todayTime": _fmt_time(today_sub["ts"]) if today_sub else "",
             "classDays": sorted(x.isoformat() for x in cd if x >= today),
@@ -484,7 +505,8 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
     no Worker anywhere (uploads and check-ins run in the browser only)."""
     if taste:
         cfg = Config(worker_url="", pages_url="", teacher_token="", videos_path=cfg.videos_path,
-                     assignments_path=cfg.assignments_path, board_poll_seconds=cfg.board_poll_seconds)
+                     assignments_path=cfg.assignments_path, moments_dir=cfg.moments_dir,
+                     board_poll_seconds=cfg.board_poll_seconds)
     ctx = build_context(conn, cfg, today, now, taste=taste, scrub=lintmod.text_scrubber(conn))
     e = env()
     if out.exists():
@@ -499,6 +521,16 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
         for v in ctx["videos"]:
             if v["thumb_src"]:
                 make_thumb(v["thumb_src"], out / "t" / f"{v['id']}.jpg", max_w=360 if v["kind"] == "short" else 480)
+    from .moments import page_copy
+    wanted = {m["src"]: m["image_key"] for s_ in ctx["students"] for st_ in s_["stories"] if st_["key"] == "moments"
+              for m in st_["items"]}
+    wanted.update({m["src"]: m["image_key"] for s_ in ctx["students"] for w in s_["room"] for m in w["moments"]})
+    for src, key in wanted.items():
+        data = page_copy(cfg, key)
+        if data is not None:
+            dst = out / src.lstrip("/")
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_bytes(data)
     st, pt, gt, it = (e.get_template(n) for n in ("student.html", "parent.html", "go.html", "index.html"))
     for s in ctx["students"]:
         sd = out / "s" / (TASTE_PATH if taste else s["student_token"])

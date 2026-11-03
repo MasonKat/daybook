@@ -12,7 +12,7 @@ function Invoke-Step([string]$Label, [scriptblock]$Block) {
 Invoke-Step 'pytest' { .\.venv\Scripts\pytest.exe -q }
 
 Push-Location worker
-try { Invoke-Step 'worker node tests' { node --test test/worker.test.mjs test/checkin.test.mjs } } finally { Pop-Location }
+try { Invoke-Step 'worker node tests' { node --test test/worker.test.mjs test/checkin.test.mjs test/moments.test.mjs } } finally { Pop-Location }
 
 # Playwright: use an installed copy if Node can resolve it, else install it locally (needs network once).
 node -e "require('playwright')" 2>$null

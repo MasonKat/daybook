@@ -219,6 +219,11 @@ Worker once: `cd worker && npx wrangler deploy`.
 오늘 한 줄 (F3): students may add one line and a chip when they upload. Read them with `daybook lines 고1A --days 7`
 or on the board. Parents do not see them unless `"parent_shows_reflection": true` is set in daybook.json.
 
+오늘의 장면 (F4): during class, "장면 올리기" on the board (photo + one line, tick the faces/names check), or
+`daybook moment add 고1A --photo board.jpg --text "…"` and answer y. Up to 3 per class. Students see it the same day
+(after the Worker redeploy) and react 🔥 👏 🤯; Saturday's publish bakes it into the pages and the parent report.
+Never post faces, names or a whole book page.
+
 In class (P2, from the week after the pilot): `daybook board 고1A` → http://127.0.0.1:8787 (attitude 1·2·3, live ✓,
 "대신 제출"). Without the board: `daybook score 고1A <date> <slug> <0-3>` and `daybook submit <slug> --source paper`.
 

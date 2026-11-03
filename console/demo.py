@@ -58,7 +58,7 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
     if n and not force:
         raise DemoError("demo data already present; use --force to re-seed (or delete the demo database)")
     if n:
-        for t in ("attitude", "submissions", "tests", "notes", "effort", "sessions", "students", "classes"):
+        for t in ("attitude", "submissions", "checkins", "moments", "tests", "notes", "effort", "sessions", "students", "classes"):
             conn.execute(f"DELETE FROM {t}")
 
     rng = random.Random(rng_seed)
@@ -106,6 +106,27 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
             _seed_kong(conn, cid, sess, today, rng)
     log_event(conn, "demo_seed", {"today": today.isoformat()})
     conn.commit()
+
+
+MOMENT_TEXTS = ["칠판 위 인수분해 3단 콤보", "다 같이 풀어낸 마지막 문제", "오늘의 명풀이: 거꾸로 생각하기",
+                "그래프 한 장으로 끝낸 나머지정리"]
+
+
+def seed_moments(conn: sqlite3.Connection, cfg, today: date | None = None) -> int:
+    """Two synthetic moments per class on its latest class day <= today and one on the class day before."""
+    from . import moments as mm
+    today = today or M.kst_today()
+    imgs = mm.make_demo_moment_images(Path(cfg.moments_dir if Path(cfg.moments_dir).is_absolute()
+                                           else Path.cwd() / cfg.moments_dir) / "_demo_src")
+    n = 0
+    for k, cls in enumerate(conn.execute("SELECT * FROM classes ORDER BY id").fetchall()):
+        days = sorted(d for d in M.class_days(conn, cls, today) if d <= today)[-2:]
+        for j, d in enumerate(days):
+            for i in range(2 if j == len(days) - 1 else 1):
+                img = imgs[(k + j + i) % len(imgs)]
+                mm.add_moment(conn, cfg, cls, d, img.read_bytes(), MOMENT_TEXTS[(k + j + i) % len(MOMENT_TEXTS)], confirmed=True)
+                n += 1
+    return n
 
 
 def _seed_kong(conn: sqlite3.Connection, class_id: int, sess: dict, today: date, rng: random.Random) -> None:
