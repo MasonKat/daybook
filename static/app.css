@@ -127,6 +127,29 @@ body[data-page="student"] .app { display: flex; flex-direction: column; height: 
 .lt { margin: 0 0 var(--s1); font-size: 15px; }
 .lmeta p { margin: 0; display: flex; align-items: center; gap: var(--s3); }
 
+/* ---------- 오늘: the ritual (출석 → 과제 끝) */
+.rhead { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); margin-top: var(--s2); }
+.rtitle { font-size: 18px; margin: 0; }
+.steps { list-style: none; padding: 0; margin: var(--s3) 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); }
+.steps li { display: flex; align-items: center; gap: 6px; background: var(--card); border-radius: 999px; padding: 6px 10px; font-size: 13px; min-height: 36px; }
+.steps .sn { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: var(--line); font-size: 11px; font-weight: 800; flex: none; }
+.steps .sl { font-weight: 700; }
+.steps .sv2 { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.steps li.now { box-shadow: inset 0 0 0 2px var(--accent); }
+.steps li.ok .sn { background: var(--ok); color: #fff; }
+.plus.ck { border: 0; font-size: 60px; }
+.pad { position: fixed; inset: 0; z-index: 11; background: rgba(5, 7, 12, .72); display: flex; align-items: flex-end; justify-content: center; }
+.pad-box { width: 100%; max-width: 420px; background: var(--bg); color: var(--fg); border-radius: 20px 20px 0 0; padding: var(--s4) var(--s4) calc(var(--s4) + env(safe-area-inset-bottom)); text-align: center; }
+.pad-t { margin: 0; font-weight: 800; font-size: 16px; }
+.pad-d { display: flex; justify-content: center; gap: 10px; margin: var(--s3) 0 var(--s1); }
+.pad-d span { width: 48px; height: 58px; border-radius: 12px; background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 30px; font-weight: 800; box-shadow: inset 0 0 0 2px var(--line); }
+.pad-d span.on { box-shadow: inset 0 0 0 2px var(--accent); }
+.pad-err { min-height: 20px; margin: 0 0 var(--s2); font-size: 13px; color: var(--muted); }
+.pad-err.bad { color: var(--err); font-weight: 700; }
+.keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); }
+.keys button { min-height: 52px; border: 0; border-radius: 14px; background: var(--card); color: var(--fg); font: 700 22px var(--font); cursor: pointer; }
+.keys button:active { background: var(--line); }
+
 /* ---------- 오늘: new post */
 .set-chip { margin: var(--s1) 0 0; }
 .state { margin-top: var(--s3); }
@@ -258,6 +281,9 @@ body[data-page="parent"] { font-size: 14px; }
 .strip li.on .dot { color: var(--up); }
 .strip li.cls { box-shadow: inset 0 -2px 0 var(--accent); }
 .strip li.fut { opacity: .45; }
+.ritual { list-style: none; padding: 0; margin: 0 0 6px; font-size: 12px; color: var(--muted); }
+.ritual .rw { display: inline-block; min-width: 18px; font-weight: 700; color: var(--fg); }
+.ritual .late { color: var(--adjust); }
 .trend { width: 100%; height: auto; display: block; }
 .trend .grid { stroke: var(--line); stroke-width: 1; }
 .trend .axis { fill: var(--muted); font-size: 11px; }
@@ -288,7 +314,14 @@ body[data-page="parent"] { font-size: 14px; }
 .board .card { background: var(--card); }
 .board .bar .fill { background: var(--ok); }
 .roster { list-style: none; padding: 0; margin: 0; }
-.roster .row { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "nm sub" "btns subfor"; gap: 6px var(--s2); align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.codebox { text-align: center; padding: var(--s3) 0 var(--s2); }
+.code-l { font-size: 14px; color: var(--muted); font-weight: 700; }
+.code { font-size: 88px; line-height: 1.05; font-weight: 900; letter-spacing: .12em; }
+.arrivals { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: var(--s2); font-size: 13px; }
+.arr { background: var(--card); border-radius: 999px; padding: 2px 10px; }
+.roster .ck { grid-area: ck; font-size: 13px; color: var(--muted); }
+.roster .ckfor { font: inherit; font-size: 13px; min-height: 36px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer; }
+.roster .row { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "nm sub" "ck ck" "btns subfor"; gap: 6px var(--s2); align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .roster .nm { grid-area: nm; font-size: 20px; font-weight: 700; }
 .roster .sub { grid-area: sub; color: var(--up); font-weight: 700; margin: 0; font-size: 15px; }
 .roster .btns { grid-area: btns; display: flex; gap: var(--s2); }
@@ -296,7 +329,7 @@ body[data-page="parent"] { font-size: 14px; }
 .roster .pt { width: 52px; height: 44px; font-size: 20px; font-weight: 700; }
 .roster .pt.sel { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 .roster .subfor { grid-area: subfor; padding: var(--s2) var(--s3); font-size: 14px; min-height: 44px; }
-@media (min-width: 640px) { .roster .row { grid-template-columns: 1fr 100px auto auto; grid-template-areas: "nm sub btns subfor"; } }
+@media (min-width: 640px) { .roster .row { grid-template-columns: 1fr 110px 100px auto auto; grid-template-areas: "nm ck sub btns subfor"; } }
 
 /* ---------- taste build (F1) */
 .taste-bar { position: relative; z-index: 20; background: #f59e0b; color: #1f1300; text-align: center; font: 700 12px/1 var(--font); padding: 6px var(--s2); letter-spacing: .02em; }

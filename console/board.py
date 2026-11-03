@@ -27,37 +27,54 @@ class Board:
         self.lock = threading.Lock()
         self.S = strings()
         with self.conn() as conn:
+            dbmod.migrate(conn)
             cls = ops.get_class(conn, class_name)
             self.class_id = cls["id"]
-            self.session_id = ops.ensure_session(conn, cls["id"], day)
+            sess = ops.start_session(conn, cls, day)          # keeps an existing code / start time
+            self.session_id = sess["id"]
             conn.commit()
+            self.sent = False
+            if cfg.worker and cfg.teacher_token:
+                from .pull import http_put_json
+                try:
+                    http_put_json(cfg, "/session", ops.session_payload(conn, sess))
+                    self.sent = True
+                except PullError as e:
+                    print(f"board: 출석 code not sent to the Worker ({e})")
 
     def conn(self) -> sqlite3.Connection:
         return dbmod.connect(self.db_path)
 
     def state(self, conn: sqlite3.Connection) -> dict:
         cls = conn.execute("SELECT * FROM classes WHERE id = ?", (self.class_id,)).fetchone()
+        sess = conn.execute("SELECT * FROM sessions WHERE id = ?", (self.session_id,)).fetchone()
         rows = conn.execute(
-            """SELECT s.id, s.display_name, sub.ts, a.points FROM students_public s
+            """SELECT s.id, s.display_name, sub.ts, a.points, c.ts AS ck FROM students_public s
                LEFT JOIN submissions sub ON sub.student_id = s.id AND sub.day = ? AND sub.status != 'deleted'
                LEFT JOIN attitude a ON a.student_id = s.id AND a.session_id = ?
+               LEFT JOIN checkins c ON c.student_id = s.id AND c.session_id = ?
                WHERE s.class_id = ? AND s.active = 1 ORDER BY s.id""",
-            (self.day.isoformat(), self.session_id, self.class_id)).fetchall()
+            (self.day.isoformat(), self.session_id, self.session_id, self.class_id)).fetchall()
         reward = M.reward_for(conn, cls, self.day)
         three = [r["display_name"] for r in rows if r["points"] == 3]
-        students = [{"id": r["id"], "display_name": r["display_name"], "done": r["ts"] is not None,
-                     "time": M.utc_iso_to_kst(r["ts"]).strftime("%H:%M") if r["ts"] else "",
-                     "points": r["points"]} for r in rows]
-        return {"cls": cls, "students": students, "reward": reward, "three": three}
+        hm = lambda ts: M.utc_iso_to_kst(ts).strftime("%H:%M") if ts else ""   # noqa: E731
+        students = [{"id": r["id"], "display_name": r["display_name"], "done": r["ts"] is not None, "time": hm(r["ts"]),
+                     "points": r["points"], "ck": hm(r["ck"])} for r in rows]
+        arrivals = [{"initial": r["display_name"][:1], "time": hm(r["ck"])}
+                    for r in sorted((r for r in rows if r["ck"]), key=lambda r: r["ck"])]
+        return {"cls": cls, "students": students, "reward": reward, "three": three, "arrivals": arrivals,
+                "code": sess["code"] or "", "start": sess["start_time"] or ""}
 
     def state_json(self, conn) -> dict:
         st = self.state(conn)
         r = st["reward"]
         return {
-            "students": {str(s["id"]): {"done": s["done"], "time": s["time"], "points": s["points"]} for s in st["students"]},
+            "students": {str(s["id"]): {"done": s["done"], "time": s["time"], "points": s["points"], "ck": s["ck"]}
+                         for s in st["students"]},
             "pct": r.pct,
             "togo": self.S["reward_to_go"].format(label=r.label, n=r.to_go),
             "three": ", ".join(st["three"]) if st["three"] else self.S["board_none"],
+            "arrivals": st["arrivals"],
         }
 
     def page(self) -> str:
@@ -65,7 +82,7 @@ class Board:
             st = self.state(conn)
         tpl = generate.env().get_template("board.html")
         return tpl.render(S=self.S, page="board", cls=st["cls"], students=st["students"], reward=st["reward"],
-                          three=st["three"], poll=self.poll, poll_seconds=self.cfg.board_poll_seconds,
+                          three=st["three"], poll=self.poll, code=st["code"], start=st["start"], arrivals=st["arrivals"], poll_seconds=self.cfg.board_poll_seconds,
                           js=generate.json_script({"refresh": max(2, min(self.cfg.board_poll_seconds, 10))}))
 
     def poll_loop(self, stop: threading.Event) -> None:
@@ -134,6 +151,8 @@ def make_handler(board: Board):
                         ops.set_attitude(conn, sid, board.session_id, int(body.get("points")), said_aloud=True)
                     elif self.path == "/api/submit-for":
                         ops.teacher_submit(conn, sid, board.day, "teacher")
+                    elif self.path == "/api/checkin-for":
+                        ops.record_checkin(conn, sid, board.session_id, dbmod.now_utc_iso(), "teacher")
                     else:
                         return self._json({"ok": False, "error": "not_found"}, 404)
                 except (ops.OpError, TypeError, ValueError) as e:

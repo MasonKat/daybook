@@ -12,7 +12,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 KST = timezone(timedelta(hours=9))  # Asia/Seoul has no DST
 
 SCHEMA = """
@@ -49,7 +49,18 @@ CREATE TABLE IF NOT EXISTS sessions (
     set_id   TEXT,
     topic    TEXT,
     note     TEXT,
+    start_time TEXT,                      -- HH:MM (F2)
+    code     TEXT,                        -- 4-digit check-in code (F2)
     UNIQUE (class_id, date)
+);
+
+CREATE TABLE IF NOT EXISTS checkins (     -- 출석 (F2)
+    id         INTEGER PRIMARY KEY,
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    session_id INTEGER NOT NULL REFERENCES sessions(id),
+    ts         TEXT NOT NULL,
+    source     TEXT NOT NULL CHECK (source IN ('phone', 'teacher')),
+    UNIQUE (student_id, session_id)
 );
 
 CREATE TABLE IF NOT EXISTS submissions (
@@ -143,7 +154,26 @@ def connect(path: str | Path) -> sqlite3.Connection:
     return conn
 
 
+def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    return {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+
+
+def migrate(conn: sqlite3.Connection) -> None:
+    """Additive migrations for databases created by an older version (never drops data)."""
+    if not is_initialized(conn):
+        return
+    cols = _columns(conn, "sessions")
+    for col in ("start_time", "code"):
+        if col not in cols:
+            conn.execute(f"ALTER TABLE sessions ADD COLUMN {col} TEXT")
+    conn.executescript(SCHEMA)   # creates any new tables (IF NOT EXISTS)
+    if conn.execute("PRAGMA user_version").fetchone()[0] < SCHEMA_VERSION:
+        conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+    conn.commit()
+
+
 def init(conn: sqlite3.Connection) -> None:
+    migrate(conn)
     conn.executescript(SCHEMA)
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     conn.commit()

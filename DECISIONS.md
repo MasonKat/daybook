@@ -110,6 +110,17 @@ One line each. "deferred" = not built in P0, on purpose.
 - `make deploy-taste` / `scripts\deploy-taste.ps1` reseed `demo.sqlite` with `demo --force --no-publish` (so the real `dist/` is untouched) and deploy `dist-taste/` to the separate Pages project `daybook-taste`; the teacher runs them.
 - The taste banner is amber (#f59e0b), not a messenger brand colour.
 
+## F2: 출석 (2026-11-03)
+- Schema v2 (additive, migrated automatically on the next command): `checkins (id, student_id, session_id, ts, source phone|teacher, UNIQUE(student_id, session_id))`; `sessions.start_time` (HH:MM) and `sessions.code` (4 random digits, `secrets`). `PRAGMA user_version` = 2.
+- `daybook session start <class> [--at HH:MM]` (default now) keeps an existing code on re-runs (`--new-code` draws again) and PUTs `/session` with the class key, date, code, window (30 min before → 60 min after) and the token → class-key map of all active students. The Worker never sees a class name: the class key is fnv1a("class:<id>").
+- The board starts the session the same way (code kept), shows 오늘의 코드 in huge digits, the arrivals (initial + time) and a "출석 처리" button per student; `daybook checkin <slug>` is the CLI twin. Both write source `teacher`.
+- Worker: `PUT /session` (teacher), `POST /checkin` (Pages origin; t + code as form data), `GET /checkins?since=` (teacher), `/status` adds `checkin_ts`, `class_today`, `start`. The tokmap is one KV key. A refused check-in (wrong code, closed window, no class today, 5 wrong codes per token per day) answers 200 with `ok: false`, so the student's browser console stays clean; malformed input still gets 4xx.
+- After a successful check-in, any further check-in that day is idempotent (keeps the first time), even with a wrong code.
+- `daybook pull` also reads `/checkins` (same `since`) and creates the session row if needed.
+- Student 오늘 tab: on a class day (the published schedule or sessions, or `/status class_today`) the ritual is ① 출석 (4-digit pad, submits on the 4th digit) → ② 과제 끝 · 찍고 가자 (the photo). On other days the tab is "오늘 공부 인증" (the photo only). Step ② 오늘의 장면 arrives with F4; until then the steps are numbered 1–2.
+- Parent weekly report: one line per class day so far, "화 출석 18:02 · 끝 20:55" (– when missing); "지각" only with `"show_late": true` in daybook.json and a check-in after the start time. No points depend on time.
+- The deployed Worker must be redeployed (`cd worker && npx wrangler deploy`) for 출석; an older Worker keeps uploads working and `pull` skips check-ins.
+
 ## Deferred
 - deferred (local agent will add after the clone, before 수능 week): `daybook class cancel <class> <date>` so a closed day does not break streaks.
 - deferred: `export pdf` (the command is a stub that exits 2 with a message).

@@ -211,6 +211,11 @@ make deploy-pages
 - `daybook weekly 고1A` prints a paste-ready message per student with the parent link.
 - Pages lag up to a week by design. The student's 오늘 완료 is immediate, because it comes from the Worker.
 
+출석 (F2): at the start of class run `daybook session start 고1A --at 18:00` (or just open the board); write the printed
+4-digit code on the board. Students tap ① 출석 on the 오늘 tab and type it (30 min before → 60 min after the start).
+"출석 처리" on the board, or `daybook checkin <slug>`, covers a phone problem. After pulling this version, redeploy the
+Worker once: `cd worker && npx wrangler deploy`.
+
 In class (P2, from the week after the pilot): `daybook board 고1A` → http://127.0.0.1:8787 (attitude 1·2·3, live ✓,
 "대신 제출"). Without the board: `daybook score 고1A <date> <slug> <0-3>` and `daybook submit <slug> --source paper`.
 

@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 import re
+import secrets
 import sqlite3
-from datetime import date
+from datetime import date, datetime, timedelta
 
-from .db import log_event, new_token, now_utc_iso
+from .db import KST, log_event, new_token, now_utc_iso
 
 WEEK_RE = re.compile(r"^\d{4}-W(0[1-9]|[1-4]\d|5[0-3])$")
 
@@ -102,3 +103,57 @@ def rotate_tokens(conn: sqlite3.Connection, student: sqlite3.Row, which: str = "
         "student_id": student["id"], "which": which,
         "old_student_token": student["student_token"] if new_s != student["student_token"] else None,
     })
+
+
+# ---------------------------------------------------------------- 출석 (F2)
+
+TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+OPEN_BEFORE = timedelta(minutes=30)
+OPEN_AFTER = timedelta(minutes=60)
+
+
+def class_key(class_id: int) -> str:
+    """The Worker only ever sees this key, never a class name."""
+    from .generate import set_hash
+    return set_hash(f"class:{class_id}")
+
+
+def start_session(conn: sqlite3.Connection, cls: sqlite3.Row, day: date, at: str | None = None,
+                  set_id: str | None = None, topic: str | None = None, new_code: bool = False) -> sqlite3.Row:
+    """Create/update today's session with a start time and a random 4-digit code (kept on re-runs)."""
+    if at is not None and not TIME_RE.match(at):
+        raise OpError("--at must be HH:MM (24 h)")
+    sid = ensure_session(conn, cls["id"], day, set_id, topic)
+    row = conn.execute("SELECT * FROM sessions WHERE id = ?", (sid,)).fetchone()
+    start = at or row["start_time"] or datetime.now(KST).strftime("%H:%M")
+    code = row["code"] if row["code"] and not new_code else f"{secrets.randbelow(10000):04d}"
+    if (start, code) != (row["start_time"], row["code"]):
+        conn.execute("UPDATE sessions SET start_time = ?, code = ? WHERE id = ?", (start, code, sid))
+        log_event(conn, "session_code", {"session_id": sid, "start_time": start})
+    return conn.execute("SELECT * FROM sessions WHERE id = ?", (sid,)).fetchone()
+
+
+def session_window(day: date, start: str) -> tuple[datetime, datetime]:
+    h, m = map(int, start.split(":"))
+    t0 = datetime(day.year, day.month, day.day, h, m, tzinfo=KST)
+    return t0 - OPEN_BEFORE, t0 + OPEN_AFTER
+
+
+def session_payload(conn: sqlite3.Connection, sess: sqlite3.Row) -> dict:
+    """PUT /session body: the session (class key, code, window) + the token -> class-key map of all active students."""
+    day = date.fromisoformat(sess["date"])
+    t_from, t_until = session_window(day, sess["start_time"])
+    tokmap = {r["student_token"]: class_key(r["class_id"]) for r in conn.execute(
+        "SELECT student_token, class_id FROM students_public WHERE active = 1 AND class_id IS NOT NULL")}
+    return {"class": class_key(sess["class_id"]), "date": sess["date"], "code": sess["code"], "start": sess["start_time"],
+            "open_from": t_from.isoformat(), "open_until": t_until.isoformat(), "tokmap": tokmap}
+
+
+def record_checkin(conn: sqlite3.Connection, student_id: int, session_id: int, ts: str, source: str) -> bool:
+    if source not in ("phone", "teacher"):
+        raise OpError("source must be phone or teacher")
+    cur = conn.execute("INSERT OR IGNORE INTO checkins (student_id, session_id, ts, source) VALUES (?, ?, ?, ?)",
+                       (student_id, session_id, ts, source))
+    if cur.rowcount:
+        log_event(conn, "checkin", {"student_id": student_id, "session_id": session_id, "source": source}, ts)
+    return bool(cur.rowcount)

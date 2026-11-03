@@ -22,6 +22,21 @@ class PullError(RuntimeError):
     pass
 
 
+def http_put_json(cfg: Config, path: str, payload: dict) -> dict:
+    if not cfg.worker or not cfg.teacher_token:
+        raise PullError("worker_url and teacher_token must be set")
+    req = urllib.request.Request(cfg.worker + path, data=json.dumps(payload).encode("utf-8"), method="PUT",
+                                 headers={"X-Teacher-Token": cfg.teacher_token, "Content-Type": "application/json",
+                                          "User-Agent": "daybook-console"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.loads(r.read() or b"{}")
+    except urllib.error.HTTPError as e:
+        raise PullError(f"Worker answered {e.code} for {path}") from e
+    except urllib.error.URLError as e:
+        raise PullError(f"cannot reach the Worker: {e.reason}") from e
+
+
 def http_fetch(cfg: Config) -> Fetch:
     if not cfg.worker or not cfg.teacher_token:
         raise PullError("worker_url and teacher_token must be set (daybook.json or DAYBOOK_WORKER_URL / "
@@ -48,6 +63,7 @@ class PullReport:
     updated: int = 0
     unknown_tokens: int = 0
     photos: list[str] = field(default_factory=list)
+    checkins: int = 0
 
 
 def _token_map(conn: sqlite3.Connection) -> dict[str, int]:
@@ -95,11 +111,33 @@ def apply_items(conn: sqlite3.Connection, items: list[dict]) -> PullReport:
     return rep
 
 
+def apply_checkins(conn: sqlite3.Connection, items: list[dict], rep: PullReport) -> None:
+    from datetime import date as _date
+    from .ops import ensure_session, record_checkin
+    tokens = _token_map(conn)
+    for it in items:
+        sid = tokens.get(it.get("token", ""))
+        if sid is None:
+            rep.unknown_tokens += 1
+            continue
+        st = conn.execute("SELECT class_id FROM students WHERE id = ?", (sid,)).fetchone()
+        if not st or st["class_id"] is None:
+            continue
+        sess = ensure_session(conn, st["class_id"], _date.fromisoformat(it["day"]))
+        if record_checkin(conn, sid, sess, it["ts"], "phone"):
+            rep.checkins += 1
+
+
 def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None = None) -> PullReport:
     last = last_event(conn, "pull") or {}
     since = last.get("next_since", "")
     body = json.loads(fetch("/submissions" + (f"?since={urllib.parse.quote(since)}" if since else "")))
     rep = apply_items(conn, body.get("items", []))
+    try:
+        ck = json.loads(fetch("/checkins" + (f"?since={urllib.parse.quote(since)}" if since else "")))
+        apply_checkins(conn, ck.get("items", []), rep)
+    except PullError:
+        pass  # an older Worker without /checkins
     now = datetime.fromisoformat(body.get("now", datetime.now(timezone.utc).isoformat()).replace("Z", "+00:00"))
     next_since = (now - MARGIN).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     if photos_dir:
@@ -116,6 +154,7 @@ def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None =
             except PullError:
                 pass  # expired (7-day retention) or missing
     log_event(conn, "pull", {"since": since, "next_since": next_since, "fetched": rep.fetched, "new": rep.new,
-                             "updated": rep.updated, "unknown_tokens": rep.unknown_tokens})
+                             "updated": rep.updated, "unknown_tokens": rep.unknown_tokens,
+                             "checkins": rep.checkins})
     conn.commit()
     return rep

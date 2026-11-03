@@ -27,7 +27,8 @@ STATIC = ROOT / "static"
 SVG_W, SVG_H = 320, 150
 JS_STRINGS = ("done_title", "streak_label", "class_plus", "reward_to_go", "uploading", "upload_error",
               "upload_rate", "upload_offline", "replaced", "no_worker", "today_set", "set_default", "weekdays", "story_streak",
-              "recorded_at", "recorded")
+              "recorded_at", "recorded", "ritual_class", "ritual_study", "study_cta", "end_cta", "ck_done", "ck_bad",
+              "ck_closed", "ck_none", "ck_rate", "ck_error")
 YT_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 WEEKDAYS_FULL = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
 PARENT_WEEKS = 8      # weeks kept in the parent room
@@ -252,6 +253,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
     longs = [v for v in videos if v["kind"] == "long"]
     newest_thumb = next((v["thumb"] for v in (new_videos or videos) if v["thumb"]), "")
     published_at = _publish_times(conn)
+    show_late = bool(cfg.extra.get("show_late", False))
 
     students = []
     only = " AND slug = ?" if taste else ""
@@ -268,6 +270,9 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "SELECT se.date, a.points FROM attitude a JOIN sessions se ON se.id = a.session_id WHERE a.student_id = ?",
             (s["id"],))]
         three_days = {d for d, p in att if p == 3}
+        checkins = {r["date"]: r for r in conn.execute(
+            """SELECT se.date, se.start_time, c.ts FROM checkins c JOIN sessions se ON se.id = c.session_id
+               WHERE c.student_id = ?""", (s["id"],))}
         tests = conn.execute(
             "SELECT date, test_name, reach, efficiency FROM tests WHERE student_id = ? ORDER BY date, id",
             (s["id"],)).fetchall()
@@ -342,6 +347,15 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                 at = published_at[stamp] if pubs else None
             mth, nth = _week_of_month(wm)
             k = sum(1 for x in wdays if x["done"])
+            ritual = []
+            for x in wdays:
+                ck = checkins.get(x["date"])
+                if x["future"] or not (x["class_day"] or ck):
+                    continue
+                t_in = _fmt_time(ck["ts"]) if ck else ""
+                late = bool(show_late and ck and ck["start_time"] and t_in > ck["start_time"])
+                if t_in or x["time"]:
+                    ritual.append({"wd": x["wd"], "in": t_in, "out": x["time"], "late": late})
             wsum = _sum_upto(att, wm, cut)
             dir_eff = S["dir_" + trend["lines"]["eff"].dir] if trend else ""
             rng = f"{_md(wm)}–{_md(we)}"
@@ -360,6 +374,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                 "bar_pct": (min(100.0, 100.0 * total_then / rw.goal) if rw and rw.goal > 0 and current else None),
                 "to_go": max(0, rw.goal - total_then) if rw else 0,
                 "note": wk_notes[-1]["text"] if wk_notes else "",
+                "ritual": ritual,
             })
             wm += timedelta(weeks=1)
 
@@ -381,6 +396,8 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "stories": {st_["key"]: st_["hash"] for st_ in stories},
             "sets": set_labels(conn, cfg, s["class_id"]),
             "todayTime": _fmt_time(today_sub["ts"]) if today_sub else "",
+            "classDays": sorted(x.isoformat() for x in cd if x >= today),
+            "checkinTime": _fmt_time(checkins[today.isoformat()]["ts"]) if today.isoformat() in checkins else "",
             "taste": taste,
             "S": {k: S[k] for k in JS_STRINGS},
         }

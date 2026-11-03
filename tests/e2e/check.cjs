@@ -164,14 +164,23 @@ async function audit(browser, url, file, label, viewport, colorScheme) {
     const thumbs = fs.existsSync(path.join(DIST, 't')) ? fs.readdirSync(path.join(DIST, 't')) : [];
     check(thumbs.length > 0 && thumbs.every((f) => fs.statSync(path.join(DIST, 't', f)).size <= 60 * 1024), `${thumbs.length} thumbnails in dist/t, each <= 60 KB`);
 
-    /* pick a student of 고1A without a submission today (the demo leaves the first one open) */
+    /* today's class (F2): the demo has 고1A on 화·금 and 기초B on 월·수. The class with class today gets a session
+       (code + window) through the real CLI; the other one has no class today (on 목·토·일 고1A gets the session). */
     const today = kstToday();
-    const pick = JSON.parse(execFileSync(PYTHON, ['-c', `
+    const wdNow = (new Date(today + 'T00:00:00Z').getUTCDay() + 6) % 7;
+    const CLASS_ON = [0, 2].includes(wdNow) ? '기초B' : '고1A';
+    const CLASS_OFF = CLASS_ON === '고1A' ? '기초B' : '고1A';
+    const nowHM = new Date(Date.now() + 9 * 3600e3).toISOString().slice(11, 16);
+    const pickFrom = (cls) => JSON.parse(execFileSync(PYTHON, ['-c', `
 import json, sqlite3, sys
 c = sqlite3.connect(sys.argv[1]); c.row_factory = sqlite3.Row
 r = c.execute("""SELECT s.student_token, s.parent_token, s.display_name FROM students_public s JOIN classes k ON k.id = s.class_id
-  WHERE k.name = '고1A' AND s.active = 1 AND s.id NOT IN (SELECT student_id FROM submissions WHERE day = ?) ORDER BY s.id LIMIT 1""", (sys.argv[2],)).fetchone()
-print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today], { encoding: 'utf-8' }));
+  WHERE k.name = ? AND s.active = 1 AND s.id NOT IN (SELECT student_id FROM submissions WHERE day = ?) ORDER BY s.id LIMIT 1""", (sys.argv[3], sys.argv[2])).fetchone()
+print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' }));
+    const pick = pickFrom(CLASS_ON), offPick = pickFrom(CLASS_OFF);
+    const started = daybook('session', 'start', CLASS_ON, '--at', nowHM);
+    const CODE = (started.match(/오늘의 코드: (\d{4})/) || [])[1];
+    check(!!CODE && /sent to the Worker/.test(started), `daybook session start ${CLASS_ON} --at ${nowHM}: code drawn and sent to the Worker`);
     const tok = pick.student_token;
 
     console.log('\n[2] student 오늘 tab: photo -> shrink -> Worker -> 오늘 완료');
@@ -185,7 +194,18 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today], { encoding: 'utf-8' }));
     page.on('request', (r) => { const u = r.url(); if (!u.startsWith(PAGES) && !u.startsWith(WORKER) && !u.startsWith('blob:') && !u.startsWith('data:')) foreignBefore.push(u); });
     await page.route(/youtube-nocookie\.com/, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>stub</title>' }));
     await page.goto(`${PAGES}/s/${tok}/?set=Adaptive_Screeners_3S_Nov06_G10#today`, { waitUntil: 'networkidle' });
-    check(await page.isVisible('#st-idle .plus'), 'idle state with the round + button');
+    check((await page.textContent('#r-title')) === '오늘 수업' && await page.isVisible('#steps') && await page.isVisible('#st-checkin') && await page.isHidden('#st-idle'),
+      'class day: the ritual starts with ① 출석');
+    await page.click('#ck-open');
+    for (const k of (CODE === '0000' ? '1111' : '0000')) await page.click(`#keys button[data-k="${k}"]`);
+    await page.waitForFunction(() => /코드가 달라요/.test(document.getElementById('pad-err').textContent), null, { timeout: 5000 }).catch(() => {});
+    check(/코드가 달라요 \(4번 남음\)/.test(await page.textContent('#pad-err')), `a wrong code is refused ("${await page.textContent('#pad-err')}")`);
+    await page.screenshot({ path: path.join(SHOTS, 'student-checkin-pad.png') });
+    for (const k of CODE) await page.click(`#keys button[data-k="${k}"]`);
+    await page.waitForSelector('#st-idle:not([hidden])', { timeout: 5000 }).catch(() => {});
+    check(await page.isHidden('#pad') && /^\d\d:\d\d$/.test(await page.textContent('#sp-ck-v')) && await page.isVisible('#st-idle .plus'),
+      `the right code checks in (출석 ${await page.textContent('#sp-ck-v')}) and moves on to ② 과제 끝`);
+    check((await page.textContent('#cta')) === '과제 끝 · 찍고 가자', 'step ② reads "과제 끝 · 찍고 가자"');
     const setText = await page.textContent('#today-set');
     check(/^\d{1,2}\/\d{1,2} 과제$/.test(setText) && !/Adaptive|_G\d/.test(setText), `?set= shows a clean label, never the raw id ("${setText}")`);
     const png = path.join(require('os').tmpdir(), 'daybook-e2e-photo.png');
@@ -219,6 +239,13 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today], { encoding: 'utf-8' }));
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForSelector('#st-done:not([hidden])', { timeout: 5000 }).catch(() => {});
     check(await page.isVisible('#st-done'), 'reopening the page shows today as done (Worker /status)');
+
+    const offCtx = await browser.newContext({ viewport: PHONE });
+    const off = await offCtx.newPage();
+    await off.goto(`${PAGES}/s/${offPick.student_token}/#today`, { waitUntil: 'networkidle' });
+    check((await off.textContent('#r-title')) === '오늘 공부 인증' && await off.isHidden('#steps') && await off.isHidden('#st-checkin') && await off.isVisible('#st-idle'),
+      `no class today (${CLASS_OFF}): 출석 hides, the tab is "오늘 공부 인증" (photo only)`);
+    await offCtx.close();
 
     console.log('\n[2b] stories, reels, profile');
     const nStories = await page.locator('.story').count();
@@ -363,6 +390,8 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today], { encoding: 'utf-8' }));
         const wd = (new Date(today + 'T00:00:00Z').getUTCDay() + 6) % 7;
         const cell = (await last.locator('ol.strip li').nth(wd).innerText()).replace(/\s+/g, ' ');
         check(/✓ \d\d:\d\d/.test(cell), `newest report shows today's ✓ and time (${cell})`);
+        const rit = await last.locator('.ritual').innerText().catch(() => '');
+        check(/출석 \d\d:\d\d · 끝 \d\d:\d\d/.test(rit) && !/지각/.test(rit), `parent row shows both times (${rit.split('\n').pop()}), no 지각 label`);
         check(/제출 \d+일 \(수업일 \d+일 중 \d+일\)|제출 \d+일$/m.test(await last.innerText()), 'count reads "제출 k일 (수업일 c일 중 d일)"');
         check(/^주간 리포트 · \d{1,2}월 \d주 \(\d+\/\d+–\d+\/\d+\)$/.test((await last.locator('.report h2').innerText()).trim()), `title "${(await last.locator('.report h2').innerText()).trim()}"`);
         check(/업데이트 \d{4}-\d\d-\d\d \d\d:\d\d/.test(await pp.textContent('footer')), 'footer update time');
@@ -379,14 +408,21 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today], { encoding: 'utf-8' }));
     }
 
     console.log('\n[6] board (127.0.0.1): live ✓, attitude buttons write and move the bar');
-    board = spawn(DAYBOOK, ['board', '고1A', '--port', String(BOARD_PORT)], { env, cwd: ROOT, stdio: 'ignore' });
+    board = spawn(DAYBOOK, ['board', CLASS_ON, '--port', String(BOARD_PORT)], { env, cwd: ROOT, stdio: 'ignore' });
     await waitFor(BOARD + '/api/state');
     const bctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const bp = await bctx.newPage();
     const berrs = [];
     bp.on('console', (m) => { if (m.type() === 'error') berrs.push(m.text()); });
     await bp.goto(BOARD + '/', { waitUntil: 'networkidle' });
+    check((await bp.textContent('#b-code')).trim() === CODE && /\d\d:\d\d/.test(await bp.textContent('#b-arrivals')), `board shows 오늘의 코드 ${CODE} and the arrival`);
     const row = bp.locator('.row', { hasText: pick.display_name });
+    check(/출석 \d\d:\d\d/.test(await row.locator('.ck').innerText()), 'the row shows the pulled 출석 time');
+    const otherId = await bp.locator('.row').filter({ has: bp.locator('button.ckfor') }).first().getAttribute('data-id');
+    const other = bp.locator(`.row[data-id="${otherId}"]`);
+    await other.locator('button.ckfor').click();
+    await bp.waitForTimeout(300);
+    check(/출석 \d\d:\d\d/.test(await other.locator('.ck').innerText()), '"출석 처리" checks a student in from the board (source teacher)');
     check(/✓ \d\d:\d\d/.test(await row.locator('.sub').innerText()), `board shows the pulled submission for ${pick.display_name.replace(/./g, '*')}`);
     const before = await bp.$eval('#b-fill', (e) => parseFloat(e.style.width));
     await row.locator('button.pt[data-p="3"]').click();
@@ -422,6 +458,12 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today], { encoding: 'utf-8' }));
       await tp.waitForLoadState('networkidle');
       check(await tp.isVisible('.taste-bar') && (await tp.textContent('.who, .sbar')).length > 0, 'student page /s/kong/ with the banner');
       check(/^20$|^21$/.test((await tp.textContent('.story[data-story="streak"] b')).trim()), `콩's streak ring shows ${(await tp.textContent('.story[data-story="streak"] b')).trim()}`);
+      check(await tp.isVisible('#st-checkin'), 'taste: 콩 starts with ① 출석 (simulated)');
+      await tp.click('#ck-open');
+      for (const k of '1234') await tp.click(`#keys button[data-k="${k}"]`);
+      await tp.waitForSelector('#st-idle:not([hidden])', { timeout: 3000 });
+      check(/^\d\d:\d\d$/.test(await tp.textContent('#sp-ck-v')), 'taste: any 4 digits check in locally');
+      await tp.screenshot({ path: path.join(SHOTS, 'taste-ritual.png') });
       await tp.setInputFiles('#photo', png);
       await tp.click('#post');
       await tp.waitForSelector('#st-done:not([hidden])', { timeout: 5000 });

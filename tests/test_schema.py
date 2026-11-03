@@ -52,3 +52,28 @@ def test_generator_reads_only_the_public_view():
         assert not re.search(r"\b(FROM|JOIN)\s+students\b(?!_public)", src), name
         for col in ("full_name", "parent_phone", "ext_id"):
             assert col not in src, (name, col)
+
+
+def test_migrates_a_v1_database_without_losing_data(tmp_path):
+    p = tmp_path / "old.sqlite"
+    c = sqlite3.connect(p)
+    c.executescript("""
+        CREATE TABLE classes (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, term TEXT, weekday_mask INTEGER NOT NULL DEFAULT 0,
+            reward_label TEXT, reward_goal_points INTEGER, goal_coef REAL DEFAULT 2.4, milestone_fracs TEXT DEFAULT '0.33,0.67');
+        CREATE TABLE students (id INTEGER PRIMARY KEY, slug TEXT NOT NULL UNIQUE, full_name TEXT NOT NULL, display_name TEXT NOT NULL,
+            class_id INTEGER, track TEXT, parent_phone TEXT, student_token TEXT NOT NULL UNIQUE, parent_token TEXT NOT NULL UNIQUE,
+            active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, ext_id TEXT UNIQUE);
+        CREATE TABLE sessions (id INTEGER PRIMARY KEY, class_id INTEGER NOT NULL, date TEXT NOT NULL, set_id TEXT, topic TEXT, note TEXT,
+            UNIQUE (class_id, date));
+        INSERT INTO classes (name) VALUES ('B');
+        INSERT INTO sessions (class_id, date) VALUES (1, '2026-11-02');
+        PRAGMA user_version = 1;""")
+    c.commit()
+    c.close()
+    conn = dbmod.connect(p)
+    dbmod.migrate(conn)
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(sessions)")}
+    assert {"start_time", "code"} <= cols
+    assert conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 1
+    assert conn.execute("SELECT name FROM sqlite_master WHERE name = 'checkins'").fetchone()
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == dbmod.SCHEMA_VERSION

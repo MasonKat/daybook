@@ -5,6 +5,11 @@
   <span class="who" id="b-poll">{{ S.board_poll_on | fmt(n=poll_seconds) if poll else S.board_poll_off }}</span>
 </header>
 <main class="board">
+<section class="codebox">
+  <div class="code-l">{{ S.board_code }}{% if start %} · {{ start }}{% endif %}</div>
+  <div class="code tnum" id="b-code">{{ code }}</div>
+  <div class="arrivals" id="b-arrivals">{% for a in arrivals %}<span class="arr"><b>{{ a.initial }}</b> {{ a.time }}</span>{% else %}<span class="muted">{{ S.board_no_arrivals }}</span>{% endfor %}</div>
+</section>
 <section class="card">
   <div class="bar" role="img" aria-label="{{ S.class_bar }}">
     <div class="fill" id="b-fill" style="width: {{ '%.1f' % reward.pct }}%"></div>
@@ -16,6 +21,7 @@
   {% for s in students %}
   <li class="row{{ ' on' if s.done }}" data-id="{{ s.id }}">
     <span class="nm">{{ s.display_name }}</span>
+    <span class="ck">{% if s.ck %}{{ S.ritual_in }} {{ s.ck }}{% else %}<button type="button" class="ckfor">{{ S.board_checkin_for }}</button>{% endif %}</span>
     <span class="sub" title="{{ S.board_submitted }}">{{ ('✓ ' ~ s.time) if s.done else '' }}</span>
     <span class="btns">
       {% for p in (1, 2, 3) %}<button type="button" class="pt{{ ' sel' if s.points == p }}" data-p="{{ p }}">{{ p }}</button>{% endfor %}

@@ -76,6 +76,67 @@ async function submit(req, env, h) {
   return json({ ok: true, ts: rec.ts, day, already: !!prev, days }, 200, h);
 }
 
+// ---- 출석 (F2): the console PUTs today's session (code + window) and the token -> class map; students check in.
+const CLASS_RE = /^[a-z0-9]{1,12}$/;
+const CODE_RE = /^\d{4}$/;
+
+async function classOf(env, token) {
+  const map = await env.SUBMISSIONS.get('tokmap', 'json');
+  return (map && map[token]) || null;
+}
+
+async function putSession(req, env) {
+  let b;
+  try { b = await req.json(); } catch { return json({ ok: false, error: 'bad_json' }, 400, {}); }
+  const { class: cls, date, code, open_from: from, open_until: until, start } = b || {};
+  if (!CLASS_RE.test(cls || '') || !/^\d{4}-\d{2}-\d{2}$/.test(date || '') || !CODE_RE.test(code || '') ||
+      Number.isNaN(Date.parse(from)) || Number.isNaN(Date.parse(until))) return json({ ok: false, error: 'bad_session' }, 400, {});
+  if (b.tokmap && typeof b.tokmap === 'object') {
+    const clean = {};
+    for (const [t, c] of Object.entries(b.tokmap)) if (TOKEN_RE.test(t) && CLASS_RE.test(String(c))) clean[t] = String(c);
+    await env.SUBMISSIONS.put('tokmap', JSON.stringify(clean));
+  }
+  const rec = { class: cls, date, code, open_from: new Date(from).toISOString(), open_until: new Date(until).toISOString(), start: String(start || '').slice(0, 5) };
+  await env.SUBMISSIONS.put(`session:${cls}:${date}`, JSON.stringify(rec), { expirationTtl: 2 * DAY });
+  return json({ ok: true }, 200, {});
+}
+
+async function checkin(req, env, h) {
+  const now = Date.now(), day = seoulDay(now), kv = env.SUBMISSIONS;
+  let form;
+  try { form = await req.formData(); } catch { return json({ ok: false, error: 'bad_form' }, 400, h); }
+  const token = String(form.get('t') || '').toLowerCase(), code = String(form.get('code') || '');
+  if (!TOKEN_RE.test(token)) return json({ ok: false, error: 'bad_token' }, 400, h);
+  const done = await kv.get(`checkin:${day}:${token}`, 'json');
+  if (done) return json({ ok: true, already: true, ts: done.ts, day }, 200, h);
+  const failKey = `ckfail:${day}:${token}`, fails = Number(await kv.get(failKey)) || 0;
+  // refusals are answers, not faults: 200 + ok:false (a 4xx would show as an error in the student's browser console)
+  if (fails >= num(env.CHECKIN_FAILS_PER_DAY, 5)) return json({ ok: false, error: 'rate_limited' }, 200, h);
+  const cls = await classOf(env, token);
+  const sess = cls ? await kv.get(`session:${cls}:${day}`, 'json') : null;
+  if (!sess) return json({ ok: false, error: 'no_class_today' }, 200, h);
+  if (now < Date.parse(sess.open_from) || now > Date.parse(sess.open_until)) return json({ ok: false, error: 'closed' }, 200, h);
+  if (!CODE_RE.test(code) || code !== sess.code) {
+    await kv.put(failKey, String(fails + 1), { expirationTtl: 2 * DAY });
+    return json({ ok: false, error: 'bad_code', left: Math.max(0, num(env.CHECKIN_FAILS_PER_DAY, 5) - fails - 1) }, 200, h);
+  }
+  const rec = { token, class: cls, day, ts: new Date(now).toISOString() };
+  await kv.put(`checkin:${day}:${token}`, JSON.stringify(rec), { expirationTtl: num(env.RECORD_TTL_DAYS, 14) * DAY, metadata: rec });
+  return json({ ok: true, already: false, ts: rec.ts, day }, 200, h);
+}
+
+async function listByPrefix(url, env, prefix) {
+  const since = url.searchParams.get('since') || '';
+  const items = [];
+  let cursor;
+  do {
+    const page = await env.SUBMISSIONS.list({ prefix, cursor });
+    for (const k of page.keys) if (k.metadata && (!since || (k.metadata.updated || k.metadata.ts) > since)) items.push(k.metadata);
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  return items;
+}
+
 async function listSubmissions(url, env, h) {
   const since = url.searchParams.get('since') || '';
   const items = [];
@@ -107,7 +168,7 @@ export default {
     const url = new URL(req.url);
     const h = corsHeaders(req, env);
     const origin = req.headers.get('Origin');
-    const isStudent = url.pathname === '/submit' || url.pathname === '/status';
+    const isStudent = url.pathname === '/submit' || url.pathname === '/status' || url.pathname === '/checkin';
     // CORS: browsers may only call the student endpoints from the Pages origin.
     if (isStudent && origin && origin !== env.ALLOWED_ORIGIN) return json({ ok: false, error: 'origin' }, 403, h);
     if (req.method === 'OPTIONS') return new Response(null, { status: isStudent ? 204 : 404, headers: h });
@@ -117,7 +178,19 @@ export default {
       const token = (url.searchParams.get('t') || '').toLowerCase();
       if (!TOKEN_RE.test(token)) return json({ ok: false, error: 'bad_token' }, 400, h);
       const day = seoulDay(Date.now());
-      return json({ ok: true, day, days: await recentDays(env, token, day) }, 200, h);
+      const [days, ck, cls] = await Promise.all([recentDays(env, token, day), env.SUBMISSIONS.get(`checkin:${day}:${token}`, 'json'), classOf(env, token)]);
+      const sess = cls ? await env.SUBMISSIONS.get(`session:${cls}:${day}`, 'json') : null;
+      return json({ ok: true, day, days, checkin_ts: ck ? ck.ts : null, class_today: !!sess, start: sess ? sess.start : null }, 200, h);
+    }
+    if (url.pathname === '/checkin' && req.method === 'POST') return checkin(req, env, h);
+    if (url.pathname === '/session' || url.pathname === '/checkins') {
+      if (!teacherOk(req, env)) return json({ ok: false, error: 'unauthorized' }, 401, {});
+      if (url.pathname === '/session' && req.method === 'PUT') return putSession(req, env);
+      if (url.pathname === '/checkins' && req.method === 'GET') {
+        const items = (await listByPrefix(url, env, 'checkin:')).sort((a, b) => (a.ts < b.ts ? -1 : 1));
+        return json({ now: new Date().toISOString(), items }, 200, {});
+      }
+      return json({ ok: false, error: 'method' }, 405, {});
     }
     if (url.pathname === '/submissions' || url.pathname === '/photo') {
       if (!teacherOk(req, env)) return json({ ok: false, error: 'unauthorized' }, 401, {});

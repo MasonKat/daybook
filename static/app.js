@@ -270,8 +270,77 @@
       });
     }
 
+    /* ---- 오늘: the ritual. Class day: ① 출석 (4-digit code) → ② 과제 끝 (photo). Other days: 오늘 공부 인증 (photo). */
+    var classToday = TASTE || (D.classDays || []).indexOf(today) >= 0 || isClassDay(today);
+    var CKEY = 'daybook.ck.' + tok + '.';
+    var ckTime = LS.get(CKEY + today) || (today === D.pub ? D.checkinTime || '' : '');
+    function hhmm(iso) { return new Date(Date.parse(iso) + 9 * 3600e3).toISOString().slice(11, 16); }
+    function renderRitual() {
+      $('r-title').textContent = classToday ? S.ritual_class : S.ritual_study;
+      $('steps').hidden = !classToday;
+      $('cta').textContent = classToday ? S.end_cta : S.study_cta;
+      $('cta-vh').textContent = $('cta').textContent;
+      var ck = $('sp-ck'), en = $('sp-end');
+      ck.classList.toggle('ok', !!ckTime);
+      $('sp-ck-v').textContent = ckTime;
+      en.classList.toggle('ok', !!known[today]);
+      $('sp-end-v').textContent = known[today] ? (LS.get(TKEY + today) || (today === D.pub ? D.todayTime : '') || '✓') : '';
+      ck.classList.toggle('now', classToday && !ckTime);
+      en.classList.toggle('now', !!(classToday && ckTime && !known[today]));
+    }
+    function idleState() { return classToday && !ckTime ? 'checkin' : 'idle'; }
+
+    /* the 4-digit pad */
+    var pad = $('pad'), digits = '', padBusy = false;
+    function padRender(msg, bad) {
+      var sp = $('pad-d').children;
+      for (var i = 0; i < 4; i++) { sp[i].textContent = digits[i] || ''; sp[i].classList.toggle('on', i === digits.length); }
+      if (msg !== undefined) { $('pad-err').textContent = msg; $('pad-err').classList.toggle('bad', !!bad); }
+    }
+    function padOpen() { digits = ''; padRender(); pad.hidden = false; }
+    function padClose() { pad.hidden = true; }
+    function checkedIn(iso) {
+      ckTime = hhmm(iso);
+      LS.set(CKEY + today, ckTime);
+      padClose();
+      renderRitual();
+      if (!known[today]) show('idle');
+    }
+    function padSubmit() {
+      padBusy = true;
+      if (TASTE) {   /* simulated: any 4 digits, nothing is sent */
+        setTimeout(function () { padBusy = false; checkedIn(new Date().toISOString()); }, 300);
+        return;
+      }
+      var fd = new FormData();
+      fd.append('t', tok);
+      fd.append('code', digits);
+      fetch(D.worker + '/checkin', { method: 'POST', body: fd })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { j.status = r.status; return j; }); })
+        .then(function (j) {
+          padBusy = false;
+          if (j.ok) return checkedIn(j.ts);
+          digits = '';
+          var msg = j.error === 'bad_code' ? fmt(S.ck_bad, { n: j.left }) : j.error === 'closed' ? S.ck_closed
+            : j.error === 'no_class_today' ? S.ck_none : j.error === 'rate_limited' ? S.ck_rate : S.ck_error;
+          padRender(msg, true);
+        })
+        .catch(function () { padBusy = false; digits = ''; padRender(S.ck_error, true); });
+    }
+    $('ck-open').addEventListener('click', padOpen);
+    $('keys').addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (!b || padBusy) return;
+      var k = b.getAttribute('data-k');
+      if (k === 'x') return padClose();
+      if (k === 'b') digits = digits.slice(0, -1);
+      else if (digits.length < 4) digits += k;
+      padRender('', false);
+      if (digits.length === 4) padSubmit();
+    });
+
     /* ---- 오늘: pick -> preview -> 올리기 -> done */
-    var states = ['idle', 'preview', 'done', 'err'];
+    var states = ['checkin', 'idle', 'preview', 'done', 'err'];
     function show(state) { states.forEach(function (s) { $('st-' + s).hidden = s !== state; }); }
     var TKEY = 'daybook.time.' + tok + '.';
     function showDone(replaced) {
@@ -291,14 +360,20 @@
     }
 
     if (known[today]) showDone(false);
+    else show(idleState());
     renderLive();
+    renderRitual();
     if (D.worker && tok) {
       fetch(D.worker + '/status?t=' + tok, { cache: 'no-store' })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) {
           if (!j || !j.days) return;
           remember(j.days);
+          if (j.class_today) classToday = true;
+          if (j.checkin_ts) { ckTime = hhmm(j.checkin_ts); LS.set(CKEY + today, ckTime); }
           renderLive();
+          renderRitual();
+          if (!known[today] && $('st-preview').hidden && $('st-err').hidden) show(idleState());
           if (known[today] && $('st-preview').hidden) showDone(false);
         })
         .catch(function () { /* offline: the published data is enough */ });
@@ -328,6 +403,7 @@
         }
         remember((j.days || []).concat([today]));
         renderLive();
+        renderRitual();
         picked = null;
         showDone(!!j.already);
       } else {
@@ -416,12 +492,26 @@
         row.classList.toggle('on', !!s.done);
         row.querySelector('.sub').textContent = s.done ? '✓ ' + s.time : '';
         row.querySelector('.subfor').hidden = !!s.done;
+        var ck = row.querySelector('.ck');
+        if (ck && s.ck) ck.textContent = (D.S_in || '출석') + ' ' + s.ck;
         var bs = row.querySelectorAll('.pt');
         for (var j = 0; j < bs.length; j++) bs[j].classList.toggle('sel', Number(bs[j].getAttribute('data-p')) === s.points);
       }
       $('b-fill').style.width = st.pct.toFixed(1) + '%';
       $('b-togo').textContent = st.togo;
       $('b-three').textContent = st.three;
+      if (st.arrivals) {
+        var a = $('b-arrivals');
+        if (st.arrivals.length) {
+          a.innerHTML = '';
+          st.arrivals.forEach(function (x) {
+            var sp = document.createElement('span'), b = document.createElement('b');
+            sp.className = 'arr'; b.textContent = x.initial;
+            sp.appendChild(b); sp.appendChild(document.createTextNode(' ' + x.time));
+            a.appendChild(sp);
+          });
+        }
+      }
     }
     $('roster').addEventListener('click', function (e) {
       var b = e.target.closest('button');
@@ -429,6 +519,7 @@
       var id = Number(b.closest('.row').getAttribute('data-id'));
       if (b.classList.contains('pt')) post('/api/attitude', { student_id: id, points: Number(b.getAttribute('data-p')) }).then(apply);
       else if (b.classList.contains('subfor')) post('/api/submit-for', { student_id: id }).then(apply);
+      else if (b.classList.contains('ckfor')) post('/api/checkin-for', { student_id: id }).then(apply);
     });
     setInterval(function () {
       fetch('/api/state', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(apply).catch(function () {});

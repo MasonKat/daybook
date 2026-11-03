@@ -62,3 +62,18 @@ def test_board_submit_for_and_guards(server, conn, klass):
     assert post(url + "/api/attitude", {"student_id": 999, "points": 2})[0] == 404
     assert post(url + "/api/attitude", {"student_id": studs[0]["id"], "points": 9})[0] == 400
     assert urllib.request.urlopen(url + "/static/app.css").status == 200
+
+
+def test_board_code_and_checkin_for(server, conn, klass):
+    url, b = server
+    _, studs = klass
+    html = urllib.request.urlopen(url + "/").read().decode("utf-8")
+    code = conn.execute("SELECT code FROM sessions WHERE id = ?", (b.session_id,)).fetchone()[0]
+    assert code and f'id="b-code">{code}<' in html and "출석 처리" in html
+    code_, st = post(url + "/api/checkin-for", {"student_id": studs[2]["id"]})
+    assert code_ == 200 and st["students"][str(studs[2]["id"])]["ck"]
+    assert st["arrivals"][0]["initial"] == studs[2]["display_name"][:1]
+    row = conn.execute("SELECT source FROM checkins WHERE student_id = ?", (studs[2]["id"],)).fetchone()
+    assert row["source"] == "teacher"
+    post(url + "/api/checkin-for", {"student_id": studs[2]["id"]})          # idempotent
+    assert conn.execute("SELECT COUNT(*) FROM checkins").fetchone()[0] == 1

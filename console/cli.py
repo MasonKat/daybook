@@ -26,6 +26,7 @@ class Ctx:
             self._conn = dbmod.connect(self.db_path)
             if not dbmod.is_initialized(self._conn):
                 raise click.ClickException(f"{self.db_path} has no schema yet: run `daybook init` first")
+            dbmod.migrate(self._conn)
         return self._conn
 
 
@@ -319,19 +320,47 @@ def session():
 @session.command("start")
 @click.argument("class_name")
 @click.option("--date", "d", default=None)
+@click.option("--at", "at", default=None, help="Start time HH:MM (default: now). 출석 opens 30 min before, closes 60 min after.")
 @click.option("--set", "set_id", default=None)
-@click.option("--topic", default=None)
+@click.option("--topic", default=None, help="Label students see for this set (else \"M/D 과제\")")
+@click.option("--new-code", is_flag=True, help="Draw a new 4-digit code even if the session has one")
 @click.pass_obj
-def session_start(obj: Ctx, class_name, d, set_id, topic):
+def session_start(obj: Ctx, class_name, d, at, set_id, topic, new_code):
+    """Start a class session: 4-digit 출석 code, sent to the Worker when it is configured."""
+    from .pull import http_put_json
     conn = obj.conn
     cls = ops.get_class(conn, class_name)
     day = parse_date(d)
-    ops.ensure_session(conn, cls["id"], day, set_id, topic)
+    sess = ops.start_session(conn, cls, day, at, set_id, topic, new_code)
     conn.commit()
-    click.echo(f"session {cls['name']} {day.isoformat()}" + (f" set {set_id}" if set_id else ""))
+    t_from, t_until = ops.session_window(day, sess["start_time"])
+    click.echo(f"session {cls['name']} {day.isoformat()} {sess['start_time']}" + (f" set {set_id}" if set_id else ""))
+    click.echo(f"오늘의 코드: {sess['code']}   (출석 {t_from:%H:%M}–{t_until:%H:%M})")
+    if obj.cfg.worker and obj.cfg.teacher_token:
+        try:
+            http_put_json(obj.cfg, "/session", ops.session_payload(conn, sess))
+            click.echo("sent to the Worker: students can check in")
+        except PullError as e:
+            click.echo(f"warning: not sent to the Worker ({e}); run the command again when online", err=True)
+    else:
+        click.echo("no Worker configured: 출석 works only through the board's 출석 처리")
     if set_id:
         base = obj.cfg.pages or "https://<pages>"
         click.echo(f"handout QR URL (no token): {base}/go/?set={set_id}")
+
+
+@cli.command("checkin")
+@click.argument("slug")
+@click.option("--date", "d", default=None)
+@click.pass_obj
+def checkin_cmd(obj: Ctx, slug, d):
+    """출석 처리 on the student's behalf (source teacher)."""
+    conn = obj.conn
+    s = ops.get_student(conn, slug)
+    sid = ops.ensure_session(conn, s["class_id"], parse_date(d))
+    made = ops.record_checkin(conn, s["id"], sid, dbmod.now_utc_iso(), "teacher")
+    conn.commit()
+    click.echo("ok" if made else "already checked in")
 
 
 @cli.command()
@@ -392,7 +421,8 @@ def pull(obj: Ctx, photos_dir):
         rep = do_pull(obj.conn, http_fetch(obj.cfg), photos_dir)
     except PullError as e:
         fail(str(e))
-    click.echo(f"fetched {rep.fetched}: new {rep.new}, updated {rep.updated}, unknown tokens {rep.unknown_tokens}")
+    click.echo(f"fetched {rep.fetched}: new {rep.new}, updated {rep.updated}, check-ins {rep.checkins}, "
+               f"unknown tokens {rep.unknown_tokens}")
     if rep.photos:
         click.echo(f"photos saved: {len(rep.photos)}")
 

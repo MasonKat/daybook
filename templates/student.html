@@ -92,11 +92,20 @@
 </section>
 
 <section id="tab-today" class="panel" role="tabpanel">
-  <p class="chip set-chip" id="today-set" hidden></p>
+  <div class="rhead"><h1 class="rtitle" id="r-title">{{ S.ritual_study }}</h1><p class="chip set-chip" id="today-set" hidden></p></div>
+  <ol class="steps" id="steps" hidden>
+    <li id="sp-ck"><span class="sn">1</span><span class="sl">{{ S.step_checkin }}</span><span class="sv2" id="sp-ck-v"></span></li>
+    <li id="sp-end"><span class="sn">2</span><span class="sl">{{ S.step_end }}</span><span class="sv2" id="sp-end-v"></span></li>
+  </ol>
   <input id="photo" class="vh" type="file" accept="image/*" capture="environment">
+  <div id="st-checkin" class="state center" hidden>
+    <button type="button" class="plus ck" id="ck-open"><span aria-hidden="true">✋</span><span class="vh">{{ S.checkin_cta }}</span></button>
+    <p class="cta">{{ S.checkin_cta }}</p>
+    <p class="muted">{{ S.checkin_hint }}</p>
+  </div>
   <div id="st-idle" class="state center">
-    <label class="plus" for="photo"><span aria-hidden="true">+</span><span class="vh">{{ S.submit_cta }}</span></label>
-    <p class="cta">{{ S.submit_cta }}</p>
+    <label class="plus" for="photo"><span aria-hidden="true">+</span><span class="vh" id="cta-vh">{{ S.submit_cta }}</span></label>
+    <p class="cta" id="cta">{{ S.study_cta }}</p>
     <p class="muted">{{ S.today_hint }}</p>
   </div>
   <div id="st-preview" class="state" hidden>
@@ -163,6 +172,18 @@
   <button type="button" role="tab" id="t-me" data-tab="me" aria-selected="false">
     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5c1.2-4 4.2-6 7.5-6s6.3 2 7.5 6"/></svg><span>{{ S.tab_me }}</span></button>
 </nav>
+</div>
+
+<div class="pad" id="pad" role="dialog" aria-modal="true" aria-labelledby="pad-t" hidden>
+  <div class="pad-box">
+    <p class="pad-t" id="pad-t">{{ S.pad_title }}</p>
+    <div class="pad-d tnum" id="pad-d"><span></span><span></span><span></span><span></span></div>
+    <p class="pad-err" id="pad-err" aria-live="polite">{% if taste %}{{ S.pad_taste }}{% endif %}</p>
+    <div class="keys" id="keys">
+      {% for k in ("1","2","3","4","5","6","7","8","9") %}<button type="button" data-k="{{ k }}">{{ k }}</button>{% endfor %}
+      <button type="button" data-k="x" aria-label="{{ S.close }}">×</button><button type="button" data-k="0">0</button><button type="button" data-k="b" aria-label="{{ S.pad_back }}">⌫</button>
+    </div>
+  </div>
 </div>
 
 <div class="sv" id="sv" role="dialog" aria-modal="true" hidden>
