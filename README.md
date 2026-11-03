@@ -98,6 +98,10 @@ Opt-in push (F15.3), once: `daybook push keys --subject mailto:you@example.com` 
 in `worker/`: `npx wrangler secret put VAPID_PRIVATE`, `… VAPID_PUBLIC`, `… VAPID_SUBJECT` (the values it prints),
 `npx wrangler deploy`, and publish once. Students and parents then see "알림 받기"; after every 발행 one generic push goes
 out (never at night, at most one a day). `daybook push send --kind message`, `daybook push count`.
+Practice mode (F16): the default is `korea` (the Korean hagwon design). The Teacher tab's "캐나다 연습 모드" switches to
+the teacher's personal Manitoba practice layer (no 3-point names on the projector, strength / challenge / next-step
+comments with a fuller lint); it is local, logged, and never changes the default. `daybook metrics weekly` and
+`daybook export portfolio --synthetic` work in both modes.
 운영 가이드 (Korean, for the teacher): `docs/운영가이드.md`; print it with `daybook guide`.
 Before every class and every publish: `daybook doctor` (or 점검 in the Teacher tab): ✓ / ⚠ / ✗ with a fix per line.
 Backups: `daybook backup [--to <dir>] [--keep 30]`; every 발행 also backs up. Set `"backup_dir"` in daybook.json to a
