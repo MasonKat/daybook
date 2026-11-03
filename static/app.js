@@ -704,22 +704,43 @@
     function qPut(rec) { return qTx('readwrite', function (st) { st.put(rec); }); }
     function qAll() { return qTx('readonly', function (st) { return st.getAll(); }); }
     function qDel(key) { return qTx('readwrite', function (st) { st.delete(key); }); }
+    /* claim this student's queued photos with a short lease in ONE read-write transaction (IndexedDB serialises
+       those across tabs and page loads): only the claimer sends; the record is deleted only after a confirmed upload,
+       so a page that dies mid-upload loses nothing (the lease expires and the next open retries) */
+    var LEASE_MS = 60000;
+    function qClaim() {
+      var now = Date.now(), me = Math.random().toString(36).slice(2);
+      return idb().then(function (db) {
+        return new Promise(function (res, rej) {
+          var tx = db.transaction('queue', 'readwrite'), st = tx.objectStore('queue'), got = [];
+          var rq = st.getAll();
+          rq.onsuccess = function () {
+            (rq.result || []).forEach(function (r) {
+              if (r.key.indexOf(tok + ':') !== 0 || (r.lease && now - r.lease < LEASE_MS)) return;
+              r.lease = now; r.owner = me; st.put(r); got.push(r);
+            });
+          };
+          tx.oncomplete = function () { res(got); };
+          tx.onerror = function () { rej(tx.error); };
+        });
+      });
+    }
+    function qRelease(rec) { rec.lease = 0; return qPut(rec); }
     var flushing = false;
     function flushQueue() {
       if (flushing || TASTE || !D.worker || navigator.onLine === false) return;
       flushing = true;
-      qAll().then(function (recs) {
-        recs = (recs || []).filter(function (r) { return r.key.indexOf(tok + ':') === 0; });
+      qClaim().then(function (recs) {
         return recs.reduce(function (p, rec) {
           return p.then(function () {
             return sendRec(rec).then(function (j) {
-              if (j.ok || (j.status && j.status < 500 && j.status !== 429)) {
-                return qDel(rec.key).then(function () { if (j.ok) onResult(j); });
-              }
-            });
+              if (j.ok) return qDel(rec.key).then(function () { onResult(j); });
+              if (!j.status || j.status >= 500 || j.status === 429) return qRelease(rec);   /* try again later */
+              return qDel(rec.key);                                                           /* refused for good */
+            }, function () { return qRelease(rec); });                                       /* still offline */
           });
         }, Promise.resolve());
-      }).catch(function () { /* still offline: next time */ }).then(function () { flushing = false; });
+      }).catch(function () { /* no IndexedDB: nothing queued */ }).then(function () { flushing = false; });
     }
     window.addEventListener('online', flushQueue);
     window.addEventListener('load', function () {

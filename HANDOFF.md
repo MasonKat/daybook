@@ -4,20 +4,19 @@ The cloud build used synthetic data only. Real students, phones, scores and note
 in `daybook.sqlite` (gitignored), and on the deployed pages behind unguessable links. Never commit `daybook.sqlite`,
 `daybook.json`, `dist/`, a real roster CSV or real screener snapshots. Never deploy to GitHub Pages.
 
-## 0. State at handoff (2026-11-03, after DESIGN v2 and features F1–F5)
+## 0. State at handoff (2026-11-04, after F6–F9)
 
-- `main` on GitHub is green from a clean clone (Python 3.12/3.13, Node 22): 97 pytest, 22 Worker node tests,
-  136 Playwright checks. Windows: `scripts\demo.ps1`, `scripts\check.ps1` (written without a PowerShell to run them
-  here: please run them once on the laptop and report).
-- Built: P0 (P1–P3), DESIGN v1 + v2, Windows/UTF-8 fixes, the raw-id lint, F1 taste build (콩), F2 출석, F3 오늘 한 줄,
-  F4 오늘의 장면, F5 (class cancel, QR, class band, term report, note suggest). See `DECISIONS.md`.
-- **Hotfix H1–H6 (D1).** Before the Worker deploy, create the D1 database once and paste its id into
-  `worker/wrangler.toml`: `cd worker && npx wrangler d1 create daybook`, then `npx wrangler deploy`. Then run
-  `daybook publish` once: it sends the student links (token map) the Worker now requires for uploads.
-- Node ≥ 22 for the Worker tests. Please run `scripts\demo.ps1` on Windows PowerShell 5.1 and report (H5 was fixed
-  without a PowerShell to run it here).
-- Console schema is v5; an existing `daybook.sqlite` is migrated automatically (additive, no data lost) by the next command.
-- Not done here: the Cloudflare deploys, a real-phone install test, live webcam capture on the board (deferred).
+- `main` is green from a clean clone: 120 pytest, 32 Worker node tests (incl. the class-day budget with an AMP Live
+  round), the full Playwright check. A normal check run leaves `git status` clean (F0); `make screenshots` /
+  `scripts\check.ps1 -Screenshots` refresh the committed screenshots on purpose.
+- Built: P0, design v2, F1–F9, hotfix H1–H6. See `DECISIONS.md` for every choice; F8 (answer cards) is a spike only.
+- Deploy order for the real Worker: `wrangler d1 create daybook` (paste the id), `wrangler deploy` (also creates the
+  AMP Live Durable Object), then `daybook publish` once (sends the student links).
+- Re-check Cloudflare's Durable Objects free-plan page once before the first Live class (the cloud build could not
+  reach developers.cloudflare.com; DECISIONS, F7).
+- Console schema is v6 (adds `class_bonus`); an existing `daybook.sqlite` is migrated automatically.
+- Not done here: the Cloudflare deploys, a real-phone install test, Live over WebSockets (polling is used),
+  a webcam capture on the board.
 
 ### The repo
 Everything is on `https://github.com/MasonKat/daybook` (private), branch `main`. If you ever receive a git bundle instead:

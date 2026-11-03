@@ -422,8 +422,9 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
       await op.click('#post');
       await op.waitForSelector('#st-queued:not([hidden])', { timeout: 8000 }).catch(() => {});
       check(await op.isVisible('#st-queued'), 'an offline submit waits on the phone ("보낼 준비 완료")');
-      await oc.setOffline(false);
-      await op.reload({ waitUntil: 'networkidle' });                       // the next open sends it
+      await oc.setOffline(false);                                          // the 'online' event sends it
+      await op.waitForSelector('#st-done:not([hidden])', { timeout: 8000 }).catch(() => {});
+      await op.reload({ waitUntil: 'networkidle' });                       // and the next open does not send it again
       await op.waitForSelector('#st-done:not([hidden])', { timeout: 8000 }).catch(() => {});
       const recs = (await workerGet('/submissions')).items.filter((i) => i.token === offPick.student_token);
       const left = await op.evaluate(() => new Promise((res) => { const r = indexedDB.open('daybook', 1); r.onsuccess = () => { const q = r.result.transaction('queue').objectStore('queue').getAll(); q.onsuccess = () => res(q.result.length); }; }));
@@ -559,7 +560,7 @@ print(json.dumps([r[0] for r in c.execute("SELECT s.student_token FROM students_
     await proj.click('#lv-close');
     await phones[0].p.waitForFunction(() => document.getElementById('lv-status').textContent.includes('끝'), null, { timeout: 6000 }).catch(() => {});
     check((await phones[0].p.textContent('#lv-status')).includes('끝났어요'), 'closing the room ends Live on the phones');
-    check(phones.every((ph) => ph.errs2.length === 0) && perr.length === 0, `0 console errors on the projector and the phones`);
+    check(phones.every((ph) => ph.errs2.length === 0) && perr.length === 0, `0 console errors on the projector and the phones ${[...perr, ...phones.flatMap((ph) => ph.errs2)].slice(0, 2).join(' | ')}`);
     for (const ph of phones) await ph.c.close();
     console.log('      ' + daybook('pull').trim());
     const eff = execFileSync(PYTHON, ['-c', `

@@ -308,6 +308,8 @@ def make_handler(board: Board):
                 return self._json({"sets": L.list_sets(board.cfg), "open": board.live and {k: board.live[k] for k in ("room", "title")}})
             if path == "/api/live/state":
                 from . import live as L
+                if not board.live:          # a poll that lands just after 방 닫기: an answer, not an error
+                    return self._json({"ok": True, "open": False})
                 try:
                     return self._json(board.live_call("state"))
                 except (L.LiveError, PullError) as e:

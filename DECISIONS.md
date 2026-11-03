@@ -175,6 +175,7 @@ One line each. "deferred" = not built in P0, on purpose.
 - Everything calls the CLI's functions (`ops.edit_student` is now shared with `roster edit`; `suggest_notes(include_existing=True)` prefills every row). One pytest per action through the HTTP layer.
 - The board server now answers only when the Host header is 127.0.0.1/localhost on its port (blocks DNS-rebinding reads of the console) and still refuses cross-origin writes. `teacher.js` is never copied into `dist/`.
 - The board is per class (`daybook board 고1A`); the Teacher tab works on that class, and 발행 publishes everything.
+- A projector poll that lands just after 방 닫기 gets `{open: false}` (200), not an error.
 
 ## F7: AMP Live prototype (2026-11-03)
 - Free-plan finding: SQLite-backed Durable Objects are on the Workers Free plan (the key-value backend is Paid only): 100,000 requests/day, 5 M rows read, 100 k rows written, 13,000 GB-s/day, 5 GB. Source: Cloudflare's DO pricing/limits pages as quoted by a web search (developers.cloudflare.com itself is not reachable from the build's network): **re-check the official page before the first Live class.**
@@ -205,7 +206,7 @@ One line each. "deferred" = not built in P0, on purpose.
 
 ## F9: offline and install (2026-11-03)
 - A service worker (`dist/sw.js`, served from the root, scope `/s/` only) caches the student page shell: pages network-first with the last copy as the offline fallback (so a new publish shows as soon as there is a connection), `/static/` cache-first. It never touches the Worker (another origin) or the parent pages.
-- A photo submitted without a connection is shrunk as usual and kept in IndexedDB (`daybook` → `queue`, one record per student per day, the newest photo wins); the 오늘 tab shows "보낼 준비 완료". It is sent on the next page open with a connection or on the browser's `online` event, then removed; the e2e checks it arrives exactly once.
+- A photo submitted without a connection is shrunk as usual and kept in IndexedDB (`daybook` → `queue`, one record per student per day, the newest photo wins); the 오늘 tab shows "보낼 준비 완료". It is sent on the next page open with a connection or on the browser's `online` event. A sender first **claims** the record with a 60 s lease in one IndexedDB read-write transaction (serialised across tabs and page loads) and deletes it only after a confirmed upload, so two tabs never send it twice and a page that dies mid-upload loses nothing (the lease expires, the next open retries; at worst a harmless same-day replacement). The e2e checks it arrives exactly once, also under the slower screenshot run that first exposed a double send.
 - The Worker dates a queued photo by when it arrives (it never trusts a date from the phone), so a photo queued at 23:50 and sent after midnight counts for the next day.
 - "홈 화면에 추가" card (iPhone Safari steps, Android Chrome steps) on the 오늘 tab, shown once per phone and never inside the installed app.
 
