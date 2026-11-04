@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_rows.html" import solved_strip, video_tiles with context %}
 {% macro report(w) %}
 <section class="card report">
   <h2>{{ w.title }}</h2>
@@ -50,16 +51,16 @@
       {% if w.focus %}<p class="rline">{% for f in w.focus %}<span class="chip">{{ f }}</span> {% endfor %}</p>{% endif %}
     </div>
   </div>
-  {% if w.videos %}
+  {% if show_videos and (w.video_tiles or w.current) %}
   <div class="rrow">
     <span class="rk">{{ S.row_videos }}</span>
-    <div class="rv"><p class="rline tnum" id="pvideos"><b>{{ S.parent_videos | fmt(n=w.videos) }}</b></p></div>
+    <div class="rv">{{ video_tiles(w, "pvideos") }}</div>
   </div>
   {% endif %}
   {% if w.solved is not none %}
   <div class="rrow">
     <span class="rk">{{ S.row_solved }}</span>
-    <div class="rv"><p class="rline tnum" id="solved"><b>{{ S.solved_week | fmt(n=w.solved) }}</b> <span class="muted">{{ S.solved_self }}</span></p></div>
+    <div class="rv">{{ solved_strip(w, "solved", S.solved_week | fmt(n=w.solved)) }}</div>
   </div>
   {% endif %}
   <div class="rrow">

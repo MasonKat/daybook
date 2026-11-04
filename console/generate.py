@@ -319,6 +319,15 @@ TASTE_PATH = "kong"   # fixed paths /s/kong/ and /p/kong/
 CHIP_KEYS = ("ok", "confused", "rewatch")
 
 
+def _solved_strip(wdays: list[dict], subs: dict) -> list[dict]:
+    """F18.1: Mon-Sun with each day's own 푼 문제 count and a bar scaled to the week's max (class days marked)."""
+    counts = [(subs.get(d["date"]) or {}) for d in wdays]
+    vals = [c["solved"] if c and c["solved"] is not None and not d["future"] else None for c, d in zip(counts, wdays)]
+    top = max([v for v in vals if v] or [0])
+    return [{"wd": d["wd"], "n": v, "pct": round(100 * v / top) if top and v else 0, "class_day": d["class_day"],
+             "future": d["future"]} for d, v in zip(wdays, vals)]
+
+
 def _solved(subs: dict, start: date, end: date) -> int | None:
     """F13.5: the week's self-reported 푼 문제 수 (None when the student never entered one that week)."""
     vals = [r["solved"] for d, r in subs.items() if start.isoformat() <= d <= end.isoformat() and r["solved"] is not None]
@@ -392,6 +401,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         st["eff"].append(r["efficiency"])
         st["reach"].append(r["reach"])
     week_ago = (today - timedelta(days=6)).isoformat()
+    by_vid = {v["id"]: v for v in videos}                                   # F18.1: tiles look up titles here
     shorts = [v for v in videos if v["kind"] == "short"]
     longs = [v for v in videos if v["kind"] == "long"]
     published_at = _publish_times(conn)
@@ -548,7 +558,12 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                     ritual.append({"wd": x["wd"], "in": t_in, "out": x["time"], "late": late, "line": line})
             wsum = _sum_upto(att, wm, cut)
             solved = _solved(subs, wm, cut)
-            wk_videos = len(W.watched_ids(conn, s["id"], wm, cut)) if show_videos else 0      # F15.1: a count only
+            # F18.1: the 푼 문제 day strip (own numbers only) and the change from last week
+            solved_strip = _solved_strip(wdays, subs)
+            prev_solved = _solved(subs, wm - timedelta(days=7), wm - timedelta(days=1))
+            solved_delta = None if solved is None or prev_solved is None else solved - prev_solved
+            vtiles = W.video_tiles(conn, s["id"], wm, cut, by_vid, S) if show_videos else []  # F18.1: own videos
+            wk_videos = len(vtiles)
             wk_ins = [r for r in insights if wm.isoformat() <= r["date"] <= we.isoformat()]
             ins_line = scrub(wk_ins[-1]["parent_line"]) if wk_ins else ""
             ins_focus = ([f for f in (scrub(x) for x in json.loads(wk_ins[-1]["focus"] or "[]")) if f]
@@ -567,7 +582,8 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                 "dir_eff": trend["lines"]["eff"].dir if trend else "",
                 "dir_reach": trend["lines"]["reach"].dir if trend else "",
                 "week_sum": wsum, "cumulative": _sum_upto(att, None, cut), "solved": solved,
-                "insight": ins_line, "focus": ins_focus, "videos": wk_videos,
+                "insight": ins_line, "focus": ins_focus, "videos": wk_videos, "video_tiles": vtiles[:6],
+                "video_more": max(0, len(vtiles) - 6), "solved_strip": solved_strip, "solved_delta": solved_delta,
                 "bar_pct": (min(100.0, 100.0 * total_then / rw.goal) if rw and rw.goal > 0 and current else None),
                 "to_go": max(0, rw.goal - total_then) if rw else 0,
                 "note": wk_notes[-1]["text"] if wk_notes else "",
@@ -649,6 +665,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         "worker": cfg.worker,
         # F15.3: the VAPID public key (not secret) turns on the opt-in box; never in the taste build
         "vapid": "" if taste or not cfg.worker else str(cfg.extra.get("vapid_public") or ""),
+        "show_videos": bool(cfg.extra.get("parent_shows_videos", True)),     # F18.1: the 영상 row (parents)
         # F15.4: the academy's mascot next to the wordmark (taste build: only with brand.mascot_public)
         "mascot": "/b/mascot.png" if brand.source(cfg) and (not taste or brand.public(cfg)) else "",
     }

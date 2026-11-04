@@ -356,6 +356,25 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
       await wc.close();
     }
 
+    {   // F18.2: a ring loses its gradient once seen, per story and per content version; new content brings it back
+      const sc = await browser.newContext({ viewport: PHONE });
+      const sp = await sc.newPage();
+      await sp.goto(`${PAGES}/s/${pick.student_token}/#today`, { waitUntil: 'networkidle' });
+      const ring = sp.locator('.story[data-story="popular"]');
+      const before = await ring.evaluate((b) => b.classList.contains('seen'));
+      await ring.click();
+      await sp.waitForSelector('#sv:not([hidden])', { timeout: 3000 }).catch(() => {});
+      await sp.click('#sv-x');
+      const after = await ring.evaluate((b) => b.classList.contains('seen'));
+      await sp.reload({ waitUntil: 'networkidle' });
+      const kept = await sp.locator('.story[data-story="popular"]').evaluate((b) => b.classList.contains('seen'));
+      await sp.evaluate(() => localStorage.setItem('daybook.seen.popular', 'an-older-content-version'));
+      await sp.reload({ waitUntil: 'networkidle' });
+      const back = await sp.locator('.story[data-story="popular"]').evaluate((b) => b.classList.contains('seen'));
+      check(!before && after && kept && !back, 'a seen ring is plain (and stays plain after a reload); new content brings the gradient back');
+      await sc.close();
+    }
+
     console.log('\n[2b] stories, reels, profile');
     const nStories = await page.locator('.story').count();
     {   // F12: this week's insight as the "이번 주 복습" ring (focus chips, recommended videos, one line)

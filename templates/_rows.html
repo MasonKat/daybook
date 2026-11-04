@@ -1,0 +1,18 @@
+{# F18.1: the same small visuals on the parent card and on the student's own profile (own data only) #}
+{% macro solved_strip(w, total_id, total_text) %}
+<ol class="sstrip tnum" aria-label="{{ S.row_solved }}">
+  {% for d in w.solved_strip %}<li class="{{ 'cls' if d.class_day }}{{ ' fut' if d.future }}"><span class="wd">{{ d.wd }}</span><span class="sbar"><i style="height: {{ d.pct }}%"></i></span><span class="sn">{{ d.n if d.n is not none else '' }}</span></li>{% endfor %}
+</ol>
+<p class="rline tnum" id="{{ total_id }}"><b>{{ total_text }}</b>
+  {% if w.solved_delta is not none %}<span class="delta {{ 'up' if w.solved_delta > 0 else 'down' if w.solved_delta < 0 else 'same' }}">{{ S.sv_up | fmt(n=w.solved_delta) if w.solved_delta > 0 else S.sv_down | fmt(n=-w.solved_delta) if w.solved_delta < 0 else S.sv_same }}</span>{% endif %}
+  <span class="muted">{{ S.solved_self }}</span></p>
+{% endmacro %}
+
+{% macro video_tiles(w, list_id) %}
+{% if w.video_tiles %}
+<ul class="vtiles" id="{{ list_id }}">
+  {% for t in w.video_tiles %}<li class="vt {{ t.kind }}{{ ' done' if t.done }}"><span class="vb">{{ t.badge }}</span><span class="vtt">{{ t.title }}</span><span class="vp"><i style="width: {{ t.pct }}%"></i></span>{% if t.done %}<span class="vok" aria-label="90%+">✓</span>{% endif %}</li>{% endfor %}
+  {% if w.video_more %}<li class="vt more">{{ S.vt_more | fmt(n=w.video_more) }}</li>{% endif %}
+</ul>
+{% else %}<p class="rline muted" id="{{ list_id }}">{{ S.vt_empty }}</p>{% endif %}
+{% endmacro %}

@@ -54,7 +54,9 @@ def test_own_count_on_the_student_page_and_a_count_on_the_parent_card(conn, klas
     assert res.ok, [str(f) for f in res.findings]
     s_html = (tmp_path / "dist" / "s" / studs[0]["student_token"] / "index.html").read_text(encoding="utf-8")
     p_html = (tmp_path / "dist" / "p" / studs[0]["parent_token"] / "index.html").read_text(encoding="utf-8")
-    assert "이번 주 본 영상 2개" in s_html and "이번 주 해설·개념 영상 2개 시청" in p_html
+    assert "이번 주 본 영상 2개" in s_html
+    newest = p_html.split('class="msg newest"')[1]
+    assert newest.count('<li class="vt ') == 2 and "영상1" in newest and ">쇼츠<" in newest      # F18.1: the child's own tiles
     off = generate.build_context(conn, cfg_with(tmp_path, [vid(1)], parent_shows_videos=False), TODAY, NOW)
     assert next(s for s in off["students"] if s["id"] == studs[0]["id"])["room"][-1]["videos"] == 0
 
@@ -114,3 +116,32 @@ def test_another_class_never_counts(conn, klass, tmp_path):
         put(conn, s["id"], "AMPvideo002", TODAY)
     conn.commit()
     assert W.popular(conn, 1, TODAY) is None and W.popular(conn, 2, TODAY) == "AMPvideo002"
+
+
+
+def test_f18_1_solved_strip_and_video_tiles(conn, klass, tmp_path):
+    _, studs = klass
+    sid = studs[0]["id"]
+    for d, n in (("2026-11-03", 10), ("2026-11-05", 20), ("2026-10-27", 5)):
+        conn.execute("INSERT INTO submissions (student_id, day, ts, source, solved) VALUES (?, ?, ?, 'phone', ?)",
+                     (sid, d, f"{d}T11:00:00.000Z", n))
+    for i in range(8):
+        put(conn, sid, f"AMPvideo{i:03d}", TODAY - timedelta(days=i % 4), sec=60, pct=95 if i == 0 else 40)
+    conn.commit()
+    cfg = cfg_with(tmp_path, [vid(i, "long" if i % 2 else "short", group="고1 · 개념" if i == 1 else "고1 · 풀이") for i in range(8)])
+    ctx = generate.build_context(conn, cfg, TODAY, NOW)
+    w = next(s for s in ctx["students"] if s["id"] == sid)["room"][-1]
+    strip = w["solved_strip"]
+    assert [d["n"] for d in strip][:5] == [None, 10, None, 20, None] and strip[3]["pct"] == 100 and strip[1]["pct"] == 50
+    assert strip[1]["class_day"] and w["solved"] == 30 and w["solved_delta"] == 25          # 30 vs last week's 5
+    assert len(w["video_tiles"]) == 6 and w["video_more"] == 2 and w["videos"] == 8
+    first = w["video_tiles"][0]
+    assert first["done"] and first["badge"] == "쇼츠" and [t["badge"] for t in w["video_tiles"] if "영상1" == t["title"]] == ["개념"]
+    res = generate.publish(conn, cfg, tmp_path / "d", today=TODAY, now=NOW)
+    p_html = (tmp_path / "d" / "p" / studs[0]["parent_token"] / "index.html").read_text(encoding="utf-8")
+    newest = p_html.split('class="msg newest"')[1]
+    assert "+2" in newest and "지난주보다 ↑ 25" in newest and newest.count('class="vok"') == 1
+    s_html = (tmp_path / "d" / "s" / studs[0]["student_token"] / "index.html").read_text(encoding="utf-8")
+    assert 'id="videos-me"' in s_html and 'class="sstrip' in s_html                           # the same components
+    other = (tmp_path / "d" / "p" / studs[1]["parent_token"] / "index.html").read_text(encoding="utf-8")
+    assert "이번 주 본 영상이 아직 없어요" in other and "영상0" not in other                     # never another child's

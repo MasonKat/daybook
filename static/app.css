@@ -541,3 +541,25 @@ tr.rc.skipped td:nth-child(2) { color: var(--err); }
 
 /* F17: consent state in 연락 현황 */
 select.consent.unknown { border-color: var(--adjust); } select.consent.no { border-color: var(--err); }
+
+/* F18.1: the 푼 문제 day strip and the 영상 tiles (parent card and the student's own profile) */
+.sstrip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; list-style: none; padding: 0; margin: 4px 0; max-width: 360px; }
+.sstrip li { display: flex; flex-direction: column; align-items: center; font-size: 11px; color: var(--muted); }
+.sstrip .sbar { width: 100%; max-width: 26px; height: 34px; display: flex; align-items: flex-end; background: var(--card);
+  border-radius: 5px; overflow: hidden; margin: 2px 0; }
+.sstrip .sbar i { display: block; width: 100%; background: var(--grad); border-radius: 5px; }
+.sstrip li.cls .wd { color: var(--fg); font-weight: 700; }
+.sstrip li.fut { opacity: .45; }
+.sstrip .sn { font-size: 11px; color: var(--fg); min-height: 1em; }
+.delta { font-size: 12px; font-weight: 700; margin-left: 4px; } .delta.up { color: var(--up); } .delta.down { color: var(--adjust); } .delta.same { color: var(--muted); }
+.vtiles { list-style: none; padding: 0; margin: 4px 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(88px, 100%), 1fr)); gap: 6px; }
+.vt { position: relative; border: 1px solid var(--line); border-radius: 10px; padding: 6px 7px 8px; background: var(--card); min-width: 0; }
+.vt .vb { display: inline-block; font-size: 10px; font-weight: 700; padding: 0 5px; border-radius: 999px; background: var(--bg); color: var(--accent); }
+.vt.short .vb { color: #db2777; } .vt.concept .vb { color: #0d9488; }
+.vt .vtt { display: block; font-size: 12px; line-height: 1.3; margin: 3px 0 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt .vp { display: block; height: 4px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.vt .vp i { display: block; height: 100%; background: var(--grad); }
+.vt .vok { position: absolute; top: 4px; right: 6px; font-size: 12px; color: var(--ok); font-weight: 700; }
+.vt.more { display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--muted); }
+.mywk { margin: 10px 0 4px; text-align: left; } .mywk-h { font-size: 13px; font-weight: 700; margin: 8px 0 2px; }
+.rrow .rv, .mywk { min-width: 0; }

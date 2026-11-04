@@ -358,6 +358,10 @@ The current `practice_mode = manitoba` is only the teacher's personal practice l
 - `doctor` lists students whose consent is not yes as ⚠ (never ✗). The demo marks every synthetic student yes (콩 too); the shared test fixture's three students are yes.
 - HANDOFF starts with the Thursday checklist (dashboard / console / Teacher tab per step).
 
+## F18.1–F18.2: small visual rows; the "seen" rings (2026-11-04, the teacher's feedback on the taste site)
+- **푼 문제:** a Mon–Sun strip in the 제출 strip's style: each day's own count and a bar scaled to the week's max, class days in bold, future days faded; under it the week's total, the change from last week (↑ n / ↓ n / 지난주와 같아요) and "스스로 기록한 수". **영상:** tiles of the videos this child watched that week, newest first, at most 6 then "+n": a short title, a badge (해설 / 개념 / 쇼츠, from the item's kind and group), a fill to the furthest %, ✓ at 90 % or more; "이번 주 본 영상이 아직 없어요" when empty (shown for the current week; older weeks only when there were videos). The child's own data to their own parent (the parent page exists only with consent = yes); `"parent_shows_videos": false` hides the row. The same macros (`templates/_rows.html`) draw the student's own profile. Both fit 360 px (the e2e audits every page at 360 and 390 px, light and dark).
+- **Seen rings (kept, now guarded by the e2e):** a story ring loses its gradient once opened; the key is per story and the value is the content hash (new 장면, new videos, a new 인기 video change it), so new content brings the ring back. Storage is wrapped in try/catch; without it the ring simply stays.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

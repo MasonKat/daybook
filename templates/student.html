@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_rows.html" import solved_strip, video_tiles with context %}
 {% block head %}
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="/static/icon-180.png">
@@ -178,8 +179,12 @@
     <li><b class="tnum" id="c-sub">{{ me.n_sub }}</b><span>{{ S.count_sub }}</span></li>
     <li><b class="tnum">{{ me.cumulative }}</b><span>{{ S.count_points }}</span></li>
   </ul>
-  {% if me.solved_week is not none %}<p class="muted solved-me tnum" id="solved-me">{{ S.solved_me | fmt(n=me.solved_week) }}</p>{% endif %}
-  {% if me.videos_week %}<p class="muted solved-me tnum" id="videos-me">{{ S.videos_me | fmt(n=me.videos_week) }}</p>{% endif %}
+  {% set myw = me.room[-1] %}
+  <div class="mywk">
+    <p class="mywk-h">{{ S.videos_me | fmt(n=myw.videos) }}</p>
+    {{ video_tiles(myw, "videos-me") }}
+    {% if myw.solved is not none %}<p class="mywk-h">{{ S.row_solved }}</p>{{ solved_strip(myw, "solved-me", S.solved_me | fmt(n=myw.solved)) }}{% endif %}
+  </div>
   {% set role, hint = "s", S.push_hint_s %}{% if vapid and me.consent %}<div class="pushbox" id="push" data-role="{{ role }}" data-vapid="{{ vapid }}" data-worker="{{ worker }}" data-s="{{ {"on": S.push_on, "off": S.push_off, "done": S.push_on_done, "ios": S.push_ios, "denied": S.push_denied, "err": S.push_err, "hint": hint} | tojson | forceescape }}" hidden>
   <button type="button" class="btn ghost push-btn" aria-pressed="false">{{ S.push_on }}</button>
   <p class="muted push-note">{{ hint }}</p>

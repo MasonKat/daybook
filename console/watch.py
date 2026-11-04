@@ -74,3 +74,21 @@ def report_text(view: dict) -> str:
             extra = f" · 전체 조회 {v['views_7d']:,} (7일)" if isinstance(v.get("views_7d"), int) else ""
             lines.append(f"  {v['title']}: {v['students']}명 · 평균 {v['avg_pct']}% · {v['minutes']}분{extra}")
     return "\n".join(lines)
+
+
+def video_tiles(conn: sqlite3.Connection, student_id: int, start: date, end: date, by_vid: dict, S: dict) -> list[dict]:
+    """F18.1: the videos this student watched in [start, end], newest first: a short title, a kind badge
+    (해설 / 개념 / 쇼츠), the furthest % reached and done at >= 90 %. The student's own data, for their own parent."""
+    rows = conn.execute("""SELECT video_id, MAX(pct) AS pct, MAX(day) AS day FROM watches
+                           WHERE student_id = ? AND day BETWEEN ? AND ? AND sec >= ?
+                           GROUP BY video_id ORDER BY day DESC, video_id""",
+                        (student_id, start.isoformat(), end.isoformat(), WATCHED_SEC)).fetchall()
+    out = []
+    for r in rows:
+        v = by_vid.get(r["video_id"], {})
+        title = v.get("title") or S["vt_untitled"]
+        group = v.get("group", "")
+        kind = "short" if v.get("kind") == "short" else "concept" if "개념" in group else "solution"
+        out.append({"title": title if len(title) <= 18 else title[:17] + "…", "kind": kind, "badge": S[f"vt_{kind}"],
+                    "pct": int(r["pct"] or 0), "done": (r["pct"] or 0) >= 90})
+    return out
