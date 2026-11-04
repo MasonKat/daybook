@@ -608,6 +608,8 @@ def pull(obj: Ctx, photos_dir):
         fail(str(e))
     click.echo(f"fetched {rep.fetched}: new {rep.new}, updated {rep.updated}, check-ins {rep.checkins}, "
                f"weekly-test reports {rep.reports}, unknown tokens {rep.unknown_tokens}")
+    if rep.reviews or rep.votes:
+        click.echo(f"학생 리뷰: new {rep.reviews} (waiting for 승인), votes {rep.votes}")
     if rep.photos:
         click.echo(f"photos saved: {len(rep.photos)}")
 
@@ -739,6 +741,10 @@ def publish(obj: Ctx, out, d, taste):
         sys.exit(1)
     if not taste:
         _send_links(obj, obj.conn)
+        from . import reviews as RV
+        msg = RV.after_publish(obj.conn, obj.cfg)                        # F18.3: vote moments, decisions, winners
+        if msg:
+            click.echo(msg, err=msg.startswith("warning"))
         from . import push as P
         for line in P.after_publish(obj.conn, obj.cfg):                  # F15.3: one push, if set up
             click.echo(line)
@@ -1203,6 +1209,72 @@ def meeting_log(obj: Ctx, slug, kind, d):
     MT.log_meeting(conn, ops.get_student(conn, slug)["id"], kind, parse_date(d))
     conn.commit()
     click.echo("logged")
+
+
+# ---------------------------------------------------------------- F18.3: 학생 리뷰 (pre-moderated)
+
+@cli.group()
+def review():
+    """학생 리뷰: approve or hide (nothing reaches classmates before 승인), open a vote now."""
+
+
+@review.command("list")
+@click.option("--status", type=click.Choice(["pending", "approved", "hidden", "all"]), default="pending", show_default=True)
+@click.pass_obj
+def review_list(obj: Ctx, status):
+    q = "SELECT r.*, s.slug, c.name AS class_name FROM reviews r JOIN students s ON s.id = r.student_id LEFT JOIN classes c ON c.id = r.class_id"
+    rows = obj.conn.execute(q + ("" if status == "all" else " WHERE r.status = ?") + " ORDER BY r.ts",
+                            () if status == "all" else (status,)).fetchall()
+    for r in rows:
+        click.echo(f"{r['id']}  {r['day']}  {r['class_name']}  {r['slug']}{' (이름 숨김)' if r['hide_name'] else ''}  [{r['status']}]  {r['text']}")
+    if not rows:
+        click.echo("none")
+
+
+def _review_decide(obj: Ctx, ids, status):
+    from . import reviews as RV
+    try:
+        for i in ids:
+            RV.decide(obj.conn, i, status)
+    except RV.ReviewError as e:
+        fail(str(e))
+    obj.conn.commit()
+    click.echo(f"{status}: {len(ids)}")
+    msg = RV.sync(obj.conn, obj.cfg)
+    if msg:
+        click.echo(msg, err=msg.startswith("warning"))
+
+
+@review.command("approve")
+@click.argument("ids", nargs=-1, required=True)
+@click.pass_obj
+def review_approve(obj: Ctx, ids):
+    """승인: classmates see it (and it can be voted on)."""
+    _review_decide(obj, ids, "approved")
+
+
+@review.command("hide")
+@click.argument("ids", nargs=-1, required=True)
+@click.pass_obj
+def review_hide(obj: Ctx, ids):
+    """숨김: never shown (or no longer shown)."""
+    _review_decide(obj, ids, "hidden")
+
+
+@review.command("open-vote")
+@click.argument("class_name")
+@click.pass_obj
+def review_open_vote(obj: Ctx, class_name):
+    """지금 투표 열기: this period's vote opens now for 24 h (instead of the random moment)."""
+    from . import reviews as RV
+    cls = ops.get_class(obj.conn, class_name)
+    rid = RV.open_now(obj.conn, cls["id"])
+    obj.conn.commit()
+    n = len(RV.candidates(obj.conn, obj.conn.execute("SELECT * FROM review_rounds WHERE id = ?", (rid,)).fetchone()))
+    click.echo(f"vote {rid} open for 24 h; {n} approved review(s)" + ("" if n >= 3 else " — fewer than 3: no vote card is shown"))
+    msg = RV.sync(obj.conn, obj.cfg)
+    if msg:
+        click.echo(msg, err=msg.startswith("warning"))
 
 
 if __name__ == "__main__":

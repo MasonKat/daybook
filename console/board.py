@@ -305,6 +305,8 @@ def make_handler(board: Board):
                     return self._json(T.push_view(conn, board.cfg))
                 if path == "/api/teacher/videos":             # F15.1/F15.2
                     return self._json(T.videos_view(conn, board.cfg, day, int((q.get("days") or ["7"])[0] or 7)))
+                if path == "/api/teacher/reviews":            # F18.3
+                    return self._json(T.reviews_view(conn, board.cfg, day))
                 if path == "/api/teacher/rounds":             # F14
                     return self._json(T.rounds_view(conn))
                 if path == "/api/teacher/round":
@@ -349,6 +351,10 @@ def make_handler(board: Board):
                         return self._json(T.publish(conn, board.cfg, db_path=board.db_path))
                     if self.path == "/api/teacher/practice":             # F16
                         return self._json(T.practice_set(conn, body))
+                    if self.path == "/api/teacher/review":               # F18.3: 승인 / 숨김
+                        return self._json(T.review_decide(conn, board.cfg, body))
+                    if self.path == "/api/teacher/review-vote":          # F18.3: 지금 투표 열기
+                        return self._json(T.review_open_vote(conn, board.cfg, body))
                     if self.path == "/api/teacher/push-send":            # F15.3
                         return self._json(T.push_send(conn, board.cfg, body))
                     if self.path == "/api/teacher/backup":               # G2

@@ -155,12 +155,50 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
             _seed_kong(conn, cid, sess, today, rng)
     _seed_contacts(conn, today, rng)
     _seed_watches(conn, today, rng)
+    _seed_reviews(conn, today)
     for r in conn.execute("SELECT id FROM students ORDER BY id LIMIT 2").fetchall():        # F16.4: two SLCs this week
         conn.execute("INSERT INTO meetings (student_id, day, kind, ts) VALUES (?, ?, 'slc', ?)",
                      (r["id"], today.isoformat(), "2026-01-01T00:00:00.000Z"))
     conn.execute("UPDATE students SET consent = 'yes'")           # F17: every synthetic parent said yes (콩 too)
     log_event(conn, "demo_seed", {"today": today.isoformat()})
     conn.commit()
+
+
+DEMO_REVIEWS = ["판서가 오늘은 피카소급", "분수 대결 명승부", "시발점 문제에서 다 같이 웃음", "프로젝터 꺼져서 다들 놀람",
+                "18문제 다 맞아서 소리 지름", "선생님 썰 듣다가 시간 순삭", "오늘 퀴즈 역대급", "다섯 번 틀리고 여섯 번째에 맞힘",
+                "쉬는 시간 끝말잇기 결승전"]
+
+
+def _seed_reviews(conn: sqlite3.Connection, today: date) -> None:
+    """F18.3: 콩's class has last period's vote (콩 won it) and this period's reviews: approved, one pending, one hidden."""
+    import hashlib
+    from . import reviews as RV
+    cid = conn.execute("SELECT id FROM classes WHERE name = ?", (KONG["class"],)).fetchone()[0]
+    studs = [r[0] for r in conn.execute("SELECT id FROM students WHERE class_id = ? ORDER BY id", (cid,))]
+    kong = conn.execute("SELECT id FROM students WHERE slug = ?", (KONG["slug"],)).fetchone()[0]
+    others = [x for x in studs if x != kong]
+    cur, _ = RV.period(today)
+    prev, prev_end = RV.period(cur - timedelta(days=1))
+    rid = lambda n: hashlib.sha256(f"demo-review-{n}".encode()).hexdigest()[:12]          # noqa: E731
+    rows = [(prev + timedelta(days=2), kong, 0, "approved"), (prev + timedelta(days=3), others[0], 1, "approved"),
+            (prev + timedelta(days=5), others[1], 2, "approved"), (prev + timedelta(days=8), others[2], 3, "approved"),
+            (today - timedelta(days=1), others[0], 4, "approved"), (today - timedelta(days=1), others[3 % len(others)], 5, "approved"),
+            (today - timedelta(days=1), others[1], 6, "approved"), (today, others[2], 7, "pending"),
+            (today, others[4 % len(others)], 8, "hidden")]
+    for n, (d, sid, t, st) in enumerate(rows):
+        conn.execute("""INSERT INTO reviews (id, student_id, class_id, day, text, hide_name, status, ts, decided_ts)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                     (rid(n), sid, cid, d.isoformat(), DEMO_REVIEWS[t], 1 if n == 3 else 0, st,
+                      f"{d.isoformat()}T10:00:00.000Z", None if st == "pending" else f"{d.isoformat()}T12:00:00.000Z"))
+    rnd = f"c{cid}-{prev.isoformat()}"
+    at = datetime.combine(prev + timedelta(days=9), time(19, 40), KST).astimezone(timezone.utc)
+    conn.execute("""INSERT INTO review_rounds (id, class_id, period_from, period_to, open_at, close_at, status)
+                    VALUES (?, ?, ?, ?, ?, ?, 'closed')""", (rnd, cid, prev.isoformat(), prev_end.isoformat(),
+                 at.strftime("%Y-%m-%dT%H:%M:%S.000Z"), (at + timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%S.000Z")))
+    for i, sid in enumerate(others[:5]):
+        conn.execute("INSERT INTO review_votes (round_id, student_id, review_id, ts) VALUES (?, ?, ?, ?)",
+                     (rnd, sid, rid(0) if i < 3 else rid(1 + i % 3), at.strftime("%Y-%m-%dT%H:%M:%S.000Z")))
+    conn.execute("INSERT INTO review_wins (round_id, review_id, votes) VALUES (?, ?, 3)", (rnd, rid(0)))
 
 
 def _seed_watches(conn: sqlite3.Connection, today: date, rng: random.Random) -> None:

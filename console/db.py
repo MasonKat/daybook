@@ -160,6 +160,43 @@ CREATE TABLE IF NOT EXISTS meetings (        -- F16.4: student-led conferences a
     ts         TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS reviews (          -- F18.3 학생 리뷰 (pulled; the teacher approves or hides)
+    id         TEXT PRIMARY KEY,
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    class_id   INTEGER REFERENCES classes(id),
+    day        TEXT NOT NULL,
+    text       TEXT NOT NULL,
+    hide_name  INTEGER NOT NULL DEFAULT 0,
+    status     TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'hidden')),
+    ts         TEXT NOT NULL,
+    decided_ts TEXT
+);
+
+CREATE TABLE IF NOT EXISTS review_rounds (    -- F18.3: one random-time vote per class per 2-week period
+    id          TEXT PRIMARY KEY,
+    class_id    INTEGER NOT NULL REFERENCES classes(id),
+    period_from TEXT NOT NULL,
+    period_to   TEXT NOT NULL,
+    open_at     TEXT NOT NULL,                 -- UTC ISO; the vote is open 24 h
+    close_at    TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'planned' CHECK (status IN ('planned', 'closed', 'novote'))
+);
+
+CREATE TABLE IF NOT EXISTS review_votes (
+    round_id   TEXT NOT NULL REFERENCES review_rounds(id),
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    review_id  TEXT NOT NULL REFERENCES reviews(id),
+    ts         TEXT NOT NULL,
+    PRIMARY KEY (round_id, student_id)
+);
+
+CREATE TABLE IF NOT EXISTS review_wins (
+    round_id  TEXT NOT NULL REFERENCES review_rounds(id),
+    review_id TEXT NOT NULL REFERENCES reviews(id),
+    votes     INTEGER NOT NULL,
+    PRIMARY KEY (round_id, review_id)
+);
+
 CREATE TABLE IF NOT EXISTS class_bonus (  -- F7: class-wide points (AMP Live: >= 80 % of the class correct)
     id         INTEGER PRIMARY KEY,
     class_id   INTEGER NOT NULL REFERENCES classes(id),

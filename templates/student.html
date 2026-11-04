@@ -11,7 +11,10 @@
 {% block body %}
 <div class="app">
 <header class="sbar">
-  <span class="wordmark">{% if mascot %}<img class="mascot" src="{{ mascot }}" alt="" width="24" height="24">{% endif %}{{ S.app_name }}</span>
+  <span class="wordmark">{{ S.app_name }}</span>
+  {# F18.4: the mascot slot (the academy's art when brand.mascot is set; a neutral placeholder shape until then) #}
+  <span class="mslot" aria-hidden="true">{% if mascot %}<img class="mascot" src="{{ mascot }}" alt="" width="28" height="28">{% else %}<svg viewBox="0 0 28 28" class="mph"><rect x="2" y="2" width="24" height="24" rx="8"/><circle cx="14" cy="14" r="5.5"/></svg>{% endif %}</span>
+  <button type="button" class="rvpill" id="rv-open" aria-label="{{ S.rv_pill }}"><svg viewBox="0 0 24 24" class="rvstar" aria-hidden="true"><defs><linearGradient id="rvg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset=".55" stop-color="#ec4899"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs><path fill="url(#rvg)" d="M12 2.6l2.8 5.8 6.4.9-4.6 4.5 1.1 6.3L12 17.1l-5.7 3 1.1-6.3-4.6-4.5 6.4-.9z"/></svg><span class="rvpill-t">{{ S.rv_pill }}</span><span class="rvdot" id="rv-dot" hidden></span></button>
   <span class="sdate" id="today-date">&nbsp;</span>
   <span class="av ring sm" title="{{ me.display_name }}"><span>{{ me.initial }}</span></span>
 </header>
@@ -103,6 +106,10 @@
   <div class="card wtcard" id="wt-card" hidden>
     <div class="wt-row"><b id="wt-label">{{ S.wt_title }}</b><span class="muted wt-leg" id="wt-state"></span></div>
     <button type="button" class="btn primary" id="wt-open">{{ S.wt_open }}</button>
+  </div>
+  <div class="card rvcard" id="rv-card" hidden>
+    <div class="wt-row"><b>{{ S.rv_vote_title }}</b><span class="muted wt-leg" id="rv-card-state"></span></div>
+    <button type="button" class="btn primary" id="rv-card-open">{{ S.rv_vote_go }}</button>
   </div>
   <ol class="steps" id="steps" hidden>
     <li id="sp-ck"><span class="sn">1</span><span class="sl">{{ S.step_checkin }}</span><span class="sv2" id="sp-ck-v"></span></li>
@@ -257,6 +264,34 @@
   </div>
 </div>
 
+<div class="wt rv" id="rv" role="dialog" aria-modal="true" aria-labelledby="rv-h" hidden>
+  <div class="wt-top"><b id="rv-h">{{ S.rv_title }}</b><button type="button" class="live-x" id="rv-x" aria-label="{{ S.close }}">×</button></div>
+  <div class="wt-body">
+    {% if taste %}<p class="muted rv-taste">{{ S.rv_taste }}</p>{% endif %}
+    <div class="rv-vote" id="rv-vote" hidden>
+      <p class="wt-q">{{ S.rv_vote_title }} <span class="muted wt-leg" id="rv-vote-until"></span></p>
+      <p class="muted wt-leg">{{ S.rv_vote_hint }}</p>
+      <ul class="rv-list" id="rv-cands"></ul>
+    </div>
+    <p class="muted">{{ S.rv_hint_s }}</p>
+    <label class="wt-q" for="rv-text">{{ S.rv_write }}</label>
+    <input id="rv-text" type="text" maxlength="60" autocomplete="off" enterkeyhint="send" placeholder="{{ S.rv_ph }}">
+    <div class="rv-row">
+      <label class="rv-hide" id="rv-hide-l"><input type="checkbox" id="rv-hide"> {{ S.rv_hide }}</label>
+      <span class="muted tnum" id="rv-count">0/60</span>
+    </div>
+    {% if taste %}<button type="button" class="chip" id="rv-sample-bad" data-text="{{ S.rv_taste_block_text }}">{{ S.rv_taste_block }}</button>{% endif %}
+    <p class="err" id="rv-err" aria-live="polite"></p>
+    <p class="muted" id="rv-ok" aria-live="polite"></p>
+    <button type="button" class="btn primary wide" id="rv-send">{{ S.rv_send }}</button>
+    <div id="rv-mine-box" hidden><p class="wt-q">{{ S.rv_mine }}</p><ul class="rv-list" id="rv-mine"></ul></div>
+    <p class="wt-q">{{ S.rv_class }}</p>
+    <ul class="rv-list" id="rv-list"></ul>
+    <p class="wt-q">★ {{ S.rv_best }}</p>
+    <ul class="rv-list best" id="rv-best"></ul>
+  </div>
+</div>
+
 <div class="live" id="live" role="dialog" aria-modal="true" aria-label="{{ S.live_btn }}" hidden>
   <div class="live-top"><b>{{ S.live_btn }} <span class="tnum" id="lv-qn"></span></b><button type="button" class="live-x" id="lv-x" aria-label="{{ S.close }}">×</button></div>
   <p class="live-status" id="lv-status" aria-live="polite"></p>
@@ -346,5 +381,6 @@
   {% endfor %}
 </div>
 <script type="application/json" id="data">{{ me.js | safe }}</script>
+<script src="/static/review_filter.js" defer></script>
 <script src="/static/app.js" defer></script>
 {% endblock %}

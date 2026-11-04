@@ -25,7 +25,8 @@ database_id = "REPLACE_WITH_D1_DATABASE_ID"
 
 # Daily cleanup at 04:17 KST: records older than RECORD_TTL_DAYS, rate counters older than 2 days.
 [triggers]
-crons = ["17 19 * * *"]
+# daily cleanup (04:17 KST) and an hourly check that opens a scheduled 학생 리뷰 vote with one push (F18.3)
+crons = ["17 19 * * *", "7 * * * *"]
 
 # AMP Live (F7): one Durable Object per room, SQLite storage backend (the only kind on the free plan).
 [[durable_objects.bindings]]

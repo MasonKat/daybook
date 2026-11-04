@@ -90,6 +90,8 @@ class PullReport:
     live: int = 0
     reports: int = 0
     watches: int = 0
+    reviews: int = 0
+    votes: int = 0
 
 
 def _token_map(conn: sqlite3.Connection) -> dict[str, int]:
@@ -233,6 +235,8 @@ def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None =
         rep.watches = apply_watches(conn, wt.get("items", []))
     except PullError:
         pass  # an older Worker without watch signals
+    from . import reviews as RV                     # F18.3: new 학생 리뷰 and votes; finished votes get their winners
+    rep.reviews, rep.votes = RV.pull_and_close(conn, fetch)
     now = datetime.fromisoformat(body.get("now", datetime.now(timezone.utc).isoformat()).replace("Z", "+00:00"))
     next_since = (now - MARGIN).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     if photos_dir:
@@ -250,6 +254,7 @@ def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None =
                 pass  # expired (7-day retention) or missing
     log_event(conn, "pull", {"since": since, "next_since": next_since, "fetched": rep.fetched, "new": rep.new,
                              "updated": rep.updated, "unknown_tokens": rep.unknown_tokens,
-                             "checkins": rep.checkins, "live": rep.live, "reports": rep.reports, "watches": rep.watches})
+                             "checkins": rep.checkins, "live": rep.live, "reports": rep.reports, "watches": rep.watches,
+                             "reviews": rep.reviews})
     conn.commit()
     return rep

@@ -26,6 +26,10 @@ def test_reseed_twice_with_every_table_filled(conn):
     conn.execute("INSERT INTO settings (key, value, ts) VALUES ('practice_mode', 'manitoba', 't')")
     conn.execute("INSERT INTO meetings (student_id, day, kind, ts) VALUES (?, '2026-11-05', 'slc', 't')", (sid,))
     conn.execute("INSERT INTO snoozes (student_id, rule, until, ts) VALUES (?, 'all', '2026-11-13', 't')", (sid,))
+    conn.execute("INSERT INTO reviews (id, student_id, class_id, day, text, ts) VALUES ('abcdefabcdef', ?, ?, '2026-11-02', '판서 최고', 't')", (sid, cls["id"]))
+    conn.execute("INSERT INTO review_rounds (id, class_id, period_from, period_to, open_at, close_at) VALUES ('r1', ?, 'a', 'b', 'c', 'd')", (cls["id"],))
+    conn.execute("INSERT INTO review_votes (round_id, student_id, review_id, ts) VALUES ('r1', ?, 'abcdefabcdef', 't')", (sid,))
+    conn.execute("INSERT INTO review_wins (round_id, review_id, votes) VALUES ('r1', 'abcdefabcdef', 1)")
     conn.commit()
     tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")]
     empty = [t for t in tables if t != "events" and not conn.execute(f"SELECT 1 FROM {t} LIMIT 1").fetchone()]

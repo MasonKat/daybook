@@ -2,10 +2,13 @@
 // 20 students, a 3-hour board polling every 60 s, 3 moments with 20 reactions each, every student opening the page 5x,
 // one AMP Live round (20 students x 10 questions, everyone polling every 2 s for ~20 minutes), and (F14) an open
 // weekly-test round: every student sends the report and edits it once; (F15) 3 watch records each, push opt-in and
-// one push after 발행.
+// one push after 발행; (F18.3) the review wordlist + name hashes synced, every student writes 1 review, opens the review
+// sheet on each of the 5 page opens, and votes once; the hourly vote cron runs 24 times.
+import fs from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { seoulDay } from '../src/index.js';
+const addDays = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400e3).toISOString().slice(0, 10);
 import { ORIGIN, TEACHER, mkEnv } from './helpers.mjs';
 
 // Cloudflare free plan, per day (Workers / KV / D1 pricing pages; re-check them if the plan changes)
@@ -33,8 +36,15 @@ test('a full class day stays under 30 % of every free daily limit', async () => 
   await teacher('/session', 'PUT', { class: 'c1', date: day, code: '1234', start: '18:00', tokmap,
     open_from: new Date(Date.now() - 30 * 60e3).toISOString(), open_until: new Date(Date.now() + 60 * 60e3).toISOString() });
   for (let n = 1; n <= 3; n++) await teacher('/moment-put', 'PUT', { class: 'c1', date: day, n, text: `장면 ${n}`, image: JPEG });
+  const words = fs.readFileSync(new URL('../../filters/review_words.txt', import.meta.url), 'utf-8').split('\n');
+  const rround = { id: 'c1-2026-11-02', class: 'c1', open_from: new Date(Date.now() - 600e3).toISOString(),
+    open_until: new Date(Date.now() + 86000e3).toISOString(), period_from: addDays(day, -13), period_to: addDays(day, 13) };
+  await teacher('/reviews-sync', 'PUT', { words, rounds: [rround],                // F18.3: 발행 sends the list, hashes, the round
+    names: { c1: Array.from({ length: 20 }, (_, i) => (i.toString(16) + '0123456789abcdef').slice(0, 16)) } });
   for (const t of toks) {
-    for (let i = 0; i < 5; i++) { await student(`/status?t=${t}`); await student(`/moments?t=${t}`); }   // 5 page opens
+    for (let i = 0; i < 5; i++) { await student(`/status?t=${t}`); await student(`/moments?t=${t}`); await student(`/reviews?t=${t}`); }   // 5 page opens
+    { const rf = new FormData(); rf.append('t', t); rf.append('text', `오늘 수업 웃겼던 순간 ${t.slice(-2)}`); rf.append('hide', '0');
+      assert.equal((await student('/review', rf)).ok, true); }                   // F18.3: one review a day
     const wrong = new FormData(); wrong.append('t', t); wrong.append('code', '0000');
     if (t.endsWith('az') || t.endsWith('bz')) await student('/checkin', wrong);
     const fd = new FormData(); fd.append('t', t); fd.append('code', '1234');
@@ -66,6 +76,15 @@ test('a full class day stays under 30 % of every free daily limit', async () => 
       assert.equal(r.ok, true);
     }
   }
+  // F18.3: the teacher approves them all (one sync), everyone votes once, the hourly cron runs all day
+  const pulled = await teacher('/reviews-pull?since=2020-01-01');
+  await teacher('/reviews-sync', 'PUT', { reviews: pulled.reviews.map((r) => ({ id: r.id, status: 'approved', label: '' })), rounds: [rround] });
+  for (const [i, t] of toks.entries()) {
+    const vf = new FormData(); vf.append('t', t); vf.append('round', rround.id); vf.append('review', pulled.reviews[(i + 1) % toks.length].id);
+    assert.equal((await student('/review/vote', vf)).ok, true);
+    await student(`/reviews?t=${t}`);
+  }
+  for (let h = 0; h < 24; h++) await worker.scheduled({ cron: '7 * * * *' }, env);
   for (let poll = 0; poll < 180; poll++) {                                       // the board: 3 h at 60 s
     await teacher('/submissions?since=2026-01-01T00:00:00.000Z');
     await teacher('/checkins?since=2026-01-01T00:00:00.000Z');
@@ -89,10 +108,11 @@ test('a full class day stays under 30 % of every free daily limit', async () => 
   await tpost('/live/close', { room });
   // F15.3: after 발행, one push to the class, in batches (the free plan's subrequest/CPU limits), then nothing more today
   for (let more = true; more;) more = (await teacher('/push/send', 'POST', { classes: ['c1'], kind: 'report', body: '이번 주 기록이 업데이트됐어요' })).more;
-  assert.equal(pushOut, 20);
+  assert.equal(pushOut, 20);                     // F18.3: the vote push reached all 20 and used today's cap: none after 발행
   assert.equal((await teacher('/push/send', 'POST', { classes: ['c1'], kind: 'video', body: 'x' })).sent, 0);   // daily cap
   await teacher('/push/count');
-  await teacher('/submissions'); await teacher('/checkins'); await teacher('/live/results'); await teacher('/reports'); await teacher('/watches');   // Saturday-style pull
+  await teacher('/submissions'); await teacher('/checkins'); await teacher('/live/results'); await teacher('/reports'); await teacher('/watches');
+  await teacher('/reviews-pull?since=2020-01-01');                              // Saturday-style pull
 
   const kv = env.SUBMISSIONS.ops, d1 = env.DB.usage;
   const dO = env.LIVE.usage;

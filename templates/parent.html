@@ -103,6 +103,7 @@
       <span class="sender">{{ S.teacher_name }}</span>
       {% if loop.last %}
       {{ report(w) }}
+      {% if me.rv_win %}<div class="bubble rvwin"><span class="bl">★ {{ S.rv_parent_win }} · {{ me.rv_win.period }}</span><blockquote>“{{ me.rv_win.text }}”</blockquote></div>{% endif %}
       {% else %}
       <details class="past">
         <summary class="bubble sum">{{ w.summary }}</summary>

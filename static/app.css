@@ -563,3 +563,43 @@ select.consent.unknown { border-color: var(--adjust); } select.consent.no { bord
 .vt.more { display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--muted); }
 .mywk { margin: 10px 0 4px; text-align: left; } .mywk-h { font-size: 13px; font-weight: 700; margin: 8px 0 2px; }
 .rrow .rv, .mywk { min-width: 0; }
+
+/* ---------- F18.4 header: wordmark → mascot slot → 학생 리뷰 pill → date → avatar */
+.sbar .wordmark { flex: none; }
+.mslot { flex: none; display: inline-flex; width: 28px; height: 28px; }
+.mslot .mascot { width: 28px; height: 28px; margin: 0; vertical-align: 0; }
+.mph { width: 28px; height: 28px; }
+.mph rect { fill: var(--card); stroke: var(--line); }
+.mph circle { fill: var(--muted); opacity: .45; }
+.rvpill { position: relative; flex: none; display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 0 12px 0 8px;
+  border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: 600 13px var(--font);
+  cursor: pointer; white-space: nowrap; }
+.rvstar { width: 18px; height: 18px; flex: none; }
+.rvdot { position: absolute; top: 2px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--heart); }
+.sbar .sdate { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 360px) {
+  .rvpill { padding: 0; width: 34px; min-height: 34px; justify-content: center; }
+  .rvpill-t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .sbar { gap: 8px; }
+}
+
+/* ---------- F18.3 학생 리뷰 sheet and the 오늘 vote card */
+.rvcard { margin-bottom: var(--s3); display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.rvcard .btn { flex: none; }
+.rv-row { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); margin-top: 6px; }
+.rv-hide { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-size: 14px; }
+.rv-hide input { width: 20px; height: 20px; }
+.rv-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.rv-list li { background: var(--card); border-radius: 12px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rv-list .rvt { flex: 1; min-width: 0; }
+.rv-list .rvl { display: block; color: var(--muted); font-size: 12px; }
+.rv-list .rvs { flex: none; color: var(--muted); font-size: 12px; }
+.rv-list .btn { flex: none; min-height: 36px; padding: 0 14px; font-size: 14px; }
+.rv-list li.on { outline: 2px solid var(--accent); }
+.rv-list.best li { background: var(--grad-soft); }
+.rv-vote { border: 1px solid var(--line); border-radius: 14px; padding: 2px 12px 12px; margin: 8px 0 4px; }
+#rv-sample-bad { border: 0; cursor: pointer; min-height: 32px; margin-top: 4px; }
+.rv-taste { margin-top: 10px; }
+/* parent: the child's own win only */
+.rvwin { border-left: 3px solid #ec4899; }
+.rvwin blockquote { margin: 6px 0 0; font-weight: 600; }

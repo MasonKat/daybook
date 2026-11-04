@@ -1,0 +1,80 @@
+# DAYBOOK 학생 리뷰 금지어 (F18.3). One word or phrase per line; # starts a comment.
+# The filter ignores spaces, symbols and digits between letters, reads 초성 (ㅅㅂ), and reads Latin letters typed on
+# a Korean keyboard (tlqkf = 시발), so one plain entry covers its variants. Extend it locally in
+# filters/review_words.local.txt (gitignored); publish sends the merged list to the pages and the Worker.
+# Words that must never be blocked (e.g. 시발점) go in a line starting with "!".
+
+# 욕설
+시발
+씨발
+씨빨
+시빨
+십발
+ㅅㅂ
+ㅆㅂ
+ㅅㅃ
+병신
+ㅂㅅ
+븅신
+빙신
+좆
+ㅈㄹ
+지랄
+존나
+졸라
+ㅈㄴ
+개새끼
+개새
+개색
+ㄱㅅㄲ
+새끼
+ㅅㄲ
+미친놈
+미친년
+미친새끼
+ㅁㅊ
+닥쳐
+엿먹어
+염병
+썅
+쌍년
+fuck
+shit
+bitch
+sibal
+ssibal
+shibal
+# 혐오 · 차별 (지역)
+홍어
+전라디언
+개쌍도
+# 혐오 · 차별 (성별)
+김치녀
+된장녀
+한남충
+메갈
+꼴페미
+보슬아치
+# 혐오 · 차별 (장애)
+애자
+찐따
+장애새끼
+벙어리
+# 혐오 · 차별 (외모)
+뚱보
+뚱땡이
+돼지새끼
+못생긴
+얼평
+# 혐오 · 차별 (국적 · 인종)
+짱깨
+쪽바리
+깜둥이
+똥남아
+# 따돌림
+왕따
+자살
+# never block (ordinary words that contain a blocked one)
+!시발표
+!시발점
+!시발역

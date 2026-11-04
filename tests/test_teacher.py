@@ -138,7 +138,7 @@ def test_publish_runs_pull_publish_lint(tserver, klass, conn, tmp_path, monkeypa
     assert code == 200 and j["ok"], j
     assert j["steps"][0].startswith("pull: new 0") and "lint passed" in j["steps"][1]
     assert (tmp_path / "dist" / "s" / studs[0]["student_token"] / "index.html").exists()
-    assert sent[-1][0] == "/tokmap"
+    assert [x[0] for x in sent][-2:] == ["/tokmap", "/reviews-sync"]        # F18.3: reviews follow the links
     assert not (tmp_path / "dist" / "static" / "teacher.js").exists()       # the Teacher tab never goes online
     conn.execute("UPDATE students SET display_name = full_name WHERE id = ?", (studs[0]["id"],))
     conn.commit()

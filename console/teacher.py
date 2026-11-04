@@ -166,6 +166,10 @@ def publish(conn: sqlite3.Connection, cfg: Config, out: Path | None = None, db_p
         msg = push_tokmap(conn, cfg)
         if msg:
             steps.append(msg)
+        from . import reviews as RV
+        msg = RV.after_publish(conn, cfg)                                # F18.3: vote moments, decisions, winners
+        if msg:
+            steps.append(msg)
         from . import push as P
         steps += P.after_publish(conn, cfg)                              # F15.3: one push, if set up
         if db_path:
@@ -509,3 +513,65 @@ def metrics_view(conn: sqlite3.Connection, cfg: Config, class_name: str | None, 
     from . import metrics as MT
     rows = MT.weekly(conn, cfg, class_name or None, 8, day)
     return {"columns": MT.COLUMNS, "rows": rows}
+
+
+# ---------------------------------------------------------------- F18.3: 학생 리뷰 (승인 / 숨김, vote state, winners)
+
+def reviews_view(conn: sqlite3.Connection, cfg: Config, day: date) -> dict:
+    from . import reviews as RV
+    q = """SELECT r.id, r.day, r.text, r.hide_name, r.status, s.display_name, c.name AS class_name FROM reviews r
+           JOIN students s ON s.id = r.student_id LEFT JOIN classes c ON c.id = r.class_id WHERE r.status = ? ORDER BY r.ts"""
+    pending = [dict(x) for x in conn.execute(q, ("pending",))]
+    approved = [dict(x) for x in conn.execute(q, ("approved",))][-40:][::-1]
+    start, end = RV.period(day)
+    classes = []
+    for c in conn.execute("SELECT * FROM classes ORDER BY id"):
+        rnd = conn.execute("SELECT * FROM review_rounds WHERE id = ?", (RV._round_id(c["id"], start),)).fetchone()
+        n = conn.execute("SELECT COUNT(*) FROM reviews WHERE class_id = ? AND status = 'approved' AND day BETWEEN ? AND ?",
+                         (c["id"], start.isoformat(), end.isoformat())).fetchone()[0]
+        state, at = "none", ""
+        if rnd:
+            at = M.utc_iso_to_kst(rnd["open_at"]).strftime("%m/%d %H:%M")
+            now = M.kst_now()
+            if rnd["status"] != "planned":
+                state = rnd["status"]
+            elif M.utc_iso_to_kst(rnd["open_at"]) > now:
+                state = "planned"
+            elif M.utc_iso_to_kst(rnd["close_at"]) > now:
+                state = "open"
+            else:
+                state = "due"            # over; the next pull counts the votes
+        votes = conn.execute("SELECT COUNT(*) FROM review_votes WHERE round_id = ?", (rnd["id"],)).fetchone()[0] if rnd else 0
+        classes.append({"name": c["name"], "approved": n, "state": state, "at": at, "votes": votes})
+    wins = []
+    for w in RV.wins(conn):
+        s = conn.execute("SELECT display_name FROM students WHERE id = ?", (w["student_id"],)).fetchone()
+        cl = conn.execute("SELECT name FROM classes WHERE id = ?", (w["class_id"],)).fetchone()
+        wins.append({"period": RV.period_label(date.fromisoformat(w["period_from"]), date.fromisoformat(w["period_to"])),
+                     "class_name": cl[0] if cl else "", "display_name": s[0] if s else "", "text": w["text"], "votes": w["votes"]})
+    return {"ok": True, "period": RV.period_label(start, end), "pending": pending, "approved": approved, "classes": classes,
+            "wins": wins}
+
+
+def review_decide(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
+    from . import reviews as RV
+    status = {"approve": "approved", "hide": "hidden"}.get(str(body.get("action", "")))
+    if not status:
+        raise TeacherError("action: approve | hide")
+    try:
+        RV.decide(conn, str(body.get("id", "")), status)
+    except RV.ReviewError as e:
+        raise TeacherError(str(e)) from e
+    conn.commit()
+    return {"ok": True, "message": RV.sync(conn, cfg)}
+
+
+def review_open_vote(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
+    from . import reviews as RV
+    try:
+        cls = ops.get_class(conn, str(body.get("class", "")))
+    except ops.OpError as e:
+        raise TeacherError(str(e)) from e
+    RV.open_now(conn, cls["id"])
+    conn.commit()
+    return {"ok": True, "message": RV.sync(conn, cfg)}

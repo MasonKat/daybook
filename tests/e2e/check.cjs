@@ -726,6 +726,58 @@ c = sqlite3.connect(sys.argv[1])
 print(c.execute("SELECT COUNT(*), SUM(correct) FROM effort WHERE source = 'live'").fetchone())`, env.DAYBOOK_DB], { encoding: 'utf-8' }).trim();
     check(eff === '(2, 1)', `daybook pull imported the per-student counts into effort, source 'live' ${eff}`);
 
+    console.log('\n[6r] 학생 리뷰 (F18.3): write -> 확인 중 -> pull -> 승인 -> a classmate sees it; a blocked line is never stored');
+    {
+      const two = JSON.parse(execFileSync(PYTHON, ['-c', `
+import json, sqlite3, sys
+c = sqlite3.connect(sys.argv[1]); c.row_factory = sqlite3.Row
+q = "SELECT s.student_token, s.display_name FROM students_public s JOIN classes k ON k.id = s.class_id WHERE k.name = ? AND s.active = 1 AND s.id NOT IN (SELECT student_id FROM reviews) ORDER BY s.id DESC LIMIT 2"
+print(json.dumps([dict(r) for r in c.execute(q, (sys.argv[2],))]))`, env.DAYBOOK_DB, CLASS_ON], { encoding: 'utf-8' }));
+      const rc = await browser.newContext({ viewport: { width: 360, height: 740 } });
+      const rp = await rc.newPage();
+      const rerr = [];
+      rp.on('console', (m) => { if (m.type() === 'error') rerr.push(m.text()); });
+      await rp.goto(`${PAGES}/s/${two[0].student_token}/#today`, { waitUntil: 'networkidle' });
+      const pill = await rp.evaluate(() => { const b = document.getElementById('rv-open').getBoundingClientRect(), h = document.querySelector('.sbar');
+        return { w: Math.round(b.width), sw: h.scrollWidth - h.clientWidth }; });
+      check(pill.w <= 40 && pill.sw <= 0, `F18.4 360 px: the pill shrinks to its star icon (${pill.w}px), the header does not overflow`);
+      await rp.click('#rv-open');
+      await rp.waitForSelector('#rv:not([hidden])');
+      await rp.fill('#rv-text', 'ㅅ 1 ㅂ 진짜 어렵네');
+      await rp.click('#rv-send');
+      await rp.waitForFunction(() => document.getElementById('rv-err').textContent.length > 0, null, { timeout: 3000 }).catch(() => {});
+      check((await rp.textContent('#rv-err')) === '이 표현은 쓸 수 없어요', 'the phone blocks 욕설 (초성 with a digit in between): "이 표현은 쓸 수 없어요"');
+      const blockedDirect = await rp.evaluate(async ([w, t]) => { const fd = new FormData(); fd.append('t', t); fd.append('text', 'ㅅ 1 ㅂ 진짜 어렵네');
+        return (await (await fetch(w + '/review', { method: 'POST', body: fd })).json()).error; }, [WORKER, two[0].student_token]);
+      check(blockedDirect === 'blocked', 'the Worker blocks it too (a page that skipped the phone check)');
+      await rp.fill('#rv-text', `${two[1].display_name} 바보`);
+      await rp.evaluate(() => { document.getElementById('rv-err').textContent = ''; });
+      await rp.click('#rv-send');
+      await rp.waitForFunction(() => document.getElementById('rv-err').textContent.length > 0, null, { timeout: 3000 }).catch(() => {});
+      check((await rp.textContent('#rv-err')) === '이 표현은 쓸 수 없어요', 'a classmate\'s display name is blocked on the phone (by hash)');
+      await rp.fill('#rv-text', '선생님 판서가 오늘은 피카소급');
+      await rp.click('#rv-send');
+      await rp.waitForFunction(() => /보냈어요/.test(document.getElementById('rv-ok').textContent), null, { timeout: 5000 }).catch(() => {});
+      check(/확인 중/.test(await rp.textContent('#rv-mine')), 'sent: the writer sees "확인 중"; nobody else does yet');
+      await rp.fill('#rv-text', '두 번째 리뷰');
+      await rp.click('#rv-send');
+      await rp.waitForFunction(() => document.getElementById('rv-err').textContent.length > 0, null, { timeout: 3000 }).catch(() => {});
+      check(/하루에 하나/.test(await rp.textContent('#rv-err')), 'one a day');
+      const pulled = daybook('pull');
+      check(/학생 리뷰: new 1 /.test(pulled), `daybook pull: ${pulled.trim().split('\n').pop()}`);
+      const id = (daybook('review', 'list').match(/^([a-f0-9]{12})\s.*피카소급/m) || [])[1];
+      check(!!id && /Worker: 학생 리뷰 synced/.test(daybook('review', 'approve', id)), `daybook review approve ${id}: synced`);
+      const rp2 = await rc.newPage();
+      await rp2.goto(`${PAGES}/s/${two[1].student_token}/#today`, { waitUntil: 'networkidle' });
+      await rp2.click('#rv-open');
+      await rp2.waitForFunction(() => /피카소급/.test(document.getElementById('rv-list').textContent), null, { timeout: 5000 }).catch(() => {});
+      check((await rp2.textContent('#rv-list')).includes('선생님 판서가 오늘은 피카소급' + two[0].display_name),
+        'a classmate sees the approved review with the writer\'s display name (korea mode)');
+      await shot(rp2, 'student-review.png');
+      check(rerr.length === 0, `0 console errors on the review pages (${rerr.slice(0, 2).join(' | ')})`);
+      await rc.close();
+    }
+
     console.log('\n[6b] Teacher tab (F6): roster, notes, publish from the browser');
     const tpage = await bctx.newPage();
     const terr = [];
@@ -790,6 +842,14 @@ print(c.execute("SELECT COUNT(*), SUM(correct) FROM effort WHERE source = 'live'
     await tpage.waitForFunction((sl) => !document.querySelector(`#need-rows .need[data-slug="${sl}"]`), topSlug, { timeout: 5000 }).catch(() => {});
     check((await tpage.locator(`#need-rows .need[data-slug="${topSlug}"]`).count()) === 0 && (await tpage.locator(`#status-rows tr[data-slug="${topSlug}"] .dd`).innerText()).startsWith('0'),
       '"통화함" logs the call: the flag clears and 연락 현황 resets to 0 days');
+    // F18.3: 학생 리뷰 in the Teacher tab: the queue, this period's vote per class, the winners with vote counts
+    await tpage.waitForSelector('#rvt-classes li', { timeout: 5000 }).catch(() => {});
+    check((await tpage.locator('#rvt-classes li').count()) === 4 && /베스트|표/.test(await tpage.textContent('#rvt-wins')) && (await tpage.locator('#rvt-pending li button').count()) >= 2,
+      `학생 리뷰: ${await tpage.locator('#rvt-pending li').count()} waiting (승인 / 숨김), 4 classes, winners with vote counts`);
+    const pend = await tpage.locator('#rvt-pending li').count();
+    await tpage.locator('#rvt-pending li button[data-act="approve"]').first().click();
+    await tpage.waitForFunction((n) => document.querySelectorAll('#rvt-pending li button').length < 2 * n, pend, { timeout: 5000 }).catch(() => {});
+    check(/synced/.test(await tpage.textContent('#rvt-msg')), `승인 syncs to the Worker (${await tpage.textContent('#rvt-msg')})`);
     await tpage.click('#pub-do');
     await tpage.waitForFunction(() => /lint passed|STOPPED/.test(document.getElementById('pub-out').textContent), null, { timeout: 30000 }).catch(() => {});
     check(/lint passed/.test(await tpage.textContent('#pub-out')), `Publish button: ${(await tpage.textContent('#pub-out')).split('\n').filter(Boolean).join(' | ')}`);
@@ -862,6 +922,23 @@ print(c.execute("SELECT COUNT(*), SUM(correct) FROM effort WHERE source = 'live'
       await tp.waitForFunction(() => /제출 완료/.test(document.getElementById('wt-state').textContent), null, { timeout: 3000 }).catch(() => {});
       check(/제출 완료/.test(await tp.textContent('#wt-state')), 'taste: 제출 is simulated on the phone (nothing sent)');
       check(/이번 주 푼 문제 \d+개/.test(await tp.textContent('#solved-me')), `taste: the profile shows 콩's own weekly sum (${await tp.textContent('#solved-me')})`);
+      // F18.3/F18.4: the 학생 리뷰 pill, 5 simulated class reviews, a practice vote, the block message; nothing is sent
+      check(await tp.isVisible('#rv-card') && /학생 리뷰/.test(await tp.textContent('#rv-open')), 'taste: the header pill "학생 리뷰" and a practice vote card on 오늘');
+      await tp.click('#rv-open');
+      await tp.waitForSelector('#rv:not([hidden])');
+      check((await tp.locator('#rv-list li').count()) === 5 && (await tp.locator('#rv-best li').count()) === 1, 'taste: 5 sample class reviews and one 베스트 리뷰');
+      check((await tp.locator('#rv-cands button[disabled]').count()) === 1, 'taste: 콩 cannot vote for 콩\'s own review');
+      await tp.click('#rv-cands button:not([disabled])');
+      check((await tp.locator('#rv-cands li.on').count()) === 1 && (await tp.locator('#rv-cands button[disabled]').count()) === 5, 'taste: one practice vote, then the vote is closed for 콩');
+      await tp.click('#rv-sample-bad');
+      await tp.waitForFunction(() => document.getElementById('rv-err').textContent.length > 0, null, { timeout: 3000 }).catch(() => {});
+      check((await tp.textContent('#rv-err')) === '이 표현은 쓸 수 없어요', 'taste: the sample shows "이 표현은 쓸 수 없어요"');
+      await tp.fill('#rv-text', '오늘 퀴즈 역대급');
+      await tp.click('#rv-send');
+      await tp.waitForFunction(() => /보냈어요/.test(document.getElementById('rv-ok').textContent), null, { timeout: 3000 }).catch(() => {});
+      check(/확인 중/.test(await tp.textContent('#rv-mine')), 'taste: a review is "확인 중" on the phone only');
+      await shot(tp, 'taste-student-review.png');
+      await tp.click('#rv-x');
       await tp.goto(TASTE + '/p/kong/', { waitUntil: 'networkidle' });
       check(await tp.isVisible('.taste-bar') && /AMP 수학 · 콩/.test(await tp.textContent('.room-title')), 'parent page /p/kong/ with the banner');
       check(/^수업 18:00–20:00 · 자습 ~21:00$/.test((await tp.textContent('#hours')).trim()), `taste parent: class hours and self-study ("${(await tp.textContent('#hours')).trim()}")`);

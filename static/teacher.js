@@ -550,6 +550,48 @@
   $('vv-copy').onclick = function () { copy(vvText, $('vv-copy')); };
   loadVideos(7);
 
+  /* ------------------------------------------------------------ F18.3: 학생 리뷰 (승인 / 숨김 before anyone sees it) */
+  var RVT = S.rv;
+  function rvtRow(r, actions) {
+    var li = el('li', { 'class': 'wrow' });
+    li.appendChild(el('span', {}, r.day + ' · ' + r.class_name + ' · ' + r.display_name + (r.hide_name ? ' (' + RVT.hidden_name + ')' : '') + ' — ' + r.text));
+    actions.forEach(function (a) {
+      var b = btn(RVT[a]); b.setAttribute('data-act', a); b.setAttribute('data-id', r.id); li.appendChild(b);
+    });
+    return li;
+  }
+  function loadReviews() {
+    api('/api/teacher/reviews').then(function (j) {
+      $('rvt-period').textContent = j.period || '';
+      var p = $('rvt-pending'); p.innerHTML = '';
+      j.pending.forEach(function (r) { p.appendChild(rvtRow(r, ['approve', 'hide'])); });
+      if (!j.pending.length) p.appendChild(el('li', { 'class': 'muted' }, RVT.none));
+      var a = $('rvt-approved'); a.innerHTML = '';
+      j.approved.forEach(function (r) { a.appendChild(rvtRow(r, ['hide'])); });
+      if (!j.approved.length) a.appendChild(el('li', { 'class': 'muted' }, RVT.none));
+      var c = $('rvt-classes'); c.innerHTML = '';
+      j.classes.forEach(function (k) {
+        var li = el('li', { 'class': 'wrow' });
+        li.appendChild(el('span', {}, k.name + ' · ' + fmt(RVT.approved_n, { n: k.approved }) + ' · ' + fmt(RVT['st_' + k.state], { at: k.at })
+          + (k.votes ? ' · ' + fmt(RVT.votes, { n: k.votes }) : '')));
+        if (k.state !== 'open') { var b = btn(RVT.vote_now); b.setAttribute('data-vote', k.name); li.appendChild(b); }
+        c.appendChild(li);
+      });
+      var w = $('rvt-wins'); w.innerHTML = '';
+      j.wins.forEach(function (x) { w.appendChild(el('li', {}, x.period + ' · ' + x.class_name + ' · ' + x.display_name + ' · ' + fmt(RVT.votes, { n: x.votes }) + ' — ' + x.text)); });
+      if (!j.wins.length) w.appendChild(el('li', { 'class': 'muted' }, RVT.none));
+    });
+  }
+  $('t-reviews').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    var call = b.getAttribute('data-vote') ? api('/api/teacher/review-vote', { 'class': b.getAttribute('data-vote') })
+      : b.getAttribute('data-act') ? api('/api/teacher/review', { id: b.getAttribute('data-id'), action: b.getAttribute('data-act') }) : null;
+    if (!call) return;
+    b.disabled = true;
+    call.then(function (j) { $('rvt-msg').textContent = j.ok ? (j.message || S.saved) : (j.error || ''); loadReviews(); });
+  });
+  loadReviews();
+
   /* ------------------------------------------------------------ F15.3: 알림 보내기 (counts only, never who) */
   var NP = { texts: {} };
   function loadPush() {

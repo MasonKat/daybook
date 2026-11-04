@@ -1,5 +1,6 @@
 // DAYBOOK Worker. Never sees names: tokens, opaque class keys, dates.
 import { send as pushSend } from './webpush.js';
+import { check as reviewCheck, parseList, pieces, readings } from './review_filter.js';
 // Bindings: D1 DB (records: submissions, check-ins, sessions, token map, moments, reactions, rate counters),
 //           KV SUBMISSIONS (photos and moment JPEGs only, with TTLs), R2 PHOTOS (only when PHOTO_STORE = "r2").
 // Secret: TEACHER_TOKEN. No KV `list` anywhere: the free plan allows ~1,000 lists a day (see DECISIONS, H1).
@@ -13,9 +14,13 @@ const CHIPS = new Set(['ok', 'confused', 'rewatch']);
 const RID_RE = /^[a-f0-9]{16}$/;
 // G1: bumped with every feature the console relies on (doctor warns when the deployed Worker is older):
 // 1 base, 2 출석, 3 장면 + Live, 4 푼 문제 수, 5 주간 테스트 reports, 6 /health version + /tokmap-info, 7 /watch,
-// 8 Web Push, 9 consent (no watch / push without the parent's yes)
-export const WORKER_VERSION = 9;
-const PUSH_KINDS = ['video', 'message', 'report', 'test'];
+// 8 Web Push, 9 consent (no watch / push without the parent's yes), 10 학생 리뷰
+export const WORKER_VERSION = 10;
+const DAILY_CRON = '17 19 * * *';
+// the worst words, used until the console has sent the full list (filters/review_words.txt)
+const CORE_WORDS = '시발\n씨발\nㅅㅂ\nㅆㅂ\n병신\nㅂㅅ\n좆\n지랄\n존나\n개새끼\nfuck\nshit\n!시발점\n!시발표';
+const PUSH_KINDS = ['video', 'message', 'report', 'test', 'vote'];
+const KIND_MATCH = { vote: 'message' };     // a vote push goes to whoever takes teacher messages (students only)
 const DEFAULT_KINDS = { s: 'video,message,report,test', p: 'report' };
 const VID_RE = /^[A-Za-z0-9_-]{6,20}$/;
 const REASONS = ['개념탈락', '계산실수', '정보이해부족', '시간부족'];   // F14: the teacher's Notion "Reasoning" options
@@ -68,6 +73,18 @@ export const SCHEMA = [
   'CREATE INDEX IF NOT EXISTS pushsubs_class ON pushsubs (class)',
   // F17: student links whose parents have not consented (yet): no watch signal is stored, no push subscription accepted
   'CREATE TABLE IF NOT EXISTS noconsent (token TEXT PRIMARY KEY)',
+  // F18.3 학생 리뷰: pre-moderated (pending until the teacher approves), class-scoped, a random-time vote per 2 weeks
+  `CREATE TABLE IF NOT EXISTS reviews (id TEXT PRIMARY KEY, token TEXT NOT NULL, class TEXT NOT NULL, day TEXT NOT NULL,
+     text TEXT NOT NULL, hide INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'pending', label TEXT, ts TEXT NOT NULL,
+     updated TEXT NOT NULL)`,
+  'CREATE INDEX IF NOT EXISTS reviews_class ON reviews (class, status)',
+  `CREATE TABLE IF NOT EXISTS rrounds (id TEXT PRIMARY KEY, class TEXT NOT NULL, open_from TEXT NOT NULL, open_until TEXT NOT NULL,
+     period_from TEXT NOT NULL, period_to TEXT NOT NULL, pushed INTEGER NOT NULL DEFAULT 0)`,
+  `CREATE TABLE IF NOT EXISTS rvotes (round TEXT NOT NULL, token TEXT NOT NULL, review TEXT NOT NULL, ts TEXT NOT NULL,
+     PRIMARY KEY (round, token))`,
+  'CREATE TABLE IF NOT EXISTS rbest (review TEXT PRIMARY KEY, class TEXT NOT NULL, period TEXT NOT NULL, text TEXT NOT NULL, label TEXT)',
+  'CREATE TABLE IF NOT EXISTS rwords (w TEXT PRIMARY KEY)',
+  'CREATE TABLE IF NOT EXISTS rnames (class TEXT NOT NULL, h TEXT NOT NULL, PRIMARY KEY (class, h))',
 ];
 const ready = new WeakMap();   // per database binding: create the tables once (no-op afterwards)
 function init(env) {
@@ -329,13 +346,19 @@ async function pushSendAll(req, env) {
   try { b = await req.json(); } catch { return json({ ok: false, error: 'bad_json' }, 400, {}); }
   const kind = String((b && b.kind) || '');
   if (!PUSH_KINDS.includes(kind)) return json({ ok: false, error: 'bad_kind' }, 400, {});
-  if (!env.VAPID_PUBLIC || !env.VAPID_PRIVATE || !env.VAPID_SUBJECT) return json({ ok: false, error: 'no_vapid' }, 200, {});
+  const r = await sendPushes(env, b);
+  return json(r, 200, {});
+}
+
+async function sendPushes(env, b) {
+  const kind = String(b.kind);
+  if (!env.VAPID_PUBLIC || !env.VAPID_PRIVATE || !env.VAPID_SUBJECT) return { ok: false, error: 'no_vapid' };
   const now = Date.now(), day = seoulDay(now);
-  if (quietNow(env, now)) return json({ ok: true, quiet: true, sent: 0, more: false }, 200, {});
+  if (quietNow(env, now)) return { ok: true, quiet: true, sent: 0, more: false };
   const classes = Array.isArray(b.classes) ? b.classes.filter((c) => CLASS_RE.test(String(c))) : [];
   const cap = num(env.PUSH_PER_DAY, 1), batch = Math.min(num(env.PUSH_BATCH, 10), 40);   // free plan: few subrequests/CPU
-  const where = `kinds LIKE ? ${classes.length ? `AND class IN (${classes.map(() => '?').join(',')})` : ''}`;
-  const args = [`%${kind}%`, ...classes];
+  const where = `kinds LIKE ? ${KIND_MATCH[kind] ? "AND role = 's'" : ''} ${classes.length ? `AND class IN (${classes.map(() => '?').join(',')})` : ''}`;
+  const args = [`%${KIND_MATCH[kind] || kind}%`, ...classes];
   const capped = (await one(env, `SELECT COUNT(*) AS n FROM pushsubs WHERE ${where} AND sent_day = ? AND sent_n >= ?`, ...args, day, cap)).n;
   const due = await all(env, `SELECT * FROM pushsubs WHERE ${where} AND (sent_day IS NULL OR sent_day != ? OR sent_n < ?)
     ORDER BY created LIMIT ?`, ...args, day, cap, batch + 1);
@@ -356,7 +379,158 @@ async function pushSendAll(req, env) {
       await run(env, 'DELETE FROM pushsubs WHERE endpoint = ?', sub.endpoint);
     } else failed++;
   }
-  return json({ ok: true, quiet: false, sent, removed, failed, capped, more: due.length > batch }, 200, {});
+  return { ok: true, quiet: false, sent, removed, failed, capped, more: due.length > batch };
+}
+
+// ---------------------------------------------------------------- F18.3 학생 리뷰
+async function hmacHex(key, text) {
+  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(key), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(text)));
+  return [...sig].map((x) => x.toString(16).padStart(2, '0')).join('').slice(0, 16);
+}
+async function wordList(env) {
+  const rows = await all(env, 'SELECT w FROM rwords');
+  return parseList(rows.length ? rows.map((x) => x.w).join('\n') : CORE_WORDS);
+}
+// a classmate's display or full name (the console sends HMAC hashes keyed with the teacher token, never names)
+async function nameHit(env, cls, syl) {
+  const hs = new Set((await all(env, 'SELECT h FROM rnames WHERE class = ?', cls)).map((x) => x.h));
+  if (!hs.size) return false;
+  for (const p of pieces(syl)) if (hs.has(await hmacHex(env.TEACHER_TOKEN || '', `name:${p}`))) return true;
+  return false;
+}
+
+async function reviewWrite(req, env, h) {
+  const now = Date.now(), day = seoulDay(now), iso = new Date(now).toISOString();
+  let form;
+  try { form = await req.formData(); } catch { return json({ ok: false, error: 'bad_form' }, 400, h); }
+  const token = String(form.get('t') || '').toLowerCase();
+  if (!TOKEN_RE.test(token)) return json({ ok: false, error: 'bad_token' }, 400, h);
+  const cls = await classOf(env, token);
+  if (!cls) return json({ ok: false, error: 'unknown_token' }, 200, h);
+  const text = clean(form.get('text'));
+  if ([...text].length < 2 || [...text].length > 60) return json({ ok: false, error: 'length' }, 200, h);
+  if (await one(env, 'SELECT 1 AS x FROM reviews WHERE token = ? AND day = ?', token, day)) return json({ ok: false, error: 'one_a_day' }, 200, h);
+  const verdict = reviewCheck(text, await wordList(env));
+  if (!verdict.ok || await nameHit(env, cls, readings(text).syl)) return json({ ok: false, error: 'blocked' }, 200, h);   // nothing stored
+  const id = [...crypto.getRandomValues(new Uint8Array(6))].map((x) => x.toString(16).padStart(2, '0')).join('');
+  await run(env, `INSERT INTO reviews (id, token, class, day, text, hide, status, ts, updated) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+    id, token, cls, day, text, form.get('hide') === '1' ? 1 : 0, iso, iso);
+  return json({ ok: true, id, status: 'pending' }, 200, h);
+}
+
+async function openRound(env, cls, now) {
+  const iso = new Date(now).toISOString();
+  return one(env, 'SELECT * FROM rrounds WHERE class = ? AND open_from <= ? AND open_until > ? ORDER BY open_from DESC LIMIT 1', cls, iso, iso);
+}
+async function candidates(env, round) {
+  return all(env, `SELECT id, token, text, label FROM reviews WHERE class = ? AND status = 'approved' AND day BETWEEN ? AND ?
+    ORDER BY ts`, round.class, round.period_from, round.period_to);
+}
+
+async function reviewList(env, url, h) {
+  const token = (url.searchParams.get('t') || '').toLowerCase();
+  if (!TOKEN_RE.test(token)) return json({ ok: false, error: 'bad_token' }, 400, h);
+  const cls = await classOf(env, token);
+  if (!cls) return json({ ok: true, mine: [], approved: [], best: [], vote: null }, 200, h);
+  const now = Date.now();
+  const [mine, approved, best, round] = await Promise.all([
+    all(env, 'SELECT id, day, text, status FROM reviews WHERE token = ? ORDER BY ts DESC LIMIT 10', token),
+    all(env, `SELECT id, token, text, label FROM reviews WHERE class = ? AND status = 'approved' AND day >= ? ORDER BY ts DESC LIMIT 30`,
+      cls, addDays(seoulDay(now), -28)),
+    all(env, 'SELECT period, text, label FROM rbest WHERE class = ? ORDER BY period DESC, review LIMIT 20', cls),
+    openRound(env, cls, now),
+  ]);
+  let vote = null;
+  if (round) {
+    const cands = await candidates(env, round);
+    if (cands.length >= 3) {                                         // fewer than 3 approved reviews: no vote this period
+      const voted = await one(env, 'SELECT review FROM rvotes WHERE round = ? AND token = ?', round.id, token);
+      vote = { round: round.id, until: round.open_until, voted: voted ? voted.review : null,
+        candidates: cands.map((c) => ({ id: c.id, text: c.text, label: c.label || '', mine: c.token === token })) };
+    }
+  }
+  // labels: the console sends the display name only for korea-mode reviews whose writer did not hide it
+  return json({ ok: true, mine, approved: approved.map((a) => ({ id: a.id, text: a.text, label: a.label || '', mine: a.token === token })),
+    best, vote }, 200, h);
+}
+
+async function reviewVote(req, env, h) {
+  let form;
+  try { form = await req.formData(); } catch { return json({ ok: false, error: 'bad_form' }, 400, h); }
+  const token = String(form.get('t') || '').toLowerCase(), roundId = String(form.get('round') || ''), rid = String(form.get('review') || '');
+  if (!TOKEN_RE.test(token)) return json({ ok: false, error: 'bad_token' }, 400, h);
+  const cls = await classOf(env, token);
+  const round = cls ? await openRound(env, cls, Date.now()) : null;
+  if (!round || round.id !== roundId) return json({ ok: false, error: 'closed' }, 200, h);
+  const cands = await candidates(env, round);
+  const pick = cands.find((c) => c.id === rid);
+  if (cands.length < 3 || !pick) return json({ ok: false, error: 'not_a_candidate' }, 200, h);
+  if (pick.token === token) return json({ ok: false, error: 'own_review' }, 200, h);
+  const res = await run(env, 'INSERT OR IGNORE INTO rvotes (round, token, review, ts) VALUES (?, ?, ?, ?)', round.id, token, rid, new Date().toISOString());
+  const changes = res && res.meta ? res.meta.changes : 1;
+  return json(changes ? { ok: true } : { ok: false, error: 'already_voted' }, 200, h);
+}
+
+async function reviewSync(req, env) {
+  // the console's moderation decisions, the vote schedule, the winners, the wordlist and the classmates' name hashes
+  let b;
+  try { b = await req.json(); } catch { return json({ ok: false, error: 'bad_json' }, 400, {}); }
+  const stmts = [], now = new Date().toISOString();
+  for (const x of Array.isArray(b.reviews) ? b.reviews : []) {
+    if (!/^[a-f0-9]{12}$/.test(String(x.id)) || !['pending', 'approved', 'hidden'].includes(x.status)) continue;
+    stmts.push(env.DB.prepare('UPDATE reviews SET status = ?, label = ?, updated = ? WHERE id = ?').bind(x.status, clean(x.label).slice(0, 20) || null, now, x.id));
+  }
+  if (Array.isArray(b.rounds)) {
+    const ok = b.rounds.filter((x) => /^[a-z0-9-]{4,40}$/.test(String(x.id)) && CLASS_RE.test(String(x.class))
+      && !Number.isNaN(Date.parse(x.open_from)) && !Number.isNaN(Date.parse(x.open_until)));
+    // rounds the console no longer plans go (closed rounds stay: votes refer to them); a kept round keeps `pushed`
+    stmts.push(env.DB.prepare(`DELETE FROM rrounds WHERE open_until > ? AND id NOT IN (${ok.map(() => '?').join(',') || "''"})`)
+      .bind(now, ...ok.map((x) => x.id)));
+    for (const x of ok) {
+      stmts.push(env.DB.prepare(`INSERT INTO rrounds (id, class, open_from, open_until, period_from, period_to, pushed)
+        VALUES (?, ?, ?, ?, ?, ?, 0) ON CONFLICT (id) DO UPDATE SET class = excluded.class, open_from = excluded.open_from,
+        open_until = excluded.open_until, period_from = excluded.period_from, period_to = excluded.period_to`)
+        .bind(x.id, x.class, new Date(x.open_from).toISOString(), new Date(x.open_until).toISOString(), String(x.period_from), String(x.period_to)));
+    }
+  }
+  if (Array.isArray(b.best)) {
+    stmts.push(env.DB.prepare('DELETE FROM rbest'));
+    for (const x of b.best) {
+      if (!/^[a-f0-9]{12}$/.test(String(x.review)) || !CLASS_RE.test(String(x.class))) continue;
+      stmts.push(env.DB.prepare('INSERT OR REPLACE INTO rbest (review, class, period, text, label) VALUES (?, ?, ?, ?, ?)')
+        .bind(x.review, x.class, clean(x.period).slice(0, 20), clean(x.text).slice(0, 60), clean(x.label).slice(0, 20) || null));
+    }
+  }
+  if (Array.isArray(b.words)) {
+    stmts.push(env.DB.prepare('DELETE FROM rwords'));
+    for (const w of b.words.slice(0, 2000)) if (String(w).trim()) stmts.push(env.DB.prepare('INSERT OR IGNORE INTO rwords (w) VALUES (?)').bind(String(w).trim().slice(0, 40)));
+  }
+  if (b.names && typeof b.names === 'object') {
+    stmts.push(env.DB.prepare('DELETE FROM rnames'));
+    for (const [cls, hs] of Object.entries(b.names)) {
+      if (!CLASS_RE.test(cls) || !Array.isArray(hs)) continue;
+      for (const hh of hs) if (/^[a-f0-9]{16}$/.test(String(hh))) stmts.push(env.DB.prepare('INSERT OR IGNORE INTO rnames (class, h) VALUES (?, ?)').bind(cls, hh));
+    }
+  }
+  if (stmts.length) await env.DB.batch(stmts);
+  return json({ ok: true }, 200, {});
+}
+
+// hourly: a round that just opened sends one push to the class (students who take teacher messages; the daily cap holds)
+async function openVotes(env) {
+  const now = Date.now(), iso = new Date(now).toISOString();
+  const due = await all(env, 'SELECT * FROM rrounds WHERE pushed = 0 AND open_from <= ? AND open_until > ?', iso, iso);
+  for (const round of due) {
+    if ((await candidates(env, round)).length < 3) continue;
+    // in batches (the free plan's subrequest limit); a class bigger than 3 batches finishes on the next hourly run
+    let r = { more: true };
+    for (let b = 0; b < 3 && r.more; b++) {
+      r = await sendPushes(env, { classes: [round.class], kind: 'vote', title: 'AMP 학습 기록', body: '학생 리뷰 투표가 열렸어요 (24시간)' });
+      if (!r.ok || r.quiet) break;
+    }
+    if (r.ok && !r.quiet && !r.more) await run(env, 'UPDATE rrounds SET pushed = 1 WHERE id = ?', round.id);
+  }
 }
 
 // ---------------------------------------------------------------- 출석 (F2)
@@ -645,6 +819,9 @@ async function route(req, env, url, h) {
   if (p === '/report' && req.method === 'POST') return report(req, env, h);
   if (p === '/watch' && req.method === 'POST') return watch(req, env, h);
   if (p === '/push/subscribe' && req.method === 'POST') return pushSubscribe(req, env, h);
+  if (p === '/review' && req.method === 'POST') return reviewWrite(req, env, h);
+  if (p === '/review/vote' && req.method === 'POST') return reviewVote(req, env, h);
+  if (p === '/reviews' && req.method === 'GET') return reviewList(env, url, h);
   if (p === '/push/unsubscribe' && req.method === 'POST') return pushUnsubscribe(req, env, h);
   if (p === '/live/join' && req.method === 'POST') return liveStudent(req, env, url, h, 'join');
   if (p === '/live/answer' && req.method === 'POST') return liveStudent(req, env, url, h, 'answer');
@@ -678,7 +855,7 @@ async function route(req, env, url, h) {
     return new Response(img, { headers: { ...h, 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=600' } });
   }
   const teacherPaths = ['/submissions', '/photo', '/checkins', '/session', '/moment-put', '/tokmap',
-    '/live/open', '/live/next', '/live/reveal', '/live/close', '/live/state', '/live/results', '/rounds', '/reports', '/tokmap-info', '/watches', '/push/send', '/push/count'];
+    '/live/open', '/live/next', '/live/reveal', '/live/close', '/live/state', '/live/results', '/rounds', '/reports', '/tokmap-info', '/watches', '/push/send', '/push/count', '/reviews-sync', '/reviews-pull'];
   if (teacherPaths.includes(p)) {
     if (!teacherOk(req, env)) return json({ ok: false, error: 'unauthorized' }, 401, {});
     const since = url.searchParams.get('since') || '';
@@ -704,6 +881,12 @@ async function route(req, env, url, h) {
       return json({ now: new Date().toISOString(), items }, 200, {});
     }
     if (p === '/push/send' && req.method === 'POST') return pushSendAll(req, env);
+    if (p === '/reviews-sync' && req.method === 'PUT') return reviewSync(req, env);
+    if (p === '/reviews-pull' && req.method === 'GET') {
+      const reviews = await all(env, 'SELECT id, token, day, text, hide, status, ts, updated FROM reviews WHERE ts > ? ORDER BY ts', since);
+      const votes = await all(env, 'SELECT round, token, review, ts FROM rvotes WHERE ts > ? ORDER BY ts', since);
+      return json({ now: new Date().toISOString(), reviews, votes }, 200, {});
+    }
     if (p === '/push/count' && req.method === 'GET') {
       // how many browsers are subscribed, per class key and role: never who
       const rows = await all(env, 'SELECT class, role, COUNT(*) AS n FROM pushsubs GROUP BY class, role');
@@ -750,7 +933,7 @@ export default {
     const url = new URL(req.url);
     const h = corsHeaders(req, env);
     const origin = req.headers.get('Origin');
-    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react', '/report', '/watch', '/push/subscribe', '/push/unsubscribe', '/live/join', '/live/answer'].includes(url.pathname)
+    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react', '/report', '/watch', '/push/subscribe', '/push/unsubscribe', '/review', '/review/vote', '/reviews', '/live/join', '/live/answer'].includes(url.pathname)
       || (url.pathname === '/live/state' && url.searchParams.has('t'));
     // CORS: browsers may only call the student endpoints from the Pages origin.
     if (isStudent && origin && origin !== env.ALLOWED_ORIGIN) return json({ ok: false, error: 'origin' }, 403, h);
@@ -765,8 +948,9 @@ export default {
   },
 
   // daily cleanup (wrangler.toml [triggers]): records live RECORD_TTL_DAYS, counters 2 days
-  async scheduled(_event, env) {
+  async scheduled(event, env) {
     await init(env);
+    if (event && event.cron && event.cron !== DAILY_CRON) return openVotes(env);       // F18.3: the hourly vote check
     const day = seoulDay(Date.now()), keep = addDays(day, -num(env.RECORD_TTL_DAYS, 14));
     await env.DB.batch([
       env.DB.prepare('DELETE FROM subs WHERE day < ?').bind(keep),
@@ -779,6 +963,7 @@ export default {
       env.DB.prepare('DELETE FROM live_results WHERE date < ?').bind(keep),
       env.DB.prepare('DELETE FROM reports WHERE updated < ?').bind(keep + 'T00:00:00.000Z'),
       env.DB.prepare('DELETE FROM watches WHERE day < ?').bind(keep),
+      env.DB.prepare("DELETE FROM reviews WHERE day < ? AND id NOT IN (SELECT review FROM rbest)").bind(addDays(day, -120)),
     ]);
   },
 };

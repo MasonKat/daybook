@@ -3,7 +3,7 @@
 **Status (2026-11-04: P0, design v2, F1–F9, hotfix H1–H6, F10 videos per class, F11 members in the Teacher tab, F12 insights, F13 parent-contact desk, F14 weekly-test report):**
 1. P1 complete and tested: schema + `students_public`, `init`, `demo`, `roster add/list/import`, Worker `/submit` + `/submissions`, student 오늘 tab, `pull`, parent page, `publish` + no-PII lint, `import screeners`, deploy steps.
 2. P2 complete: board + attitude buttons, `score`, class reward bar, `note`, `weekly`, Playwright checks. P3: manifest/icons/standalone, `rotate-tokens`, `export pdf` stub, Worker node tests.
-3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 215 pytest + 49 Worker node tests (incl. the class-day budget with a Live round) + the Playwright end-to-end check (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
+3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 230 pytest + 53 Worker node tests (incl. the class-day budget with a Live round) + the Playwright end-to-end check (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
    Design v2: shorts reels + 강의 cards, story rings with content, status-coloured profile tiles, one weekly report per parent message.
 4. Features: taste build (콩, `make deploy-taste`), 출석 with a 4-digit code, 오늘 한 줄, 오늘의 장면 + reactions, 휴강, QR sheet, class band, term report, note drafts,
    the Teacher tab (no terminal on Saturdays), AMP Live (cooperative in-class rounds), the answer-card spike, an offline-capable student page.
@@ -90,6 +90,7 @@ Then follow `HANDOFF.md` (classes, roster import, links).
 | Saturday, optional (F12) | `daybook import insights <file.json>` (or Teacher tab → 가져오기) | per student ≤ 3 focus items, ≤ 3 videos and one line each for student and parent (format: `mappings/insights.example.json`) |
 | Saturday (F13) | Teacher tab → 연락 필요 / 이번 주 할 일, or `daybook contact needed --script` / `daybook contact plan` | who to call and why (dates, times), a 3-line call script and a formal 카톡 draft; the 100-minute plan with a 4-week rotation; you call, then press 통화함 (or `daybook contact log <slug> --summary "…"`) |
 | last week of the month (F13) | Teacher tab → 이달의 좋은 소식, or `daybook contact goodnews` | positive-only drafts for every parent; edit, send yourself, press 메시지 보냄 |
+| Saturday (F18.3) | Teacher tab → 학생 리뷰, or `daybook review list` / `review approve <id>…` / `review hide <id>…` | students' one-line class reviews wait for 승인 (nothing reaches classmates before it); 발행 plans each class's random 24-hour vote (a class day, 15:00–21:30) and `daybook pull` counts it; `daybook review open-vote <class>` (지금 투표 열기) opens it now. Extra filter words: `filters/review_words.local.txt` (gitignored) |
 | once per class (F13) | `daybook class edit 기초B --start 20:00 --end 22:00 --late-min 30 [--self-study 21:00]` | class hours and the 지각 rule (defaults: 10 min, 3 of the last 6, or an average of 15 min) |
 
 Printable 안내 (G4): `daybook cards students <class>` (cut-out cards) and `daybook cards parents <class>` (A4 letters with
@@ -220,9 +221,12 @@ history. `dist/` and `*.sqlite` are gitignored. Every page sends `noindex` and h
 | POST | `/live/join` · `/live/answer`, GET `/live/state?t=&room=` | Pages origin, own class only | AMP Live on the phone: counts and the student's own result |
 | POST | `/react` | Pages origin, own class only | form `t`, `k`, `r` (fire\|clap\|mind) → `{counts, mine, already}`; one per token per moment |
 | GET | `/photo?key=<key>` | `X-Teacher-Token` | the photo bytes |
+| POST | `/review` · `/review/vote`, GET `/reviews?t=` | Pages origin, own class only | F18.3 학생 리뷰: form `t`, `text` (2–60), `hide` → `{ok, status: pending}` or `blocked\|length\|one_a_day` (nothing stored when blocked); a vote `t`, `round`, `review` (`own_review\|already_voted\|closed`); the list: own reviews with status, the class's approved ones, 베스트 리뷰, the open vote |
+| PUT | `/reviews-sync` · GET `/reviews-pull?since=` | `X-Teacher-Token` | decisions, labels, rounds, winners, the wordlist and HMAC name hashes · new reviews and votes |
 
 One record per token per Seoul day; a second upload the same day replaces the photo and keeps the first `ts`.
-Rate limit: `RATE_PER_HOUR` (10) uploads per token per hour → 429. The Worker never sees names.
+Rate limit: `RATE_PER_HOUR` (10) uploads per token per hour → 429. The Worker never sees names, with one exception: the
+display name shown with an approved korea-mode 학생 리뷰 whose writer did not hide it (DECISIONS F18.3).
 
 Manual check against a deployed Worker (replace the URL; the token only needs the right format):
 

@@ -998,6 +998,140 @@
     }
     renderWT();
 
+    /* ---- F18.3 학생 리뷰: write one line a day (filtered here and again in the Worker; nothing is stored when blocked),
+       see the class's approved reviews, vote once when a vote is open (never for your own), and the 베스트 리뷰 history.
+       Classmates' names are checked by salted hash only; the wordlist ships in /static/review_filter.js. */
+    var RV = D.rv || {}, FL = window.DaybookFilter, RVKEY = 'daybook.rv.' + tok;
+    var rv = { mine: [], approved: [], best: [], vote: null };
+    function rvHex(buf) { return Array.prototype.map.call(new Uint8Array(buf), function (x) { return ('0' + x.toString(16)).slice(-2); }).join(''); }
+    function rvNameHit(text) {
+      if (!FL || !(RV.names || []).length || !(window.crypto && crypto.subtle && window.TextEncoder)) return Promise.resolve(false);
+      var ps = FL.pieces(FL.readings(text).syl);
+      return Promise.all(ps.map(function (p) {
+        return crypto.subtle.digest('SHA-256', new TextEncoder().encode(RV.key + ':' + p)).then(function (b) { return rvHex(b).slice(0, 16); });
+      })).then(function (hs) { return hs.some(function (h) { return RV.names.indexOf(h) >= 0; }); }, function () { return false; });
+    }
+    function rvCheck(text) {
+      var n = Array.from(text).length;
+      if (n < 2 || n > 60) return Promise.resolve('length');
+      if (FL && !FL.check(text, FL.list).ok) return Promise.resolve('blocked');
+      return rvNameHit(text).then(function (hit) { return hit ? 'blocked' : ''; });
+    }
+    function rvLi(text, label, side) {
+      var li = document.createElement('li'), t = document.createElement('span');
+      t.className = 'rvt'; t.textContent = text;
+      if (label != null) { var l = document.createElement('span'); l.className = 'rvl'; l.textContent = label; t.appendChild(l); }
+      li.appendChild(t);
+      if (side) li.appendChild(side);
+      return li;
+    }
+    function rvLabel(x) { return x.mine ? S.rv_me : (!RV.anon && x.label) ? x.label : S.rv_anon; }
+    function rvVoteOpen() { return rv.vote && Date.parse(rv.vote.until) > Date.now() ? rv.vote : null; }
+    function renderRv() {
+      var v = rvVoteOpen();
+      $('rv-hide-l').hidden = !!RV.anon;                      /* manitoba practice mode: always anonymous */
+      var mine = $('rv-mine'); mine.innerHTML = '';
+      rv.mine.slice(0, 5).forEach(function (x) {
+        var st = document.createElement('span'); st.className = 'rvs'; st.textContent = S['rv_st_' + x.status] || '';
+        mine.appendChild(rvLi(x.text, null, st));
+      });
+      $('rv-mine-box').hidden = !rv.mine.length;
+      var list = $('rv-list'); list.innerHTML = '';
+      rv.approved.forEach(function (x) { list.appendChild(rvLi(x.text, rvLabel(x))); });
+      if (!rv.approved.length) list.appendChild(rvLi(S.rv_empty));
+      var best = $('rv-best'); best.innerHTML = '';
+      rv.best.forEach(function (x) { best.appendChild(rvLi(x.text, x.period + ' · ' + rvLabel(x))); });
+      if (!rv.best.length) best.appendChild(rvLi(S.rv_best_empty));
+      $('rv-vote').hidden = !v; $('rv-card').hidden = !v; $('rv-dot').hidden = !v || !!v.voted;
+      if (!v) return;
+      $('rv-vote-until').textContent = fmt(S.rv_vote_until, { t: untilText(v.until) });
+      $('rv-card-state').textContent = v.voted ? S.rv_voted : fmt(S.rv_vote_until, { t: untilText(v.until) });
+      $('rv-card-open').textContent = v.voted ? S.rv_voted : S.rv_vote_btn;
+      var cs = $('rv-cands'); cs.innerHTML = '';
+      v.candidates.forEach(function (c) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'btn ' + (v.voted === c.id ? 'primary' : 'ghost'); b.setAttribute('data-id', c.id);
+        b.textContent = c.mine ? S.rv_vote_own : v.voted === c.id ? S.rv_voted : S.rv_vote_btn;
+        b.disabled = !!c.mine || !!v.voted;
+        var li = rvLi(c.text, rvLabel(c), b);
+        if (v.voted === c.id) li.className = 'on';
+        cs.appendChild(li);
+      });
+    }
+    function rvLoad() {
+      if (TASTE) { renderRv(); return; }
+      if (!D.worker || !tok) return;
+      fetch(D.worker + '/reviews?t=' + tok, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+        if (!j || !j.ok) return;
+        rv = { mine: j.mine || [], approved: j.approved || [], best: j.best || [], vote: j.vote || null };
+        LS.set(RVKEY, JSON.stringify(rv));
+        renderRv();
+      }, function () { /* offline: the last copy stays */ });
+    }
+    function rvShow(toVote) {
+      $('rv-err').textContent = ''; $('rv-ok').textContent = '';
+      $('rv').hidden = false;
+      if (toVote && !$('rv-vote').hidden) $('rv-vote').scrollIntoView({ block: 'start' });
+      rvLoad();
+    }
+    $('rv-open').addEventListener('click', function () { rvShow(false); });
+    $('rv-card-open').addEventListener('click', function () { rvShow(true); });
+    $('rv-x').addEventListener('click', function () { $('rv').hidden = true; });
+    $('rv-text').addEventListener('input', function () {
+      $('rv-count').textContent = Array.from($('rv-text').value).length + '/60'; $('rv-err').textContent = '';
+    });
+    if ($('rv-sample-bad')) $('rv-sample-bad').addEventListener('click', function () {   /* taste: see the block message */
+      $('rv-text').value = $('rv-sample-bad').getAttribute('data-text'); $('rv-send').click();
+    });
+    function rvErr(code) {
+      $('rv-ok').textContent = '';
+      $('rv-err').textContent = { blocked: S.rv_blocked, length: S.rv_length, one_a_day: S.rv_one_a_day }[code] || S.rv_err;
+    }
+    $('rv-send').addEventListener('click', function () {
+      var text = $('rv-text').value.replace(/[\u0000-\u001f]/g, ' ').trim(), hide = $('rv-hide').checked && !RV.anon;
+      rvCheck(text).then(function (bad) {
+        if (bad) return rvErr(bad);                            /* blocked: nothing is sent, nothing is stored */
+        if (rv.mine.some(function (x) { return x.day === today; })) return rvErr('one_a_day');
+        var done = function () {
+          rv.mine.unshift({ day: today, text: text, status: 'pending' });
+          $('rv-text').value = ''; $('rv-count').textContent = '0/60'; $('rv-err').textContent = ''; $('rv-ok').textContent = S.rv_sent;
+          if (!TASTE) LS.set(RVKEY, JSON.stringify(rv));
+          renderRv();
+        };
+        if (TASTE) return done();                              /* taste: nothing leaves this phone */
+        var fd = new FormData(); fd.append('t', tok); fd.append('text', text); fd.append('hide', hide ? '1' : '0');
+        $('rv-send').disabled = true;
+        fetch(D.worker + '/review', { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (j) {
+          $('rv-send').disabled = false;
+          if (j.ok) done(); else rvErr(j.error);
+        }, function () { $('rv-send').disabled = false; rvErr(''); });
+      });
+    });
+    $('rv-cands').addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-id]'), v = rvVoteOpen();
+      if (!b || !v || v.voted) return;
+      var id = b.getAttribute('data-id');
+      var ok = function () { v.voted = id; if (!TASTE) LS.set(RVKEY, JSON.stringify(rv)); renderRv(); };
+      if (TASTE) return ok();
+      var fd = new FormData(); fd.append('t', tok); fd.append('round', v.round); fd.append('review', id);
+      b.disabled = true;
+      fetch(D.worker + '/review/vote', { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (j) {
+        if (j.ok || j.error === 'already_voted') return j.ok ? ok() : rvLoad();
+        b.disabled = false;
+        if (j.error === 'closed') { rv.vote = null; renderRv(); $('rv-err').textContent = S.rv_vote_closed; }
+      }, function () { b.disabled = false; rvErr(''); });
+    });
+    if (TASTE && RV.sample) {   /* 콩 can try it: simulated class reviews and a practice vote, in memory only */
+      var smp = RV.sample.map(function (t, i) { return { id: 'taste' + i, text: t, label: '', mine: i === 0 }; });
+      rv = { mine: [{ day: addDays(today, -1), text: RV.sample[0], status: 'approved' }], approved: smp,
+        best: [{ period: RV.samplePeriod, text: RV.sample[2], label: '' }],
+        vote: { round: 'taste', until: new Date(Date.parse(today + 'T21:30:00+09:00') + 86400e3).toISOString(), voted: null, candidates: smp } };
+    } else {
+      try { var c0 = JSON.parse(LS.get(RVKEY) || 'null'); if (c0) rv = c0; } catch (e) { /* ignore */ }
+    }
+    renderRv();
+    rvLoad();
+
     /* ---- F9: "홈 화면에 추가" hint, shown once, never inside the installed app */
     var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone;
     if (!standalone && !LS.get('daybook.a2hs')) { $('a2hs').hidden = false; LS.set('daybook.a2hs', '1'); }
