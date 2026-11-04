@@ -16,3 +16,15 @@
 </ul>
 {% else %}<p class="rline muted" id="{{ list_id }}">{{ S.vt_empty }}</p>{% endif %}
 {% endmacro %}
+
+{# F21.2: the sub-concept skill map (내 실력 지도): ○ ✕ – per tag, grouped by 단원; never a ranking or a comparison #}
+{% macro skill_map(sk) %}
+<p class="sk-tot tnum">{{ S.sk_totals | fmt(o=sk.totals.o, x=sk.totals.x, m=sk.totals.m) }}</p>
+{% for u in sk.units %}
+<div class="sk-unit"><p class="sk-u">{{ u.unit }}</p>
+  <ul class="sk-tags">{% for t in u.tags %}<li class="sk {{ t.status }}"><span class="sk-n">{{ t.tag }}</span>
+    <span class="sk-st">{{ S['sk_' ~ t.status] }}{% if t.rate is not none and t.status != 'few' %} · {{ S.sk_rate | fmt(p=t.rate) }}{% endif %}</span>
+    <span class="sk-c tnum">○ {{ t.o }}{% if t.p %} · △ {{ S.sk_p | fmt(n=t.p) }}{% endif %} · ✕ {{ t.x }}{% if t.m %} · <span class="sk-m">{{ S.sk_m | fmt(n=t.m) }}</span>{% endif %}</span></li>{% endfor %}</ul>
+</div>
+{% endfor %}
+{% endmacro %}

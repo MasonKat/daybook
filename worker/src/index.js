@@ -16,8 +16,8 @@ const RID_RE = /^[a-f0-9]{16}$/;
 // G1: bumped with every feature the console relies on (doctor warns when the deployed Worker is older):
 // 1 base, 2 출석, 3 장면 + Live, 4 푼 문제 수, 5 주간 테스트 reports, 6 /health version + /tokmap-info, 7 /watch,
 // 8 Web Push, 9 consent (no watch / push without the parent's yes), 10 학생 리뷰, 11 영상 반응 (5-way, pooled per grade),
-// 12 the teacher remote (/t/remote: tap who, speak what)
-export const WORKER_VERSION = 12;
+// 12 the teacher remote (/t/remote: tap who, speak what), 13 수업 문제 (in-class ○/✕/– checks)
+export const WORKER_VERSION = 13;
 const DAILY_CRON = '17 19 * * *';
 // the worst words, used until the console has sent the full list (filters/review_words.txt)
 const CORE_WORDS = '시발\n씨발\nㅅㅂ\nㅆㅂ\n병신\nㅂㅅ\n좆\n지랄\n존나\n개새끼\nfuck\nshit\n!시발점\n!시발표';
@@ -102,6 +102,13 @@ export const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS shouts (id TEXT PRIMARY KEY, token TEXT NOT NULL, class TEXT NOT NULL, day TEXT NOT NULL, points INTEGER NOT NULL,
      text TEXT NOT NULL, at INTEGER NOT NULL, ts TEXT NOT NULL, updated TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)`,
   'CREATE INDEX IF NOT EXISTS shouts_token ON shouts (token, at)',
+  // F21.2 수업 문제: a set the teacher opens in class (a label and N only: no quiz text, no key, no tags), and each
+  // student's own ○ / ✕ / – per quiz (o x m), open until the end of the class day
+  `CREATE TABLE IF NOT EXISTS cwsets (sid TEXT PRIMARY KEY, class TEXT NOT NULL, label TEXT NOT NULL, n INTEGER NOT NULL,
+     open_from TEXT NOT NULL, open_until TEXT NOT NULL, created TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS cwmarks (sid TEXT NOT NULL, token TEXT NOT NULL, marks TEXT NOT NULL, ts TEXT NOT NULL, updated TEXT NOT NULL,
+     PRIMARY KEY (sid, token))`,
+  'CREATE INDEX IF NOT EXISTS cwmarks_updated ON cwmarks (updated)',
 ];
 const ready = new WeakMap();   // per database binding: create the tables once (no-op afterwards)
 function init(env) {
@@ -661,6 +668,10 @@ async function remoteRoute(req, env, url) {
       id, token, cls, seoulDay(at), points, text, at, iso, iso);
     return json({ ok: true }, 200, REMOTE_H);
   }
+  if (p === '/t/remote/classwork' && req.method === 'POST') {          // F21.2: 수업 문제 from the phone
+    const r = await classworkOpen(env, b || {});
+    return json(r, r.ok ? 200 : 400, REMOTE_H);
+  }
   if (p === '/t/remote/undo' && req.method === 'POST') {
     const r = await one(env, 'SELECT * FROM shouts WHERE id = ?', String(b.id || ''));
     if (!r || r.deleted) return json({ ok: false, error: 'not_found' }, 200, REMOTE_H);
@@ -669,6 +680,48 @@ async function remoteRoute(req, env, url) {
     return json({ ok: true }, 200, REMOTE_H);
   }
   return json({ ok: false, error: 'not_found' }, 404, REMOTE_H);
+}
+
+// ---------------------------------------------------------------- F21.2 수업 문제 (in-class ○ / ✕ / – checks)
+const CW_RE = /^[a-f0-9]{16}$/;
+function endOfSeoulDay(ms) {             // 23:59:59 KST of that day, as UTC ISO
+  return new Date(Date.parse(seoulDay(ms) + 'T23:59:59+09:00')).toISOString();
+}
+// the teacher (board, console or remote) opens a set: a label and N; it closes at the end of the class day
+async function classworkOpen(env, b) {
+  const cls = String(b.class || ''), label = clean(b.label).slice(0, 40), n = Number(b.n);
+  if (!CLASS_RE.test(cls) || !label || !Number.isInteger(n) || n < 1 || n > 40) return { ok: false, error: 'bad_request' };
+  if (!(await one(env, 'SELECT 1 AS x FROM tokmap WHERE class = ? LIMIT 1', cls))) return { ok: false, error: 'unknown_class' };
+  const sid = CW_RE.test(String(b.sid || '')) ? String(b.sid)
+    : [...crypto.getRandomValues(new Uint8Array(8))].map((x) => x.toString(16).padStart(2, '0')).join('');
+  const now = Date.now(), iso = new Date(now).toISOString();
+  await run(env, `INSERT INTO cwsets (sid, class, label, n, open_from, open_until, created) VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT (sid) DO NOTHING`, sid, cls, label, n, iso, endOfSeoulDay(now), iso);
+  return { ok: true, sid, until: endOfSeoulDay(now) };
+}
+async function openClasswork(env, token, now) {
+  const iso = new Date(now).toISOString();
+  const rows = await all(env, `SELECT s.sid, s.n, s.label, s.open_until, m.marks FROM cwsets s JOIN tokmap t ON t.token = ? AND t.class = s.class
+    LEFT JOIN cwmarks m ON m.sid = s.sid AND m.token = t.token WHERE s.open_from <= ? AND s.open_until >= ? ORDER BY s.open_from`, token, iso, iso);
+  return rows.map((r) => ({ s: r.sid, n: r.n, label: r.label, until: r.open_until, mine: r.marks || null }));
+}
+async function classworkMark(req, env, h) {
+  const now = Date.now(), day = seoulDay(now), iso = new Date(now).toISOString();
+  let form;
+  try { form = await req.formData(); } catch { return json({ ok: false, error: 'bad_form' }, 400, h); }
+  const token = String(form.get('t') || '').toLowerCase(), sid = String(form.get('s') || ''), marks = String(form.get('marks') || '');
+  if (!TOKEN_RE.test(token) || !CW_RE.test(sid)) return json({ ok: false, error: 'bad_request' }, 400, h);
+  const rl = `rc:${token}:${Math.floor(now / 3600e3)}`;
+  if ((await peek(env, rl)) >= num(env.CLASSWORK_PER_HOUR, 60)) return json({ ok: false, error: 'rate_limited' }, 200, h);
+  await bump(env, rl, day);
+  const set = await one(env, 'SELECT * FROM cwsets WHERE sid = ?', sid);
+  const cls = await classOf(env, token);
+  if (!set || !cls || set.class !== cls) return json({ ok: false, error: 'unknown_set' }, 200, h);
+  if (iso < set.open_from || iso > set.open_until) return json({ ok: false, error: 'closed' }, 200, h);
+  if (marks.length !== set.n || !/^[oxm]+$/.test(marks)) return json({ ok: false, error: 'bad_marks' }, 200, h);   // – stays –, never ✕
+  await run(env, `INSERT INTO cwmarks (sid, token, marks, ts, updated) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT (sid, token) DO UPDATE SET marks = excluded.marks, updated = excluded.updated`, sid, token, marks, iso, iso);
+  return json({ ok: true, updated: iso }, 200, h);
 }
 
 // ---------------------------------------------------------------- 출석 (F2)
@@ -961,6 +1014,7 @@ async function route(req, env, url, h) {
   if (p === '/review/vote' && req.method === 'POST') return reviewVote(req, env, h);
   if (p === '/reviews' && req.method === 'GET') return reviewList(env, url, h);
   if (p === '/t/remote' || p.startsWith('/t/remote/')) return remoteRoute(req, env, url);
+  if (p === '/classwork-mark' && req.method === 'POST') return classworkMark(req, env, h);
   if (p === '/vreact' && req.method === 'POST') return vreact(req, env, h);
   if (p === '/vreacts' && req.method === 'GET') return vreactList(env, url, h);
   if (p === '/push/unsubscribe' && req.method === 'POST') return pushUnsubscribe(req, env, h);
@@ -971,13 +1025,14 @@ async function route(req, env, url, h) {
     const token = (url.searchParams.get('t') || '').toLowerCase();
     if (!TOKEN_RE.test(token)) return json({ ok: false, error: 'bad_token' }, 400, h);
     const day = seoulDay(Date.now());
-    const [days, ck, sess, rounds] = await Promise.all([
+    const [days, ck, sess, rounds, classwork] = await Promise.all([
       recentDays(env, token, day),
       one(env, 'SELECT ts FROM checkins WHERE token = ? AND day = ?', token, day),
       one(env, 'SELECT s.start FROM sessions s JOIN tokmap t ON t.class = s.class WHERE t.token = ? AND s.date = ?', token, day),
       openRounds(env, token, Date.now()),
+      openClasswork(env, token, Date.now()),
     ]);
-    return json({ ok: true, day, days, checkin_ts: ck ? ck.ts : null, class_today: !!sess, start: sess ? sess.start : null, rounds }, 200, h);
+    return json({ ok: true, day, days, checkin_ts: ck ? ck.ts : null, class_today: !!sess, start: sess ? sess.start : null, rounds, classwork }, 200, h);
   }
   if ((p === '/moments' || p === '/moment') && req.method === 'GET') {
     const token = (url.searchParams.get('t') || '').toLowerCase();
@@ -996,7 +1051,7 @@ async function route(req, env, url, h) {
     return new Response(img, { headers: { ...h, 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=600' } });
   }
   const teacherPaths = ['/submissions', '/photo', '/checkins', '/session', '/moment-put', '/tokmap',
-    '/live/open', '/live/next', '/live/reveal', '/live/close', '/live/state', '/live/results', '/rounds', '/reports', '/tokmap-info', '/watches', '/push/send', '/push/count', '/reviews-sync', '/reviews-pull', '/vreacts-pull', '/remote-roster', '/shouts-pull'];
+    '/live/open', '/live/next', '/live/reveal', '/live/close', '/live/state', '/live/results', '/rounds', '/reports', '/tokmap-info', '/watches', '/push/send', '/push/count', '/reviews-sync', '/reviews-pull', '/vreacts-pull', '/remote-roster', '/shouts-pull', '/classwork-open', '/classwork-pull'];
   if (teacherPaths.includes(p)) {
     if (!teacherOk(req, env)) return json({ ok: false, error: 'unauthorized' }, 401, {});
     const since = url.searchParams.get('since') || '';
@@ -1023,6 +1078,18 @@ async function route(req, env, url, h) {
     }
     if (p === '/push/send' && req.method === 'POST') return pushSendAll(req, env);
     if (p === '/reviews-sync' && req.method === 'PUT') return reviewSync(req, env);
+    if (p === '/classwork-open' && req.method === 'POST') {
+      let b;
+      try { b = await req.json(); } catch { return json({ ok: false, error: 'bad_json' }, 400, {}); }
+      const r = await classworkOpen(env, b || {});
+      return json(r, r.ok ? 200 : 400, {});
+    }
+    if (p === '/classwork-pull' && req.method === 'GET') {
+      // the sets (label, N, window) and the marks by token; the console resolves the tags from its own file
+      const sets = await all(env, 'SELECT sid, class, label, n, open_from, open_until, created FROM cwsets WHERE created > ? ORDER BY created', since);
+      const marks = await all(env, 'SELECT sid, token, marks, ts, updated FROM cwmarks WHERE updated > ? ORDER BY updated', since);
+      return json({ now: new Date().toISOString(), sets, marks }, 200, {});
+    }
     if (p === '/remote-roster' && req.method === 'PUT') {
       let b;
       try { b = await req.json(); } catch { return json({ ok: false, error: 'bad_json' }, 400, {}); }
@@ -1097,7 +1164,7 @@ export default {
     const url = new URL(req.url);
     const h = corsHeaders(req, env);
     const origin = req.headers.get('Origin');
-    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react', '/report', '/watch', '/push/subscribe', '/push/unsubscribe', '/review', '/review/vote', '/reviews', '/vreact', '/vreacts', '/live/join', '/live/answer'].includes(url.pathname)
+    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react', '/report', '/watch', '/push/subscribe', '/push/unsubscribe', '/review', '/review/vote', '/reviews', '/vreact', '/vreacts', '/classwork-mark', '/live/join', '/live/answer'].includes(url.pathname)
       || (url.pathname === '/live/state' && url.searchParams.has('t'));
     // CORS: browsers may only call the student endpoints from the Pages origin.
     if (isStudent && origin && origin !== env.ALLOWED_ORIGIN) return json({ ok: false, error: 'origin' }, 403, h);
@@ -1130,6 +1197,8 @@ export default {
       env.DB.prepare("DELETE FROM reviews WHERE day < ? AND id NOT IN (SELECT review FROM rbest)").bind(addDays(day, -120)),
       env.DB.prepare('DELETE FROM vreacts WHERE ts < ?').bind(addDays(day, -60) + 'T00:00:00.000Z'),
       env.DB.prepare('DELETE FROM shouts WHERE updated < ?').bind(addDays(day, -30) + 'T00:00:00.000Z'),
+      env.DB.prepare('DELETE FROM cwmarks WHERE updated < ?').bind(keep + 'T00:00:00.000Z'),
+      env.DB.prepare('DELETE FROM cwsets WHERE open_until < ?').bind(keep + 'T00:00:00.000Z'),
     ]);
   },
 };

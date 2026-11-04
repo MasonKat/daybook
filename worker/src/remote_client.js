@@ -10,7 +10,7 @@ export const REMOTE_JS = String.raw`(function () {
   + '.note,.net{margin:4px 16px;color:#9aa3b2;font-size:13px}.net:empty,.note:empty{display:none}'
   + '.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:8px 16px calc(24px + env(safe-area-inset-bottom))}'
   + '.who{position:relative;min-height:64px;border:0;border-radius:16px;background:#1a2230;color:#f2f4f8;font-family:inherit;font-weight:700;font-size:20px;padding:8px;'
-  + 'display:flex;align-items:center;justify-content:center;cursor:pointer;min-width:0}.who:active{background:#2563eb}.who.whole{grid-column:1/-1;min-height:56px;background:#2b2150}'
+  + 'display:flex;align-items:center;justify-content:center;cursor:pointer;min-width:0}.who:active{background:#2563eb}.cwb{border:0;border-radius:10px;background:#1f2a3c;color:#dbe4ff;min-height:40px;padding:0 10px;font-family:inherit;font-weight:700;font-size:14px}#cwl,#cwn{width:100%;min-height:48px;margin:8px 0;border-radius:12px;border:1px solid #2a3240;background:#0b0f17;color:#f2f4f8;font-family:inherit;font-size:16px;padding:0 10px}.who.whole{grid-column:1/-1;min-height:56px;background:#2b2150}'
   + '.who .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.who .badge{position:absolute;top:6px;right:8px;font-size:12px;font-weight:600;color:#c7d2fe}'
   + '.sheet{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;z-index:5}'
   + '.box{width:100%;background:#121826;border-radius:20px 20px 0 0;padding:14px 16px calc(16px + env(safe-area-inset-bottom))}'
@@ -25,7 +25,11 @@ export const REMOTE_JS = String.raw`(function () {
   + '.muted{color:#9aa3b2}';
   var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
   var tb = document.querySelector('.taste-bar');
-  (tb || document.body).insertAdjacentHTML(tb ? 'afterend' : 'afterbegin', '<header class="top"><b>AMP 리모컨</b><select id="cls" aria-label="반"></select></header>'
+  (tb || document.body).insertAdjacentHTML(tb ? 'afterend' : 'afterbegin', '<header class="top"><b>AMP 리모컨</b><button type="button" class="cwb" id="cwb">수업 문제</button><select id="cls" aria-label="반"></select></header>'
+    + '<div class="sheet" id="cws" role="dialog" aria-modal="true" aria-label="수업 문제" hidden><div class="box">'
+    + '<div class="sh-top"><b>수업 문제 열기</b><button type="button" class="x" id="cws-x" aria-label="닫기">×</button></div>'
+    + '<input id="cwl" list="cwlist" maxlength="40" placeholder="세트 이름 (예: 쎈 이차방정식 A)" aria-label="세트 이름"><datalist id="cwlist"></datalist>'
+    + '<input id="cwn" type="number" min="1" max="40" placeholder="문제 수" aria-label="문제 수"><button type="button" class="save" id="cwgo">열기 (오늘 밤까지)</button></div></div>'
     + '<p class="note" id="note"></p><p class="net" id="net" aria-live="polite"></p>'
     + '<main class="grid" id="grid"></main>'
     + '<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sh-name" hidden><div class="box">'
@@ -194,6 +198,20 @@ export const REMOTE_JS = String.raw`(function () {
     });
     render(); loadCounts(); flush();
   }
+  // F21.2: open a 수업 문제 set for the chosen class (a label and N; the tags stay on the teacher's laptop)
+  $('cwb').onclick = function () {
+    var dl = $('cwlist'); dl.innerHTML = '';
+    ((R && R.sets) || []).forEach(function (x) { var o = document.createElement('option'); o.value = x.label; dl.appendChild(o); });
+    $('cws').hidden = false;
+  };
+  $('cwl').onchange = function () { var x = ((R && R.sets) || []).filter(function (y) { return y.label === $('cwl').value; })[0]; if (x && x.n) $('cwn').value = x.n; };
+  $('cws-x').onclick = function () { $('cws').hidden = true; };
+  $('cwgo').onclick = function () {
+    var body = { 'class': CUR, label: $('cwl').value.trim(), n: Number($('cwn').value) };
+    if (!body.label || !body.n) return;
+    if (TASTE) { $('cws').hidden = true; toast(body.label + ' · ' + body.n); return; }
+    api('/t/remote/classwork', body).then(function (j) { $('cws').hidden = true; toast(j.ok ? body.label + ' · ' + body.n : S.bad); }, function () { toast(S.offline); });
+  };
   $('cls').onchange = function () { CUR = $('cls').value; COUNTS = {}; render(); loadCounts(); };
   $('pts').onclick = function (e) {
     var b = e.target.closest('button'); if (!b) return;

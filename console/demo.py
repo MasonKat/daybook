@@ -157,6 +157,7 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
     _seed_watches(conn, today, rng)
     _seed_reviews(conn, today)
     _seed_voice(conn, today)
+    _seed_classwork(conn, today)
     for r in conn.execute("SELECT id FROM students ORDER BY id LIMIT 2").fetchall():        # F16.4: two SLCs this week
         conn.execute("INSERT INTO meetings (student_id, day, kind, ts) VALUES (?, ?, 'slc', ?)",
                      (r["id"], today.isoformat(), "2026-01-01T00:00:00.000Z"))
@@ -175,6 +176,24 @@ def _seed_voice(conn: sqlite3.Connection, today: date) -> None:
     cid = conn.execute("SELECT id FROM classes WHERE name = ?", (KONG["class"],)).fetchone()[0]
     text = (ROOT / "demo" / "voice" / "clova_sample.txt").read_text(encoding="utf-8")
     VC.save(conn, Config(), cid, today, VC.preview(conn, cid, text)["rows"])
+
+
+def _seed_classwork(conn: sqlite3.Connection, today: date) -> None:
+    """F21.2: two 수업 문제 sets in 콩's class over the last week (labels in demo/classwork_tags.demo.json), each student's
+    own ○ ✕ –; 콩 and the late star (and their parents) agreed to show it on the parent page (share_classwork)."""
+    rng = random.Random(21)
+    cid = conn.execute("SELECT id FROM classes WHERE name = ?", (KONG["class"],)).fetchone()[0]
+    studs = [r[0] for r in conn.execute("SELECT id FROM students WHERE class_id = ? ORDER BY id", (cid,))]
+    for k, (label, ago) in enumerate((("쎈 이차방정식 A", 6), ("쎈 부등식 B", 2))):
+        sid = f"{0xdeca0 + k:016x}"
+        day = today - timedelta(days=ago)
+        conn.execute("INSERT INTO classwork_sets (sid, class_id, day, label, n, ts) VALUES (?, ?, ?, ?, 6, ?)",
+                     (sid, cid, day.isoformat(), label, f"{day.isoformat()}T11:00:00.000Z"))
+        for st in studs:
+            marks = "".join(rng.choice("ooooxm") for _ in range(6))
+            conn.execute("INSERT INTO classwork_marks (sid, student_id, marks, updated) VALUES (?, ?, ?, ?)",
+                         (sid, st, marks, f"{day.isoformat()}T11:05:00.000Z"))
+    conn.execute("UPDATE students SET share_classwork = 'yes' WHERE slug = ? OR ext_id = ?", (KONG["slug"], LATE_STAR))
 
 
 DEMO_REVIEWS = ["판서가 오늘은 피카소급", "분수 대결 명승부", "시발점 문제에서 다 같이 웃음", "프로젝터 꺼져서 다들 놀람",

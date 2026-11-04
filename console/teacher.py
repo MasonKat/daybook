@@ -45,10 +45,12 @@ def roster_edit(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
     active = body.get("active")
     consent = body.get("consent")
     callsign = body.get("callsign")
+    share = body.get("share_classwork")
     changed = ops.edit_student(conn, str(body.get("slug", "")), display if isinstance(display, str) else None,
                                active=active if isinstance(active, bool) else None,
                                consent=consent if isinstance(consent, str) else None,
-                               callsign=callsign if isinstance(callsign, str) else None)
+                               callsign=callsign if isinstance(callsign, str) else None,
+                               share_classwork=share if isinstance(share, str) else None)
     conn.commit()
     msg = push_tokmap(conn, cfg) if {"active", "consent"} & changed else ""
     return {"ok": True, "changed": sorted(changed), "message": msg}
@@ -664,3 +666,65 @@ def remote_setup(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
     except RM.RemoteError as e:
         raise TeacherError(str(e)) from e
     return {"ok": True, "link": url, "qr": RM.qr_svg(url), "message": RM.push(conn, cfg)}
+
+
+# ---------------------------------------------------------------- F21.2 / F21.4 / F21.5: 수업 문제, 서술형, 사진 확인
+
+def _cls(conn, body_or_name) -> sqlite3.Row:
+    name = body_or_name.get("class", "") if isinstance(body_or_name, dict) else body_or_name
+    try:
+        return ops.get_class(conn, str(name))
+    except ops.OpError as e:
+        raise TeacherError(str(e)) from e
+
+
+def classwork_open(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
+    from . import classwork as CW
+    try:
+        r = CW.open_set(conn, cfg, _cls(conn, body)["id"], str(body.get("label", "")), int(body["n"]) if body.get("n") else None)
+    except (CW.ClassworkError, ValueError) as e:
+        raise TeacherError(str(e)) from e
+    return {"ok": True, **r}
+
+
+def classwork_view(conn: sqlite3.Connection, cfg: Config, class_name: str, day: date) -> dict:
+    """The skill grid for one class, the 서술형 tag list, today's open sets and the 사진 확인 필요 queue."""
+    from . import classwork as CW
+    cls = _cls(conn, class_name)
+    sets = [dict(r) | {"k": conn.execute("SELECT COUNT(*) FROM classwork_marks WHERE sid = ?", (r["sid"],)).fetchone()[0]}
+            for r in conn.execute("SELECT sid, label, n FROM classwork_sets WHERE class_id = ? AND day = ? ORDER BY ts", (cls["id"], day.isoformat()))]
+    return {"ok": True, "class": cls["name"], "grid": CW.class_grid(conn, cfg, cls["id"]), "tags": CW.all_tags(cfg),
+            "set_names": CW.set_names(cfg), "today": sets, "queue": CW.queue(conn, cfg)}
+
+
+def classwork_export(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
+    from . import classwork as CW
+    cls = _cls(conn, body)
+    return {"ok": True, "path": str(CW.export_csv(conn, cfg, cls["id"], cls["name"]))}
+
+
+def essay_view(conn: sqlite3.Connection, q: dict) -> dict:
+    from . import classwork as CW
+    cls = _cls(conn, q.get("class", ""))
+    return {"ok": True, **CW.essay_view(conn, cls["id"], str(q.get("day", "")), str(q.get("label", "")))}
+
+
+def essay_save(conn: sqlite3.Connection, body: dict) -> dict:
+    from . import classwork as CW
+    cls = _cls(conn, body)
+    try:
+        mx = float(body["max"]) if body.get("max") not in (None, "") else None
+        n = CW.essay_save(conn, cls["id"], str(body.get("day", "")), str(body.get("label", "")), list(body.get("tags") or []), mx,
+                          list(body.get("rows") or []))
+    except (CW.ClassworkError, ValueError) as e:
+        raise TeacherError(str(e)) from e
+    return {"ok": True, "changed": n}
+
+
+def classwork_decide(conn: sqlite3.Connection, body: dict) -> dict:
+    from . import classwork as CW
+    try:
+        CW.decide(conn, int(body.get("id") or 0), str(body.get("mark", "")))
+    except CW.ClassworkError as e:
+        raise TeacherError(str(e)) from e
+    return {"ok": True}

@@ -31,3 +31,4 @@ brand/
 filters/review_words.local.txt
 filters/shoutout_negative.local.txt
 setup_state.json
+classwork_tags.json

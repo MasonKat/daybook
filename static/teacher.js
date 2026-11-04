@@ -98,6 +98,7 @@
       pick.value = pv;
       renderRoster();
       vcClasses(j.board_class);
+      skClasses(j.board_class);
     });
   }
   $('rs-q').addEventListener('input', renderRoster);
@@ -352,6 +353,10 @@
     ['yes', 'no', 'unknown'].forEach(function (k) { var o = el('option', { value: k }, C.consent[k]); if (x.consent === k) o.selected = true; cs.appendChild(o); });
     cs.onchange = function () { api('/api/teacher/roster', { slug: x.slug, consent: cs.value }).then(function (j) { $('status-msg').textContent = j.ok ? S.saved + (j.message ? ' · ' + j.message : '') : (j.error || ''); cs.className = 'consent ' + cs.value; }); };
     td.appendChild(cs);
+    var sh = el('select', { 'aria-label': 'share_classwork', 'class': 'share ' + x.share_classwork });   /* F21.1: 수업 문제 on the parent page */
+    ['no', 'yes'].forEach(function (k) { var o = el('option', { value: k }, C.share[k]); if (x.share_classwork === k) o.selected = true; sh.appendChild(o); });
+    sh.onchange = function () { api('/api/teacher/roster', { slug: x.slug, share_classwork: sh.value }).then(function (j) { $('status-msg').textContent = j.ok ? S.saved : (j.error || ''); sh.className = 'share ' + sh.value; }); };
+    td.appendChild(sh);
     td.appendChild(sel('greeting', { '어머님': '어머님', '아버님': '아버님', '보호자님': '보호자님' }));
     tr.appendChild(td);
     var td2 = el('td');
@@ -656,6 +661,100 @@
     });
   }
   loadVoice();
+
+  /* ------------------------------------------------------------ F21.2 / F21.4 / F21.5: 수업 문제, 실력 지도, 서술형, 사진 확인 */
+  var SK = S.sk, MK = { o: '○', x: '✕', m: '–', p: '△' };
+  function skClasses(boardClass) {
+    var sel = $('sk-class'), v = sel.value;
+    sel.innerHTML = ''; classesAll.forEach(function (c) { sel.appendChild(el('option', { value: c.name }, c.name)); });
+    sel.value = v || boardClass || (classesAll[0] || {}).name || '';
+    loadSkills();
+  }
+  function loadSkills() {
+    var c = $('sk-class').value; if (!c) return;
+    api('/api/teacher/classwork?class=' + encodeURIComponent(c)).then(function (j) {
+      if (!j.ok) return;
+      var dl = $('sk-sets'); dl.innerHTML = ''; j.set_names.forEach(function (n) { dl.appendChild(el('option', { value: n })); });
+      var es = $('es-tags'); var keep = Array.prototype.map.call(es.selectedOptions, function (o) { return o.value; });
+      es.innerHTML = ''; j.tags.forEach(function (t) { var o = el('option', { value: t }, t); if (keep.indexOf(t) >= 0) o.selected = true; es.appendChild(o); });
+      var td = $('sk-today'); td.innerHTML = '';
+      j.today.forEach(function (x) { td.appendChild(el('li', {}, SK.today + ': ' + x.label + ' · ' + x.n + ' · ' + x.k)); });
+      var hd = $('sk-head'), rows = $('sk-rows'); hd.innerHTML = ''; rows.innerHTML = '';
+      var tr = el('tr'); tr.appendChild(el('th', {}, '')); tr.appendChild(el('th', {}, '○ ✕ – △'));
+      j.grid.tags.forEach(function (t) { tr.appendChild(el('th', {}, t)); }); hd.appendChild(tr);
+      j.grid.students.forEach(function (s) {
+        var r = el('tr'); r.appendChild(el('td', {}, s.display_name));
+        r.appendChild(el('td', { 'class': 'tnum' }, s.totals.o + ' ' + s.totals.x + ' ' + s.totals.m + ' ' + s.totals.p));
+        j.grid.tags.forEach(function (t) {
+          var c2 = s.cells[t];
+          r.appendChild(el('td', { 'class': 'tnum sk-cell ' + (c2 ? c2.status : '') }, c2 ? '○' + c2.o + ' ✕' + c2.x + (c2.m ? ' –' + c2.m : '') + (c2.p ? ' △' + c2.p : '') : ''));
+        });
+        rows.appendChild(r);
+      });
+      var pq = $('pq-rows'); pq.innerHTML = '';
+      if (!j.queue.length) pq.appendChild(el('li', { 'class': 'muted' }, SK.none));
+      j.queue.forEach(function (x) {
+        var li = el('li', { 'class': 'wrow' + (x.flag ? ' hold' : '') });
+        var img = el('img', { src: '/api/teacher/classwork-photo?student=' + x.student_id + '&day=' + x.day, alt: '', 'class': 'pq-img', loading: 'lazy' });
+        img.onerror = function () { img.remove(); };
+        li.appendChild(img);
+        li.appendChild(el('span', {}, x.day + ' · ' + x.class_name + ' · ' + x.display_name + ' · ' + x.label + ' #' + x.quiz + ' · '
+          + fmt(SK.read, { a: x.read_answer }) + ' · ' + fmt(SK.photo, { m: MK[x.photo_mark], c: Math.round(100 * (x.confidence || 0)) })
+          + (x.self_mark ? ' · ' + fmt(SK.self, { m: MK[x.self_mark] }) : '') + (x.flag ? ' · ' + SK.flag : '')));
+        ['o', 'x', 'm'].forEach(function (m) {
+          var b = btn(MK[m]); b.onclick = function () { api('/api/teacher/classwork-decide', { id: x.id, mark: m }).then(loadSkills); }; li.appendChild(b);
+        });
+        pq.appendChild(li);
+      });
+    });
+  }
+  $('sk-class').onchange = loadSkills;
+  $('sk-open').onclick = function () {
+    api('/api/teacher/classwork-open', { 'class': $('sk-class').value, label: $('sk-label').value, n: $('sk-n').value }).then(function (j) {
+      $('sk-msg').textContent = j.ok ? j.label + ' · ' + j.n : (j.error || ''); loadSkills();
+    });
+  };
+  $('sk-export').onclick = function () {
+    api('/api/teacher/classwork-export', { 'class': $('sk-class').value }).then(function (j) { $('sk-msg').textContent = j.ok ? j.path : (j.error || ''); });
+  };
+  var ES = [];
+  function esDraw() {
+    var tb = $('es-rows'); tb.innerHTML = '';
+    var mx = $('es-max').value;
+    ES.forEach(function (s) {
+      var tr = el('tr'); tr.appendChild(el('td', {}, s.display_name));
+      var td = el('td');
+      if (mx) {
+        var sc = el('input', { type: 'number', min: '0', max: mx, step: '0.5', value: s.score == null ? '' : String(s.score), 'class': 'pts', 'aria-label': 'score' });
+        sc.onchange = function () { s.score = sc.value; }; td.appendChild(sc);
+      } else ['o', 'p', 'x'].forEach(function (m) {
+        var b = btn(MK[m], s.mark === m ? 'primary' : 'ghost');
+        b.onclick = function () { s.mark = s.mark === m ? '' : m; esDraw(); }; td.appendChild(b);
+      });
+      tr.appendChild(td);
+      var nt = el('input', { type: 'text', maxlength: '80', value: s.note || '', placeholder: SK.note, 'aria-label': SK.note });
+      nt.onchange = function () { s.note = nt.value; };
+      var tn = el('td'); tn.appendChild(nt); tr.appendChild(tn);
+      tb.appendChild(tr);
+    });
+    $('es-save').hidden = !ES.length;
+  }
+  $('es-load').onclick = function () {
+    api('/api/teacher/essay?class=' + encodeURIComponent($('sk-class').value) + '&day=' + $('es-day').value + '&label=' + encodeURIComponent($('es-label').value)).then(function (j) {
+      if (!j.ok) { $('es-msg').textContent = j.error || ''; return; }
+      ES = j.students; if (j.max && !$('es-max').value) $('es-max').value = j.max;
+      Array.prototype.forEach.call($('es-tags').options, function (o) { o.selected = j.tags.indexOf(o.value) >= 0 || o.selected; });
+      esDraw();
+    });
+  };
+  $('es-max').onchange = esDraw;
+  $('es-save').onclick = function () {
+    api('/api/teacher/essay', { 'class': $('sk-class').value, day: $('es-day').value, label: $('es-label').value, max: $('es-max').value,
+      tags: Array.prototype.map.call($('es-tags').selectedOptions, function (o) { return o.value; }),
+      rows: ES.map(function (s) { return { student_id: s.id, mark: s.mark, score: s.score, note: s.note }; }) }).then(function (j) {
+      $('es-msg').textContent = j.ok ? fmt(SK.saved, { n: j.changed }) : (j.error || ''); if (j.ok) loadSkills();
+    });
+  };
 
   /* ------------------------------------------------------------ F19.4: 리모컨 (the setup QR is shown on screen only) */
   var rmLink = '';

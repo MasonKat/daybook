@@ -50,9 +50,9 @@ def test_second_pull_uses_since_and_is_idempotent(conn, klass):
     fw = FakeWorker([item(tok)])
     pull(conn, fw)
     pull(conn, fw)
-    assert fw.calls[:8] == ["/submissions", "/checkins", "/live/results", "/reports", "/watches", "/vreacts-pull", "/shouts-pull",
-                            "/reviews-pull"]
-    assert fw.calls[8].startswith("/submissions?since=2026-11-06T12%3A55")
+    assert fw.calls[:9] == ["/submissions", "/checkins", "/live/results", "/reports", "/watches", "/vreacts-pull", "/classwork-pull",
+                            "/shouts-pull", "/reviews-pull"]
+    assert fw.calls[9].startswith("/submissions?since=2026-11-06T12%3A55")
     assert conn.execute("SELECT COUNT(*) FROM submissions").fetchone()[0] == 1
 
 

@@ -121,7 +121,8 @@ def status(conn: sqlite3.Connection, cfg: Config, today: date, class_id: int | N
         out.append({"id": s["id"], "slug": s["slug"], "display_name": s["display_name"], "class_name": s["class_name"],
                     "days": d, "level": "red" if d >= st["red"] else "amber" if d >= st["amber"] else "ok",
                     "last": last.isoformat() if last else None, **profile(conn, s["id"]),
-                    "consent": conn.execute("SELECT consent FROM students WHERE id = ?", (s["id"],)).fetchone()[0]})
+                    "consent": conn.execute("SELECT consent FROM students WHERE id = ?", (s["id"],)).fetchone()[0],
+                    "share_classwork": conn.execute("SELECT share_classwork FROM students WHERE id = ?", (s["id"],)).fetchone()[0]})
     out.sort(key=lambda x: (-x["days"], x["class_name"] or "", x["display_name"]))
     return out
 

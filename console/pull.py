@@ -100,6 +100,7 @@ class PullReport:
     votes: int = 0
     reactions: int = 0
     shouts: int = 0
+    classwork: int = 0
 
 
 def _token_map(conn: sqlite3.Connection) -> dict[str, int]:
@@ -249,6 +250,12 @@ def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None =
         rep.reactions = vrank.apply_pull(conn, vr.get("items", []))
     except PullError:
         pass  # an older Worker without video reactions
+    try:
+        from . import classwork as CW               # F21.2: 수업 문제 sets and each student's ○ ✕ –
+        cw = json.loads(fetch("/classwork-pull" + (f"?since={urllib.parse.quote(since)}" if since else "")))
+        rep.classwork = sum(CW.apply_pull(conn, cw))
+    except PullError:
+        pass  # an older Worker without 수업 문제
     try:
         from . import voice as VC                   # F19.4: shout-outs from the teacher remote (and their undo)
         sh = json.loads(fetch("/shouts-pull" + (f"?since={urllib.parse.quote(since)}" if since else "")))

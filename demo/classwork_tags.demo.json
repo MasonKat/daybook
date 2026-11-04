@@ -1,0 +1,10 @@
+{
+  "_comment": "Synthetic demo tags (F21.2). The real file is classwork_tags.json on the teacher's laptop (gitignored): set label (or a weekly-test round id) -> quiz number -> \"단원/개념\". Only on the laptop: the Worker never sees a tag.",
+  "sets": {
+    "쎈 이차방정식 A": {"1": "이차방정식/판별식", "2": "이차방정식/판별식", "3": "이차방정식/근과 계수의 관계", "4": "이차방정식/근과 계수의 관계",
+                     "5": "이차방정식/판별식", "6": "이차방정식/이차방정식의 활용"},
+    "쎈 부등식 B": {"1": "부등식/산술·기하평균", "2": "부등식/산술·기하평균", "3": "부등식/절댓값 부등식", "4": "명제/역과 대우",
+                  "5": "명제/역과 대우", "6": "부등식/산술·기하평균"},
+    "Adaptive_Screeners_1S_Nov06_G10": {"3": "부등식/산술·기하평균", "7": "명제/역과 대우", "12": "이차방정식/판별식"}
+  }
+}

@@ -116,8 +116,10 @@ class Board:
         shouts = VC.today_board(conn, self.class_id, self.day, self.S["vc_class"]) if show_three else []
         drafts = [r[0] for r in conn.execute("SELECT text FROM moment_drafts WHERE class_id = ? AND status = 'approved' ORDER BY id DESC LIMIT 5",
                                              (self.class_id,))]
+        cw_today = [{"label": r["label"], "n": r["n"], "k": conn.execute("SELECT COUNT(*) FROM classwork_marks WHERE sid = ?", (r["sid"],)).fetchone()[0]}
+                    for r in conn.execute("SELECT * FROM classwork_sets WHERE class_id = ? AND day = ? ORDER BY ts", (self.class_id, self.day.isoformat()))]
         return {"cls": cls, "students": students, "reward": reward, "three": three, "show_three": show_three, "arrivals": arrivals,
-                "code": sess["code"] or "", "start": sess["start_time"] or "", "shouts": shouts, "drafts": drafts}
+                "code": sess["code"] or "", "start": sess["start_time"] or "", "shouts": shouts, "drafts": drafts, "cw_today": cw_today}
 
     def state_json(self, conn) -> dict:
         st = self.state(conn)
@@ -134,6 +136,7 @@ class Board:
             "reactions": self.reactions_text,
             "moments": conn.execute("SELECT COUNT(*) FROM moments WHERE session_id = ?", (self.session_id,)).fetchone()[0],
             "shouts": [{"display_name": x["display_name"], "text": x["text"], "points": x["points"]} for x in st["shouts"]],
+            "classwork": [self.S["cw_board_state"].format(label=x["label"], n=x["n"], k=x["k"], t=len(st["students"])) for x in st["cw_today"]],
         }
 
     deploy_runner = None   # tests replace the wrangler call
@@ -215,9 +218,11 @@ class Board:
         tpl = generate.env().get_template("board.html")
         from . import brand
         return tpl.render(S=self.S, page="board", mascot=brand.data_uri(self.cfg), mascot_px=brand.mascot_px(self.cfg), cls=st["cls"], students=st["students"], reward=st["reward"],
-                          three=st["three"], show_three=st["show_three"], shouts=st["shouts"], drafts=st["drafts"], poll=self.poll, code=st["code"], start=st["start"], arrivals=st["arrivals"],
+                          three=st["three"], show_three=st["show_three"], shouts=st["shouts"], drafts=st["drafts"], poll=self.poll,
+                          cw_sets=__import__("console.classwork", fromlist=["x"]).set_names(self.cfg),
+                          cw_today=[self.S["cw_board_state"].format(label=x["label"], n=x["n"], k=x["k"], t=len(st["students"])) for x in st["cw_today"]], code=st["code"], start=st["start"], arrivals=st["arrivals"],
                           reactions=self.reactions_text, poll_seconds=self.cfg.board_poll_seconds,
-                          js=generate.json_script({"refresh": max(2, min(self.cfg.board_poll_seconds, 10)),
+                          js=generate.json_script({"cls": st["cls"]["name"], "refresh": max(2, min(self.cfg.board_poll_seconds, 10)),
                                                    "need": self.S["board_moment_need"], "rxLabel": self.S["board_reactions"]}))
 
     def poll_loop(self, stop: threading.Event) -> None:
@@ -310,6 +315,25 @@ def make_handler(board: Board):
                     return self._json(T.push_view(conn, board.cfg))
                 if path == "/api/teacher/videos":             # F15.1/F15.2
                     return self._json(T.videos_view(conn, board.cfg, day, int((q.get("days") or ["7"])[0] or 7)))
+                if path == "/api/teacher/classwork":          # F21.2 / F21.5
+                    try:
+                        return self._json(T.classwork_view(conn, board.cfg, (q.get("class") or [""])[0], day))
+                    except T.TeacherError as e:
+                        return self._json({"ok": False, "error": str(e)}, 404)
+                if path == "/api/teacher/essay":              # F21.4
+                    try:
+                        return self._json(T.essay_view(conn, {k: v[0] for k, v in q.items()}))
+                    except T.TeacherError as e:
+                        return self._json({"ok": False, "error": str(e)}, 404)
+                if path == "/api/teacher/classwork-photo":    # F21.5: the local photo for the queue (never online)
+                    from . import classwork as CW
+                    try:
+                        f = CW.photo_file(conn, board.cfg, int((q.get("student") or ["0"])[0]), (q.get("day") or [""])[0])
+                    except ValueError:
+                        f = None
+                    if not f:
+                        return self._send(404, b"no photo", "text/plain")
+                    return self._send(200, f.read_bytes(), "image/jpeg")
                 if path == "/api/teacher/remote":             # F19.4
                     return self._json(T.remote_view(board.cfg))
                 if path == "/api/teacher/voice":              # F19.1
@@ -364,6 +388,14 @@ def make_handler(board: Board):
                         return self._json(T.voice_preview(conn, body))
                     if self.path == "/api/teacher/voice-save":
                         return self._json(T.voice_save(conn, board.cfg, body, board.day))
+                    if self.path == "/api/teacher/classwork-open":       # F21.2: 수업 문제 (the board and the Teacher tab)
+                        return self._json(T.classwork_open(conn, board.cfg, body))
+                    if self.path == "/api/teacher/classwork-export":
+                        return self._json(T.classwork_export(conn, board.cfg, body))
+                    if self.path == "/api/teacher/essay":                # F21.4 서술형
+                        return self._json(T.essay_save(conn, body))
+                    if self.path == "/api/teacher/classwork-decide":     # F21.5 사진 확인 필요 -> ○ / ✕ / –
+                        return self._json(T.classwork_decide(conn, body))
                     if self.path == "/api/teacher/shout":                # F19 addendum: 확인 필요 -> 공개 / 비공개
                         return self._json(T.shout_decide(conn, body))
                     if self.path == "/api/teacher/remote":               # F19.4: the setup link + an on-screen QR

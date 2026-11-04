@@ -38,7 +38,7 @@ JS_STRINGS = ("wt_todo", "wt_done", "wt_queued", "wt_err", "wt_closed", "wt_hard
               # F18.3 학생 리뷰
               "rv_blocked", "rv_length", "rv_one_a_day", "rv_sent", "rv_err", "rv_st_pending", "rv_st_approved",
               "rv_st_hidden", "rv_empty", "rv_anon", "rv_me", "rv_vote_until", "rv_vote_btn", "rv_voted", "rv_vote_own",
-              "rv_vote_closed", "rv_best_empty", "vr_err")
+              "rv_vote_closed", "rv_best_empty", "vr_err", "cw_title", "cw_open", "cw_edit", "cw_done", "cw_todo", "cw_err", "cw_closed")
 # the taste build's simulated class reviews (synthetic, shown without names; nothing is sent). The first is 콩's own.
 TASTE_REVIEWS = ["선생님 판서가 오늘은 피카소급", "분수 대결 명승부였다", "시발점 문제 풀다가 다 같이 웃음",
                  "불 꺼진 줄 알았는데 프로젝터였음", "18문제 다 맞아서 소리 지름"]
@@ -427,6 +427,8 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
     from . import voice as VC
     rv_anon = practice.manitoba(conn, cfg)                                 # F18.3: manitoba mode is always anonymous
     rv_names = {cid: RV.page_name_hashes(conn, cid) for cid in classes}    # classmates' display names, hashed only
+    from . import classwork as CW
+    cw_tags = CW.load_tags(cfg)                                            # F21.2: the local tag file (never online)
     students = []
     consent = {r[0]: r[1] for r in conn.execute("SELECT id, consent FROM students_public")}   # F17 (not personal data)
     only = " AND slug = ?" if taste else ""
@@ -653,6 +655,8 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "mic": 0 if rv_anon else VC.mic_total(conn, s["id"]),
             "rv_win": _rv_win(RV.parent_win(conn, s["id"], today), scrub) if not taste else None,   # F18.3: own win only
             "rv_anon": rv_anon,
+            "skills": CW.skill_map(conn, cfg, s["id"], cw_tags),           # F21.2: 내 실력 지도 (own page; parent: share_classwork)
+            "share_classwork": s["share_classwork"] == "yes",
             "rank": rank,
             "parent_token": s["parent_token"],
             "week": week,

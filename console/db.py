@@ -12,7 +12,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 KST = timezone(timedelta(hours=9))  # Asia/Seoul has no DST
 
 SCHEMA = """
@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS students (
     ext_id        TEXT UNIQUE,            -- console only (the teacher's roster ID)
     left_on       TEXT,                   -- F11 퇴원 처리: the date (NULL while enrolled)
     consent       TEXT NOT NULL DEFAULT 'unknown',  -- F17: the parent's slip: yes | no | unknown
-    callsign      TEXT                    -- F19.1: the short spoken name for voice notes (console only; unique per class)
+    callsign      TEXT,                   -- F19.1: the short spoken name for voice notes (console only; unique per class)
+    share_classwork TEXT NOT NULL DEFAULT 'no'      -- F21.1: in-class quiz work on the parent page: yes only when both agree
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -261,6 +262,44 @@ CREATE TABLE IF NOT EXISTS video_ranks (      -- F19.3: the 2-week TOP list per 
     PRIMARY KEY (period_from, pool, rank)
 );
 
+CREATE TABLE IF NOT EXISTS classwork_sets (   -- F21.2 수업 문제: opened in class (board / remote / CLI); pulled by sid
+    sid        TEXT PRIMARY KEY,               -- the Worker's id
+    class_id   INTEGER NOT NULL REFERENCES classes(id),
+    day        TEXT NOT NULL,                  -- KST class day
+    label      TEXT NOT NULL,                  -- also the key into classwork_tags.json (the tags stay on this laptop)
+    n          INTEGER NOT NULL,
+    ts         TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS classwork_marks (  -- each student's own ○ / ✕ / – per quiz: "o" "x" "m" (– is never ✕)
+    sid        TEXT NOT NULL REFERENCES classwork_sets(sid),
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    marks      TEXT NOT NULL,
+    updated    TEXT NOT NULL,
+    PRIMARY KEY (sid, student_id)
+);
+
+CREATE TABLE IF NOT EXISTS quiz_marks (       -- F21.4 / F21.5: per-quiz marks by the teacher (incl. 서술형) or from photo grading
+    id          INTEGER PRIMARY KEY,
+    student_id  INTEGER NOT NULL REFERENCES students(id),
+    class_id    INTEGER REFERENCES classes(id),
+    day         TEXT NOT NULL,
+    label       TEXT NOT NULL,                 -- the set / quiz label (the key into classwork_tags.json)
+    quiz        INTEGER NOT NULL,
+    mark        TEXT NOT NULL CHECK (mark IN ('o', 'x', 'm', 'p')),   -- p = △ 부분 (서술형)
+    source      TEXT NOT NULL CHECK (source IN ('teacher', 'essay', 'photo')),
+    score       REAL,                          -- 서술형: points out of max_score
+    max_score   REAL,
+    tags        TEXT,                          -- JSON list (서술형: chosen from the tag file); else the tag file decides
+    note        TEXT,
+    read_answer TEXT,                          -- photo: what the vision model read (never a key)
+    confidence  REAL,
+    status      TEXT NOT NULL DEFAULT 'ok' CHECK (status IN ('ok', 'queued', 'done')),   -- photo: below the threshold = queued
+    ts          TEXT NOT NULL,
+    updated     TEXT NOT NULL,
+    UNIQUE (student_id, day, label, quiz, source)
+);
+
 CREATE TABLE IF NOT EXISTS class_bonus (  -- F7: class-wide points (AMP Live: >= 80 % of the class correct)
     id         INTEGER PRIMARY KEY,
     class_id   INTEGER NOT NULL REFERENCES classes(id),
@@ -356,7 +395,7 @@ BEGIN SELECT RAISE(ABORT, 'events is append-only'); END;
 
 -- The generator reads only this view: no full_name, parent_phone or ext_id.
 CREATE VIEW IF NOT EXISTS students_public AS
-    SELECT id, slug, display_name, class_id, track, student_token, parent_token, active, created_at, consent
+    SELECT id, slug, display_name, class_id, track, student_token, parent_token, active, created_at, consent, share_classwork
     FROM students;
 
 CREATE INDEX IF NOT EXISTS ix_sub_day ON submissions(day);
@@ -385,7 +424,8 @@ def migrate(conn: sqlite3.Connection) -> None:
         return
     added = {   # table -> {column: declaration} for columns that arrived after v1 (additive only)
         "sessions": {"start_time": "TEXT", "code": "TEXT", "cancelled": "TEXT"},
-        "students": {"left_on": "TEXT", "consent": "TEXT NOT NULL DEFAULT 'unknown'", "callsign": "TEXT"},
+        "students": {"left_on": "TEXT", "consent": "TEXT NOT NULL DEFAULT 'unknown'", "callsign": "TEXT",
+                     "share_classwork": "TEXT NOT NULL DEFAULT 'no'"},
         "shoutouts": {"ref": "TEXT", "hold": "INTEGER NOT NULL DEFAULT 0"},
         "contacts": {"tag": "TEXT"},
         "submissions": {"reflection": "TEXT", "chip": "TEXT", "solved": "INTEGER"},
@@ -400,7 +440,7 @@ def migrate(conn: sqlite3.Connection) -> None:
             if col not in cols:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
     view = _columns(conn, "students_public")
-    if view and "consent" not in view:      # F17: the public view gained consent (not personal data): recreate it
+    if view and ("consent" not in view or "share_classwork" not in view):   # F17 / F21.1: new public columns: recreate it
         conn.execute("DROP VIEW students_public")
     conn.executescript(SCHEMA)   # creates any new tables (IF NOT EXISTS)
     if conn.execute("PRAGMA user_version").fetchone()[0] < SCHEMA_VERSION:

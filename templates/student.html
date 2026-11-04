@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_rows.html" import solved_strip, video_tiles with context %}
+{% from "_rows.html" import solved_strip, video_tiles, skill_map with context %}
 {% macro vrx(v, compact=false) %}<div class="vrx{{ ' compact' if compact }}" data-v="{{ v.id }}" role="group" aria-label="{{ S.vr_label }}">{% for l in vr_labels %}<button type="button" class="vrb" data-r="{{ l.key }}" aria-pressed="false" title="{{ l.text }}" aria-label="{{ l.text }}"><span class="ve" aria-hidden="true">{{ l.emoji }}</span><span class="vl">{{ l.text }}</span><span class="vn tnum"></span></button>{% endfor %}</div>{% endmacro %}
 {% block head %}
 <link rel="manifest" href="manifest.webmanifest">
@@ -111,6 +111,10 @@
     <div class="wt-row"><b id="wt-label">{{ S.wt_title }}</b><span class="muted wt-leg" id="wt-state"></span></div>
     <button type="button" class="btn primary" id="wt-open">{{ S.wt_open }}</button>
   </div>
+  <div class="card wtcard" id="cw-card" hidden>
+    <div class="wt-row"><b id="cw-label">{{ S.cw_title }}</b><span class="muted wt-leg" id="cw-state"></span></div>
+    <button type="button" class="btn primary" id="cw-open">{{ S.cw_open }}</button>
+  </div>
   <div class="card rvcard" id="rv-card" hidden>
     <div class="wt-row"><b>{{ S.rv_vote_title }}</b><span class="muted wt-leg" id="rv-card-state"></span></div>
     <button type="button" class="btn primary" id="rv-card-open">{{ S.rv_vote_go }}</button>
@@ -215,6 +219,12 @@
     {% for l in me.lines %}<li data-date="{{ l.date }}"><span class="ld">{{ l.label }}</span>{% if l.chip %}<span class="lchip">{{ l.chip }}</span>{% endif %}{% if l.text %}<span class="lt2">{{ l.text }}</span>{% endif %}</li>{% else %}<li class="muted empty">{{ S.lines_empty }}</li>{% endfor %}
   </ul>
 
+  {% if me.skills.any %}
+  <h2 class="sec-h">🧭 {{ S.sk_title }}</h2>
+  <p class="muted">{{ S.sk_hint }}</p>
+  <div class="skmap" id="skmap">{{ skill_map(me.skills) }}</div>
+  {% endif %}
+
   {% if me.shouts %}
   <h2 class="sec-h">🎤 {{ S.vc_student_title }} <span class="muted tnum">{{ S.vc_student_total | fmt(n=me.mic) }}</span></h2>
   <ul class="shoutlist" id="shouts">{% for x in me.shouts %}<li><span class="sd">{{ x.label }}</span>{{ x.text }}</li>{% endfor %}</ul>
@@ -312,6 +322,16 @@
     <ul class="rv-list" id="rv-list"></ul>
     <p class="wt-q">★ {{ S.rv_best }}</p>
     <ul class="rv-list best" id="rv-best"></ul>
+  </div>
+</div>
+
+<div class="wt" id="cw" role="dialog" aria-modal="true" aria-labelledby="cw-h" hidden>
+  <div class="wt-top"><b id="cw-h">{{ S.cw_title }}</b><button type="button" class="live-x" id="cw-x" aria-label="{{ S.close }}">×</button></div>
+  <div class="wt-body">
+    <p class="muted wt-leg">{{ S.cw_hint }}</p>
+    <div class="wt-grid" id="cw-grid"></div>
+    <p class="err" id="cw-err" aria-live="polite"></p>
+    <button type="button" class="btn primary wide" id="cw-send">{{ S.cw_send }}</button>
   </div>
 </div>
 

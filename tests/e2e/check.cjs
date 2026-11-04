@@ -983,6 +983,34 @@ print(c.execute("SELECT COUNT(*), SUM(text = '질문 좋았어'), SUM(text = '�
     }
     await bctx.close();
 
+    console.log('\n[6d] F21.2 수업 문제: the teacher opens a set, a student marks ○ ✕ – on the phone, pull brings it in');
+    {
+      const opened = daybook('classwork', 'open', CLASS_ON, '--label', '쎈 이차방정식 A');
+      check(/6 quizzes · 6 tagged/.test(opened), `classwork open (N and tags from the local tag file): ${opened.trim()}`);
+      const cc = await browser.newContext({ viewport: { width: 360, height: 740 } });
+      const cp = await cc.newPage();
+      await cp.goto(`${PAGES}/s/${pick.student_token}/#today`, { waitUntil: 'networkidle' });
+      await cp.waitForSelector('#cw-card:not([hidden])', { timeout: 6000 }).catch(() => {});
+      check(await cp.isVisible('#cw-card') && /쎈 이차방정식 A/.test(await cp.textContent('#cw-label')), 'the student sees 수업 문제 · 쎈 이차방정식 A on 오늘');
+      await cp.click('#cw-open');
+      await cp.click('#cw-grid .wq[data-k="1"]');                                   // ○ -> ✕
+      await cp.click('#cw-grid .wq[data-k="2"]'); await cp.click('#cw-grid .wq[data-k="2"]');   // ○ -> ✕ -> –
+      check((await cp.textContent('#cw-grid')).replace(/\d/g, '') === '○✕–○○○', 'tiles cycle ○ → ✕ → – (– is its own mark)');
+      await cp.click('#cw-send');
+      await cp.waitForSelector('#cw', { state: 'hidden', timeout: 5000 }).catch(() => {});
+      check(/표시 완료/.test(await cp.textContent('#cw-state')), 'sent: 표시 완료 (editable until tonight)');
+      const sw = await cp.evaluate(() => document.documentElement.scrollWidth);
+      check(sw <= 360, `수업 문제 at 360 px: no horizontal scroll (${sw})`);
+      await cc.close();
+      daybook('pull');
+      const m = execFileSync(PYTHON, ['-c', `
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+print(c.execute("SELECT m.marks FROM classwork_marks m JOIN students s ON s.id = m.student_id WHERE s.student_token = ?", (sys.argv[2],)).fetchone())`,
+        env.DAYBOOK_DB, pick.student_token], { encoding: 'utf-8' }).trim();
+      check(m === "('oxmooo',)", `daybook pull stored the student's own marks ${m}`);
+    }
+
     console.log('\n[7] taste build (F1): only 콩, no Worker, nothing stored');
     console.log('      ' + daybook('publish', '--taste', '--out', TASTE_OUT).trim().split('\n').pop());
     const TASTE = 'http://127.0.0.1:8791', TDIST = TASTE_OUT;
@@ -1064,6 +1092,10 @@ print(c.execute("SELECT COUNT(*), SUM(text = '질문 좋았어'), SUM(text = '�
       check(/확인 중/.test(await tp.textContent('#rv-mine')), 'taste: a review is "확인 중" on the phone only');
       await shot(tp, 'taste-student-review.png');
       await tp.click('#rv-x');
+      // F21.2: a practice 수업 문제 set and 내 실력 지도 (synthetic)
+      check(await tp.isVisible('#cw-card'), 'taste: a practice 수업 문제 card on 오늘');
+      await tp.click('#cw-open'); await tp.click('#cw-grid .wq[data-k="0"]'); await tp.click('#cw-send');
+      check(/표시 완료/.test(await tp.textContent('#cw-state')), 'taste: 수업 문제 marked on the phone only');
       // F19.2: a live practice reaction (simulated totals on the first videos; nothing is sent)
       await tp.click('#t-videos');
       const tvb = tp.locator('#feed .reel').first().locator('.vrb[data-r="fire"]');

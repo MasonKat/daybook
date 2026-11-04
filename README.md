@@ -3,7 +3,7 @@
 **Status (2026-11-04: P0, design v2, F1–F9, hotfix H1–H6, F10 videos per class, F11 members in the Teacher tab, F12 insights, F13 parent-contact desk, F14 weekly-test report):**
 1. P1 complete and tested: schema + `students_public`, `init`, `demo`, `roster add/list/import`, Worker `/submit` + `/submissions`, student 오늘 tab, `pull`, parent page, `publish` + no-PII lint, `import screeners`, deploy steps.
 2. P2 complete: board + attitude buttons, `score`, class reward bar, `note`, `weekly`, Playwright checks. P3: manifest/icons/standalone, `rotate-tokens`, `export pdf` stub, Worker node tests.
-3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 268 pytest + 58 Worker node tests (incl. the class-day budget with a Live round) + the Playwright end-to-end check (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
+3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 278 pytest + 59 Worker node tests (incl. the class-day budget with a Live round) + the Playwright end-to-end check (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
    Design v2: shorts reels + 강의 cards, story rings with content, status-coloured profile tiles, one weekly report per parent message.
 4. Features: taste build (콩, `make deploy-taste`), 출석 with a 4-digit code, 오늘 한 줄, 오늘의 장면 + reactions, 휴강, QR sheet, class band, term report, note drafts,
    the Teacher tab (no terminal on Saturdays), AMP Live (cooperative in-class rounds), the answer-card spike, an offline-capable student page.
@@ -95,6 +95,8 @@ Then follow `HANDOFF.md` (classes, roster import, links).
 | after class (F19.1) | Teacher tab → 음성 메모 가져오기 (paste the CLOVA Note text export), or `daybook voice import memo.txt --class 고1A [--save]` | "칭찬 가람 2점 …", "개념 …", "장면 …", "취소": a preview (누구? lines get candidate chips, nothing stored), then 저장: 🎤 shoutouts (korea mode: the student's "선생님 한마디" and the board's 오늘의 칭찬), teacher-only 개념 메모, 장면 drafts. Call signs: `roster edit <slug> --callsign 7번` |
 | any time (F19.2/F19.3) | daybook.json `"rank_scope": "grade"` (or `class` / `all`), `"video_reactions": {…}` labels, `"brand": {"mascot_px": 36}` (28–44) | students react to videos (🔥 👍 🤔 😵 💪; totals from 3 students, 어려워요 only in Teacher tab → 영상); every 발행 updates the 2-week TOP list per grade, shown as the header's "TOP 3" ticker |
 | in class (F19.4) | Teacher tab → 리모컨 → open the QR once on your phone (or `daybook remote link`) | the phone shows the class as name buttons: tap a student (or 반 전체), +1/+2/+3, say or type the praise, 저장 (취소 for 2 minutes; works offline); `daybook pull` or the board's poll brings it in |
+| in class (F21.2) | board → 수업 문제 열기 (or the remote's 수업 문제, or `daybook classwork open 고1A --label "쎈 이차방정식 A"`) | students mark ○ ✕ – per quiz on their phone until tonight; tags from your own classwork_tags.json (never online) build each student's 내 실력 지도 |
+| after class (F21.4/5) | Teacher tab → 실력 지도 · 서술형 · 사진 확인 필요; `daybook classwork import results.csv`, `classwork export <class>` | hand-graded 서술형 (○ △ ✕ or a score), photo-graded marks from a local model (confident ones stored, the rest queued), the tag × student grid as CSV |
 | once per class (F13) | `daybook class edit 기초B --start 20:00 --end 22:00 --late-min 30 [--self-study 21:00]` | class hours and the 지각 rule (defaults: 10 min, 3 of the last 6, or an average of 15 min) |
 
 Printable 안내 (G4): `daybook cards students <class>` (cut-out cards) and `daybook cards parents <class>` (A4 letters with
@@ -230,6 +232,8 @@ history. `dist/` and `*.sqlite` are gitignored. Every page sends `noindex` and h
 | GET | `/vreacts-pull?since=` | `X-Teacher-Token` | every reaction (token, video, reaction, ts), 어려워요 included |
 | GET | `/t/remote/` (+ `remote.js`, `sw.js`, `manifest.webmanifest`) | none (a shell, no data) | F19.4: the teacher remote page |
 | GET/POST | `/t/remote/roster` · `/today?class=` · `/shout` · `/undo` | `X-Teacher-Token` | the encrypted class lists; today's counts; a save `{id, t (token or *), class, points 1-3, text, at}` (one per student per 3 s; an id seen before is a no-op); undo within 2 minutes |
+| POST | `/classwork-mark`; GET `/status` (`classwork`) | Pages origin, own class only | F21.2: form `t`, `s` (set id), `marks` (N of o / x / m) until the end of the class day |
+| POST | `/classwork-open` (also `/t/remote/classwork`) · GET `/classwork-pull?since=` | `X-Teacher-Token` | open a set `{class, label, n}` (no quiz text, no tags) · sets and marks |
 | PUT | `/remote-roster` · GET `/shouts-pull?since=` | `X-Teacher-Token` | the console: the encrypted lists · shout-outs and undos |
 | PUT | `/reviews-sync` · GET `/reviews-pull?since=` | `X-Teacher-Token` | decisions, labels, rounds, winners, the wordlist and HMAC name hashes · new reviews and votes |
 

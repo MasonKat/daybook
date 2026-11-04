@@ -102,7 +102,10 @@ def roster(conn: sqlite3.Connection, cfg: Config) -> dict:
                                           WHERE class_id = ? AND active = 1 ORDER BY id""", (c["id"],))]
         days = [i for i in range(7) if c["weekday_mask"] and c["weekday_mask"] & (1 << i)]
         out.append({"key": class_key(c["id"]), "name": c["name"], "days": days, "start": c["start_time"] or "", "students": studs})
-    return {"classes": out, "chips": chips(cfg), "v": 1}
+    from . import classwork as CW              # F21.2: the set names (and their quiz counts) for 수업 문제; never a tag
+    tags = CW.load_tags(cfg)
+    sets = [{"label": k, "n": max(tags[k]) if tags[k] else 0} for k in CW.set_names(cfg)]
+    return {"classes": out, "chips": chips(cfg), "sets": sets, "v": 1}
 
 
 def link(cfg: Config) -> str:

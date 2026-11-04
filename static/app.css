@@ -659,3 +659,22 @@ select.consent.unknown { border-color: var(--adjust); } select.consent.no { bord
 .rm-qr svg { width: 100%; height: auto; display: block; }
 .tlist li.hold { font-weight: 600; }
 select.hold { min-height: 32px; border-radius: 8px; margin-left: 4px; }
+
+/* ---------- F21.2 내 실력 지도 (student; parent only with share_classwork) */
+.skmap { display: flex; flex-direction: column; gap: 10px; }
+.sk-tot { margin: 0; font-weight: 600; }
+.sk-u { margin: 0 0 4px; font-weight: 700; font-size: 14px; }
+.sk-tags { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr)); gap: 6px; }
+.sk { border-radius: 12px; padding: 8px 10px; background: var(--card); border-left: 4px solid var(--line); min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sk.strong { border-left-color: var(--up); }
+.sk.work { border-left-color: var(--adjust); }
+.sk.few { border-left-color: var(--line); opacity: .85; }
+.sk-n { font-weight: 700; }
+.sk-st, .sk-c { font-size: 12px; color: var(--muted); }
+.sk-m { color: var(--muted); }
+.bubble.skp .skmap { margin-top: 6px; }
+.ttable.sk td.sk-cell.strong { color: var(--up); }
+.ttable.sk td.sk-cell.work { color: var(--adjust); }
+.ttable.sk td.sk-cell.few { color: var(--muted); }
+.pq-img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; margin-right: 6px; vertical-align: middle; }
+#es-tags { min-height: 60px; }

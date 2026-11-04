@@ -319,11 +319,14 @@ def roster_import(obj: Ctx, csv_path, map_path, class_name):
 @click.option("--consent", type=click.Choice(["yes", "no", "unknown"]), default=None,
               help="F17: the parent's consent slip (yes publishes the parent page and allows watch signals / push)")
 @click.option("--callsign", default=None, help='F19.1: the short spoken name for voice notes (가람, 7번); "" clears it')
+@click.option("--share-classwork", "share_classwork", type=click.Choice(["yes", "no"]), default=None,
+              help="F21.1: in-class quiz work (○/✕ and the skill map) on the parent page: yes only when the student AND the parent agreed")
 @click.pass_obj
-def roster_edit(obj: Ctx, slug, display, new_slug, track, class_name, active, consent, callsign):
+def roster_edit(obj: Ctx, slug, display, new_slug, track, class_name, active, consent, callsign, share_classwork):
     conn = obj.conn
     try:
-        changed = ops.edit_student(conn, slug, display, new_slug, track, class_name, active, consent, callsign=callsign)
+        changed = ops.edit_student(conn, slug, display, new_slug, track, class_name, active, consent, callsign=callsign,
+                                   share_classwork=share_classwork)
     except ops.OpError as e:
         fail(str(e))
     conn.commit()
@@ -612,6 +615,8 @@ def pull(obj: Ctx, photos_dir):
                f"weekly-test reports {rep.reports}, unknown tokens {rep.unknown_tokens}")
     if rep.shouts:
         click.echo(f"리모컨 칭찬: {rep.shouts}")
+    if rep.classwork:
+        click.echo(f"수업 문제: {rep.classwork}")
     if rep.reviews or rep.votes:
         click.echo(f"학생 리뷰: new {rep.reviews} (waiting for 승인), votes {rep.votes}")
     if rep.photos:
@@ -1377,6 +1382,50 @@ def setup_cmd(obj: Ctx, start, english, state_path):
     except SU.SetupError as e:
         fail(str(e))
     sys.exit(0 if ok else 3)
+
+
+# ---------------------------------------------------------------- F21.2: 수업 문제 and the skill map
+
+@cli.group()
+def classwork():
+    """수업 문제: open an in-class ○/✕/– check; the sub-concept skill map (tags from the local classwork_tags.json)."""
+
+
+@classwork.command("open")
+@click.argument("class_name")
+@click.option("--label", required=True, help="The set's name (also its key in classwork_tags.json)")
+@click.option("--n", "n", type=int, default=None, help="Number of quizzes (default: the tag file's last quiz number)")
+@click.pass_obj
+def classwork_open(obj: Ctx, class_name, label, n):
+    from . import classwork as CW
+    cls = ops.get_class(obj.conn, class_name)
+    try:
+        r = CW.open_set(obj.conn, obj.cfg, cls["id"], label, n)
+    except CW.ClassworkError as e:
+        fail(str(e))
+    click.echo(f"open until the end of today: {r['label']} · {r['n']} quizzes · {r['tagged']} tagged")
+
+
+@classwork.command("import")
+@click.argument("csv_path", type=click.Path(exists=True, dir_okay=False))
+@click.pass_obj
+def classwork_import(obj: Ctx, csv_path):
+    """F21.5: photo-grading results (date, class, student, set, quiz, read_answer, mark, confidence, source=photo).
+    At or above classwork_auto_min (0.9): stored; below it, or unlike the student's own mark: Teacher tab → 사진 확인 필요."""
+    from . import classwork as CW
+    n = CW.import_photo(obj.conn, obj.cfg, csv_path)
+    click.echo(f"stored {n['stored']}, queued for 사진 확인 필요 {n['queued']} (of them unlike the student's own mark: {n['flagged']}), skipped {n['skipped']}")
+
+
+@classwork.command("export")
+@click.argument("class_name")
+@click.option("--out", "out_dir", default="reports", show_default=True)
+@click.pass_obj
+def classwork_export(obj: Ctx, class_name, out_dir):
+    """reports/skills_<class>_<date>.csv: tag × student counts (○ ✕ – and the rate), teacher only."""
+    from . import classwork as CW
+    cls = ops.get_class(obj.conn, class_name)
+    click.echo(CW.export_csv(obj.conn, obj.cfg, cls["id"], cls["name"], out_dir))
 
 
 if __name__ == "__main__":

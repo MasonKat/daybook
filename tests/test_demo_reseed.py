@@ -34,6 +34,8 @@ def test_reseed_twice_with_every_table_filled(conn):
     conn.execute("INSERT INTO moment_drafts (class_id, day, text, ts) VALUES (?, '2026-11-05', '장면', 't')", (cls["id"],))
     conn.execute("INSERT INTO class_shouts (class_id, day, ts, points, text) VALUES (?, '2026-11-05', 't', 1, '다 같이')", (cls["id"],))
     conn.execute("INSERT INTO video_ranks (period_from, pool, rank, video_id, score, watchers) VALUES ('2026-11-02', 'p', 1, 'v', 3, 1)")
+    conn.execute("""INSERT INTO quiz_marks (student_id, class_id, day, label, quiz, mark, source, ts, updated)
+                    VALUES (?, ?, '2026-11-05', '서술형 1', 1, 'p', 'essay', 't', 't')""", (sid, cls["id"]))
     conn.execute("INSERT INTO review_wins (round_id, review_id, votes) VALUES ('r1', 'abcdefabcdef', 1)")
     conn.commit()
     tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")]

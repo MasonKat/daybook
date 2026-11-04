@@ -729,6 +729,7 @@
           if (j.class_today) classToday = true;
           if (j.checkin_ts) { ckTime = hhmm(j.checkin_ts); LS.set(CKEY + today, ckTime); }
           if (j.rounds) wtSave(j.rounds);
+          if (j.classwork) cwSave(j.classwork);
           renderLive();
           renderRitual();
           if (!known[today] && $('st-preview').hidden && $('st-err').hidden) show(idleState());
@@ -1198,6 +1199,70 @@
     renderRv();
     rvLoad();
 
+    /* ---- F21.2 수업 문제: after the teacher reveals the answers, mark each quiz ○ (맞음) → ✕ (틀림) → – (못 풀었거나 시간 부족).
+       No quiz text, no answer, no key: the student solved it in their own book. Open until the end of the class day. */
+    var CWKEY = 'daybook.cw.' + tok, cwSets = [], cwCur = null, cwMarks = [];
+    var CWM = { o: '○', x: '✕', m: '–' }, CWN = { o: 'x', x: 'm', m: 'o' };
+    function cwSave(sets) { cwSets = sets || []; if (!TASTE) LS.set(CWKEY, JSON.stringify(cwSets)); renderCW(); }
+    function cwOpenSet() {
+      var now = Date.now(), open = cwSets.filter(function (x) { return Date.parse(x.until) > now; });
+      return open.length ? open[open.length - 1] : null;
+    }
+    function renderCW() {
+      var x = cwOpenSet();
+      $('cw-card').hidden = !x;
+      if (!x) return;
+      $('cw-label').textContent = S.cw_title + ' · ' + x.label;
+      $('cw-state').textContent = x.mine ? S.cw_done : fmt(S.cw_todo, { n: x.n });
+      $('cw-open').textContent = x.mine ? S.cw_edit : S.cw_open;
+    }
+    function cwDraw() {
+      var g = $('cw-grid'); g.innerHTML = '';
+      for (var i = 0; i < cwCur.n; i++) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'wq ' + (cwMarks[i] === 'o' ? 'c' : cwMarks[i]); b.setAttribute('data-k', String(i));
+        b.innerHTML = '<span class="wn"></span><span class="wm"></span>';
+        b.firstChild.textContent = i + 1; b.lastChild.textContent = CWM[cwMarks[i]];
+        g.appendChild(b);
+      }
+    }
+    $('cw-open').addEventListener('click', function () {
+      cwCur = cwOpenSet(); if (!cwCur) return;
+      cwMarks = (cwCur.mine && cwCur.mine.length === cwCur.n ? cwCur.mine : new Array(cwCur.n + 1).join('o')).split('');
+      $('cw-h').textContent = S.cw_title + ' · ' + cwCur.label; $('cw-err').textContent = '';
+      cwDraw(); $('cw').hidden = false;
+    });
+    $('cw-x').addEventListener('click', function () { $('cw').hidden = true; });
+    $('cw-grid').addEventListener('click', function (e) {
+      var b = e.target.closest('.wq'); if (!b) return;
+      var k = Number(b.getAttribute('data-k'));
+      cwMarks[k] = CWN[cwMarks[k]];
+      b.className = 'wq ' + (cwMarks[k] === 'o' ? 'c' : cwMarks[k]); b.lastChild.textContent = CWM[cwMarks[k]];
+    });
+    $('cw-send').addEventListener('click', function () {
+      var marks = cwMarks.join(''), cur = cwCur;
+      var done = function () { cur.mine = marks; cwSave(cwSets); $('cw').hidden = true; };
+      if (TASTE) return done();                                 /* taste: nothing leaves the phone */
+      var fd = new FormData(); fd.append('t', tok); fd.append('s', cur.s); fd.append('marks', marks);
+      $('cw-send').disabled = true;
+      fetch(D.worker + '/classwork-mark', { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (j) {
+        $('cw-send').disabled = false;
+        if (j.ok) return done();
+        $('cw-err').textContent = j.error === 'closed' ? S.cw_closed : S.cw_err;
+      }, function () { $('cw-send').disabled = false; $('cw-err').textContent = S.cw_err; });
+    });
+    if (TASTE) {   /* 콩 can try it: a practice set, kept in memory only */
+      cwSets = [{ s: 'taste', n: 6, label: '쎈 이차방정식 A', until: new Date(Date.parse(today + 'T23:59:00+09:00')).toISOString(), mine: null }];
+    } else {
+      try { cwSets = JSON.parse(LS.get(CWKEY) || '[]') || []; } catch (e) { cwSets = []; }
+      document.addEventListener('visibilitychange', function () {   /* a set the teacher opened while the page sat in the pocket */
+        if (document.hidden || !D.worker || !tok) return;
+        fetch(D.worker + '/status?t=' + tok, { cache: 'no-store' }).then(function (r) { return r.json(); })
+          .then(function (j) { if (j && j.classwork) cwSave(j.classwork); }, function () {});
+      });
+    }
+    renderCW();
+
     /* ---- F9: "홈 화면에 추가" hint, shown once, never inside the installed app */
     var standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone;
     if (!standalone && !LS.get('daybook.a2hs')) { $('a2hs').hidden = false; LS.set('daybook.a2hs', '1'); }
@@ -1312,6 +1377,10 @@
       $('b-fill').style.width = st.pct.toFixed(1) + '%';
       $('b-togo').textContent = st.togo;
       if ($('b-three')) $('b-three').textContent = st.three;   /* F16.1: absent in manitoba practice mode */
+      if ($('cw-today') && st.classwork) {                       /* F21.2: 수업 문제 · n문제 · 표시 k/t명 */
+        var cl = $('cw-today'); cl.innerHTML = '';
+        st.classwork.forEach(function (t) { var li = document.createElement('li'); li.textContent = t; cl.appendChild(li); });
+      }
       if ($('b-shouts') && st.shouts) {                          /* F19.4: 오늘의 칭찬 (the remote's saves arrive with the poll) */
         var ul = $('b-shouts').querySelector('ul'); ul.innerHTML = '';
         st.shouts.forEach(function (x) { var li = document.createElement('li'), b = document.createElement('b');
@@ -1339,6 +1408,14 @@
       if (b.classList.contains('pt')) post('/api/attitude', { student_id: id, points: Number(b.getAttribute('data-p')) }).then(apply);
       else if (b.classList.contains('subfor')) post('/api/submit-for', { student_id: id }).then(apply);
       else if (b.classList.contains('ckfor')) post('/api/checkin-for', { student_id: id }).then(apply);
+    });
+    if ($('cw-go')) $('cw-go').addEventListener('click', function () {     /* F21.2: open a 수업 문제 set for this class */
+      var cname = (document.querySelector('.top .brand') || {}).textContent || '';
+      post('/api/teacher/classwork-open', { 'class': D.cls || cname.split(' · ').pop().trim(), label: $('cw-label').value, n: $('cw-n').value })
+        .then(function (j) {
+          var li = document.createElement('li'); li.textContent = j.ok ? j.label + ' · ' + j.n : (j.error || '');
+          $('cw-today').appendChild(li); if (j.ok) { $('cw-label').value = ''; $('cw-n').value = ''; }
+        });
     });
     var mPost = $('m-post');
     if (mPost) {

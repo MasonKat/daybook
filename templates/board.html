@@ -35,6 +35,15 @@
   </li>
   {% endfor %}
 </ul>
+<section class="card cwbox" id="b-cw">
+  <h2>{{ S.cw_board }}</h2>
+  <p class="muted">{{ S.cw_board_hint }}</p>
+  <div class="row2"><input id="cw-label" type="text" maxlength="40" list="cw-sets" placeholder="{{ S.cw_board_label }}" aria-label="{{ S.cw_board_label }}">
+    <datalist id="cw-sets">{% for n in cw_sets %}<option value="{{ n }}">{% endfor %}</datalist>
+    <input id="cw-n" type="number" min="1" max="40" placeholder="{{ S.cw_board_n }}" aria-label="{{ S.cw_board_n }}">
+    <button type="button" class="btn primary" id="cw-go">{{ S.cw_board_open }}</button></div>
+  <ul class="muted cwlist" id="cw-today">{% for x in cw_today %}<li>{{ x }}</li>{% endfor %}</ul>
+</section>
 <section class="card mbox">
   <h2>{{ S.board_moment }}</h2>
   <input id="m-file" type="file" accept="image/*" capture="environment">

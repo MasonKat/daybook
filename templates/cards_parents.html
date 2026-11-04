@@ -52,9 +52,11 @@ ul { margin: 0; padding-left: 5mm; columns: 2; column-gap: 8mm; } li { margin: 0
     <h3>{% if academy %}{{ academy }} · {% endif %}{{ P.letter_slip_title }}</h3>
     <div class="row"><span>{{ P.letter_slip_student }} <span class="blank">&nbsp;</span></span>
       <span><span class="box">□</span> {{ P.letter_slip_yes }}</span> <span><span class="box">□</span> {{ P.letter_slip_no }}</span></div>
+    <div class="row"><span>{{ P.letter_slip_cw }}</span>
+      <span><span class="box">□</span> {{ P.letter_slip_cw_student }}</span> <span><span class="box">□</span> {{ P.letter_slip_cw_parent }}</span></div>
     <div class="row"><span>{{ P.letter_slip_sign }} <span class="blank">&nbsp;</span></span>
       <span>{{ P.letter_slip_date }} <span class="blank" style="min-width: 30mm">&nbsp;</span></span></div>
-    <p class="note">{{ P.letter_slip_note }}</p>
+    <p class="note">{{ P.letter_slip_note }} {{ P.letter_slip_cw_note }}</p>
   </div>
 </section>
 {% endfor %}
