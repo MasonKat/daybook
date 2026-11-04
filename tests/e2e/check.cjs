@@ -1174,6 +1174,42 @@ print(c.execute("SELECT m.marks FROM classwork_marks m JOIN students s ON s.id =
       await tour(setupRemote, 'remote tutorial');
     }
 
+    console.log('\n[7b] F22.4 ⚙ 설정: an avatar and a reorder (never a hide), saved on the Worker, the same on another device');
+    {
+      const sc = await browser.newContext({ viewport: { width: 360, height: 740 } });
+      const sp = await sc.newPage();
+      await sp.goto(`${PAGES}/s/${pick.student_token}/#me`, { waitUntil: 'networkidle' });
+      const before = await sp.evaluate(() => [...document.querySelectorAll('#stories > .story')].map((b) => b.getAttribute('data-story')));
+      await sp.click('#set-open');
+      const n = await sp.evaluate(() => [...document.querySelectorAll('.set-ord li')].length);
+      const ids = await sp.evaluate(() => [...document.querySelectorAll('.set-ord[data-kind="rings"] li')].map((l) => l.getAttribute('data-id')));
+      await sp.click('.set-ord[data-kind="rings"] li:first-child .so-b:last-child');      // ▼: the first ring moves down one
+      await sp.click('.set-av[data-d="owl"]'); await sp.click('.set-col[data-c="2"]');
+      const sw = await sp.evaluate(() => Math.max(document.documentElement.scrollWidth, document.getElementById('set').scrollWidth));
+      await sp.click('#set-save');
+      await sp.waitForSelector('#set', { state: 'hidden', timeout: 5000 }).catch(() => {});
+      const after = await sp.evaluate(() => [...document.querySelectorAll('#stories > .story')].map((b) => b.getAttribute('data-story')));
+      const want = ids.slice(); want.splice(0, 2, ids[1], ids[0]);
+      const rel = (list) => list.filter((x) => before.includes(x));
+      check(n === 18 && sw <= 360 && after.length === before.length && rel(want).join() === after.join() && await sp.isVisible('.sbar .me-av svg'),
+        `settings at 360 px (${n} rows, scroll ${sw}): ▼ moved ${ids[0]} after ${ids[1]}, nothing hidden (${after.length} rings), the owl avatar in the header`);
+      await sc.close();
+      const oc = await browser.newContext({ viewport: { width: 390, height: 844 } });          // another device: from the Worker
+      const op = await oc.newPage();
+      await op.goto(`${PAGES}/s/${pick.student_token}/#me`, { waitUntil: 'networkidle' });
+      await op.waitForFunction((a) => [...document.querySelectorAll('#stories > .story')].map((b) => b.getAttribute('data-story')).join() === a, after.join(), { timeout: 5000 }).catch(() => {});
+      const other = await op.evaluate(() => [...document.querySelectorAll('#stories > .story')].map((b) => b.getAttribute('data-story')));
+      check(other.join() === after.join() && await op.isVisible('.sbar .me-av svg'), 'another device shows the same order and avatar (stored per token on the Worker)');
+      await oc.close();
+      daybook('pull');
+      const row = execFileSync(PYTHON, ['-c', `
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+print(c.execute("SELECT p.prefs FROM student_prefs p JOIN students s ON s.id = p.student_id WHERE s.student_token = ?", (sys.argv[2],)).fetchone()[0])`,
+        env.DAYBOOK_DB, pick.student_token], { encoding: 'utf-8' }).trim();
+      check(JSON.parse(row).avatar === 'p:owl-2' && JSON.parse(row).rings.join() === want.join(), `pull copied the settings to SQLite: ${row.slice(0, 80)}…`);
+    }
+
     console.log('\n[8] F19 mascot size: brand.mascot_px 44 keeps the student header on one line at 360 px');
     {
       const c44 = { ...cfgCopy, brand: { ...(cfgCopy.brand || {}), mascot_px: 44 } };

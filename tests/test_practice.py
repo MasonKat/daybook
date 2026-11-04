@@ -23,7 +23,8 @@ def test_board_names_three_in_korea_and_hides_them_in_manitoba(tserver, conn, kl
     call(url + "/api/attitude", {"student_id": studs[0]["id"], "points": 3})
     call(url + "/api/attitude", {"student_id": studs[1]["id"], "points": 2})
     html = call(url + "/")[1]
-    assert 'id="b-three">가람<' in html and "도담" not in html.split('id="b-three"')[1][:40]   # praise by name; 2 points never
+    three = html.split('id="b-three"')[1].split("</p>")[0]
+    assert "</span>가람</span>" in three and "도담" not in three                     # praise by name (F22.4: + avatar); 2 points never
     assert call(url + "/api/state")[1]["three"] == "가람"
     assert "three" not in call(url + "/api/teacher/flags")[1]
     code, j = call(url + "/api/teacher/practice", {"mode": "manitoba"})

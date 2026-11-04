@@ -159,6 +159,7 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
     _seed_voice(conn, today)
     _seed_classwork(conn, today)
     _seed_goal_rules(conn, today)
+    _seed_prefs(conn)
     for r in conn.execute("SELECT id FROM students ORDER BY id LIMIT 2").fetchall():        # F16.4: two SLCs this week
         conn.execute("INSERT INTO meetings (student_id, day, kind, ts) VALUES (?, ?, 'slc', ?)",
                      (r["id"], today.isoformat(), "2026-01-01T00:00:00.000Z"))
@@ -195,6 +196,19 @@ def _seed_classwork(conn: sqlite3.Connection, today: date) -> None:
             conn.execute("INSERT INTO classwork_marks (sid, student_id, marks, updated) VALUES (?, ?, ?, ?)",
                          (sid, st, marks, f"{day.isoformat()}T11:05:00.000Z"))
     conn.execute("UPDATE students SET share_classwork = 'yes' WHERE slug = ? OR ext_id = ?", (KONG["slug"], LATE_STAR))
+
+
+def _seed_prefs(conn: sqlite3.Connection) -> None:
+    """F22.4: a few students picked a preset avatar; one moved 반 목표 to the front of the rings and 실력 지도 up."""
+    from . import prefs as PF
+    ids = [r[0] for r in conn.execute("SELECT id FROM students ORDER BY id")]
+    picks = ["p:cat-0", "p:rocket-4", "p:owl-2", "p:star-6", "p:frog-3"]
+    for sid, aid in zip(ids[::3], picks):
+        PF.save(conn, sid, {"avatar": aid}, "demo")
+    if ids:
+        rings = ["goal"] + [x for x in PF.SECTIONS["rings"] if x != "goal"]
+        profile = ["skills"] + [x for x in PF.SECTIONS["profile"] if x != "skills"]
+        PF.save(conn, ids[0], {"avatar": "p:cat-0", "rings": rings, "profile": profile}, "demo")
 
 
 def _seed_goal_rules(conn: sqlite3.Connection, today: date) -> None:

@@ -831,6 +831,31 @@
   });
   loadReviews();
 
+  /* ------------------------------------------------------------ F22.4: 아바타 확인 (own pictures, shown only once approved) */
+  function loadAvatars() {
+    api('/api/teacher/avatars').then(function (j) {
+      var ul = $('avt-pending'); ul.innerHTML = '';
+      (j.pending || []).forEach(function (a) {
+        var li = el('li', { 'class': 'wrow' });
+        var img = el('img', { src: a.src, alt: '', width: '64', height: '64', 'class': 'avq-img' }); li.appendChild(img);
+        li.appendChild(el('span', {}, a.class_name + ' · ' + a.name));
+        var ok = el('button', { type: 'button', 'class': 'btn primary', 'data-av': a.id, 'data-ok': '1' }, S.av.ok);
+        var no = el('button', { type: 'button', 'class': 'btn ghost', 'data-av': a.id, 'data-ok': '' }, S.av.no);
+        li.appendChild(ok); li.appendChild(no); ul.appendChild(li);
+      });
+      if (!(j.pending || []).length) ul.appendChild(el('li', { 'class': 'muted' }, S.av.none));
+    });
+  }
+  $('t-avatars').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-av]'); if (!b) return;
+    b.disabled = true;
+    api('/api/teacher/avatar', { id: Number(b.getAttribute('data-av')), ok: !!b.getAttribute('data-ok') }).then(function (j) {
+      $('avt-msg').textContent = j.ok ? (S.saved + (j.message ? ' · ' + j.message : '')) : (j.error || '');
+      loadAvatars();
+    });
+  });
+  loadAvatars();
+
   /* ------------------------------------------------------------ F15.3: 알림 보내기 (counts only, never who) */
   var NP = { texts: {} };
   function loadPush() {

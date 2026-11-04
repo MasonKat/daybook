@@ -755,3 +755,35 @@ def history(conn: sqlite3.Connection, class_name: str, day: str) -> dict:
                               WHERE x.class_id = ? AND x.day = ? ORDER BY x.ts""", cls["id"], day),
             "notes": q("""SELECT s.display_name, n.text FROM notes n JOIN students s ON s.id = n.student_id
                           WHERE s.class_id = ? AND n.week = ? ORDER BY s.id""", cls["id"], M.iso_week(d))}
+
+
+# ---------------------------------------------------------------- F22.4: 아바타 확인 (own pictures wait for the teacher)
+
+def avatars_view(conn: sqlite3.Connection) -> dict:
+    from . import prefs as PF
+    names = {r["id"]: (r["display_name"], r["class_name"]) for r in conn.execute(
+        "SELECT s.id, s.display_name, c.name AS class_name FROM students_public s LEFT JOIN classes c ON c.id = s.class_id")}
+    return {"ok": True, "pending": [{**p, "name": names.get(p["student_id"], ("?", ""))[0],
+                                     "class_name": names.get(p["student_id"], ("", ""))[1]} for p in PF.pending(conn)]}
+
+
+def avatar_decide(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
+    """승인 / 거절. The picture is published (own page + parent page) at the next 발행; the Worker drops its copy."""
+    from datetime import datetime, timezone
+    from . import prefs as PF
+    from .db import log_event
+    from .pull import http_post_json
+    try:
+        row = PF.decide(conn, int(body.get("id") or 0), bool(body.get("ok")), datetime.now(timezone.utc).isoformat())
+    except PF.PrefsError as e:
+        raise TeacherError(str(e)) from e
+    log_event(conn, "avatar_decide", {"student_id": row["student_id"], "ok": bool(body.get("ok"))})
+    conn.commit()
+    tok = conn.execute("SELECT student_token FROM students_public WHERE id = ?", (row["student_id"],)).fetchone()
+    msg = ""
+    if tok and cfg.worker and cfg.teacher_token:
+        try:
+            http_post_json(cfg, "/avatar-decide", {"token": tok[0], "ok": bool(body.get("ok")), "ts": row["ts"]})
+        except PullError as e:
+            msg = str(e)
+    return {"ok": True, "message": msg}

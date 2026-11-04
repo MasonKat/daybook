@@ -262,6 +262,12 @@ def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None =
         rep.shouts = VC.apply_remote(conn, cfg or Config(), sh.get("items", []))
     except PullError:
         pass  # an older Worker without the remote
+    try:
+        from . import prefs as PF                   # F22.4: ⚙ 설정 (order + avatar) and own pictures waiting for the teacher
+        av = json.loads(fetch("/avatars-pull" + (f"?since={urllib.parse.quote(since)}" if since else "")))
+        PF.apply_pull(conn, av, _token_map(conn))
+    except PullError:
+        pass  # an older Worker without settings
     from . import reviews as RV                     # F18.3: new 학생 리뷰 and votes; finished votes get their winners
     rep.reviews, rep.votes = RV.pull_and_close(conn, fetch)
     now = datetime.fromisoformat(body.get("now", datetime.now(timezone.utc).isoformat()).replace("Z", "+00:00"))

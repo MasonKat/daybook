@@ -223,7 +223,7 @@ def test_student_page_carries_hashes_not_names_and_the_header_pill(conn, klass, 
     for s in studs[1:]:
         assert s["display_name"] not in html and s["full_name"] not in html
     head = html.split('<header class="sbar">')[1].split("</header>")[0]
-    order = [head.index(x) for x in ('class="wordmark"', 'class="mslot"', 'id="rv-open"', 'class="rkt-gap"', 'class="av ring sm"')]
+    order = [head.index(x) for x in ('class="wordmark"', 'class="mslot"', 'id="rv-open"', 'class="rkt-gap"', 'class="av ring sm')]
     assert 'id="today-date"' not in head and 'id="today-date"' in html.split('class="rhead"')[1].split("</div>")[0]   # F19.3: date moved
     assert order == sorted(order) and 'class="mph"' in head                        # F18.4 order; the placeholder shape
     assert '<script src="/static/review_filter.js" defer>' in html and (tmp_path / "d" / "static" / "review_filter.js").exists()

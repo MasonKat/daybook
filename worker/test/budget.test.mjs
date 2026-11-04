@@ -5,7 +5,9 @@
 // one push after 발행; (F18.3) the review wordlist + name hashes synced, every student writes 1 review, opens the review
 // sheet on each of the 5 page opens, and votes once; the hourly vote cron runs 24 times; (F19.2) every student reacts once to
 // every one of 12 videos (the worst case of one reaction per student per video per day) and loads the totals on every open;
-// (F19.4) the teacher remote: 40 taps in class (each a save, half with the badge refresh), 3 undos, the roster twice.
+// (F19.4) the teacher remote: 40 taps in class (each a save, half with the badge refresh), 3 undos, the roster twice;
+// (F22.4) every student loads ⚙ 설정 on each open and saves it twice, 5 upload an own picture (the worst case of 1/day),
+// the teacher pulls and decides them.
 import fs from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -44,11 +46,16 @@ test('a full class day stays under 30 % of every free daily limit', async () => 
   await teacher('/reviews-sync', 'PUT', { words, rounds: [rround],                // F18.3: 발행 sends the list, hashes, the round
     names: { c1: Array.from({ length: 20 }, (_, i) => (i.toString(16) + '0123456789abcdef').slice(0, 16)) } });
   for (const t of toks) {
-    for (let i = 0; i < 5; i++) { await student(`/status?t=${t}`); await student(`/moments?t=${t}`); await student(`/reviews?t=${t}`); await student(`/vreacts?t=${t}`); }   // 5 page opens
+    for (let i = 0; i < 5; i++) { await student(`/status?t=${t}`); await student(`/moments?t=${t}`); await student(`/reviews?t=${t}`); await student(`/vreacts?t=${t}`); await student(`/prefs?t=${t}`); }   // 5 page opens
     for (let k = 0; k < 12; k++) {                                           // F19.2: 12 videos, one reaction each
       const xf = new FormData(); xf.append('t', t); xf.append('v', `AMPvideo0${String(k).padStart(2, '0')}`); xf.append('r', ['fire', 'good', 'curious', 'hard', 'try'][k % 5]);
       assert.equal((await student('/vreact', xf)).ok, true);
     }
+    for (let k = 0; k < 2; k++) {                                            // F22.4: ⚙ 설정 saved twice
+      const pf = new FormData(); pf.append('t', t); pf.append('prefs', JSON.stringify({ avatar: k ? 'p:cat-1' : 'p:owl-3' }));
+      assert.equal((await student('/prefs', pf)).ok, true);
+    }
+    if (toks.indexOf(t) < 5) { const af = new FormData(); af.append('t', t); af.append('image', JPEG.slice(0, 40000)); assert.equal((await student('/avatar', af)).ok, true); }
     { const rf = new FormData(); rf.append('t', t); rf.append('text', `오늘 수업 웃겼던 순간 ${t.slice(-2)}`); rf.append('hide', '0');
       assert.equal((await student('/review', rf)).ok, true); }                   // F18.3: one review a day
     const wrong = new FormData(); wrong.append('t', t); wrong.append('code', '0000');
@@ -132,10 +139,11 @@ test('a full class day stays under 30 % of every free daily limit', async () => 
   await teacher('/submissions'); await teacher('/checkins'); await teacher('/live/results'); await teacher('/reports'); await teacher('/watches');
   await teacher('/reviews-pull?since=2020-01-01'); await teacher('/vreacts-pull?since=2020-01-01');
   await teacher('/shouts-pull?since=2020-01-01');                              // Saturday-style pull
+  for (const a of (await teacher('/avatars-pull?since=2020-01-01')).avatars) await tpost('/avatar-decide', { token: a.token, ok: true, ts: a.ts });
 
   const kv = env.SUBMISSIONS.ops, d1 = env.DB.usage;
   const dO = env.LIVE.usage;
-  const used = { requests, kvRead: kv.get, kvWrite: kv.put, kvList: kv.list, kvDelete: 0, d1RowsRead: d1.rowsRead, d1RowsWritten: d1.rowsWritten,
+  const used = { requests, kvRead: kv.get, kvWrite: kv.put, kvList: kv.list, kvDelete: kv.delete, d1RowsRead: d1.rowsRead, d1RowsWritten: d1.rowsWritten,
     doRequests: dO.requests, doRowsRead: dO.rowsRead, doRowsWritten: dO.rowsWritten };
   const table = Object.keys(FREE).map((k) => `${k.padEnd(14)} ${String(used[k]).padStart(7)} / ${String(FREE[k]).padStart(9)}  ${(100 * used[k] / FREE[k]).toFixed(2)} %`);
   console.log('\n# class-day budget (free plan)\n# ' + table.join('\n# '));

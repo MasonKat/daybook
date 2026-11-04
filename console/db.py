@@ -12,7 +12,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 KST = timezone(timedelta(hours=9))  # Asia/Seoul has no DST
 
 SCHEMA = """
@@ -39,6 +39,20 @@ CREATE TABLE IF NOT EXISTS classes (
     rubric             TEXT                  -- F22.1: JSON {"1": …, "2": …, "3": …} (NULL = the default rubric)
 );
 
+CREATE TABLE IF NOT EXISTS student_prefs (    -- F22.4 ⚙ 설정: the student's own avatar + section order (pulled from the Worker)
+    student_id INTEGER PRIMARY KEY REFERENCES students(id),
+    prefs      TEXT NOT NULL,                 -- JSON, validated by console/prefs.py (reorder only, never hide)
+    updated    TEXT
+);
+CREATE TABLE IF NOT EXISTS avatar_uploads (   -- F22.4: an own picture, pre-moderated (shown only once approved)
+    id         INTEGER PRIMARY KEY,
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    mime       TEXT NOT NULL,
+    image      BLOB NOT NULL,                 -- <= 60 KB, square, <= 256 px (cropped on the phone)
+    status     TEXT NOT NULL DEFAULT 'pending',   -- pending | approved | rejected | replaced
+    ts         TEXT NOT NULL,
+    decided    TEXT
+);
 CREATE TABLE IF NOT EXISTS goal_cycles (      -- F22.1: a month cycle's goal, frozen at its first publish; past ones = history
     class_id INTEGER NOT NULL REFERENCES classes(id),
     start    TEXT NOT NULL,                   -- the 1st of the month

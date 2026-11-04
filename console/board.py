@@ -125,6 +125,7 @@ class Board:
             (self.day.isoformat(), self.session_id, self.session_id, self.class_id)).fetchall()
         reward = M.reward_for(conn, cls, self.day)
         three = [r["display_name"] for r in rows if r["points"] == 3]
+        three_html = _three_html(conn, [r for r in rows if r["points"] == 3])     # F22.4: each with their avatar
         # F16.1: korea (default): today's 3-point names are public praise on the projected board, as designed (1-2 points
         # never appear by name). manitoba practice mode: no names on the projected view; "선생님 보기" shows them.
         from . import practice
@@ -142,7 +143,7 @@ class Board:
                                              (self.class_id,))]
         cw_today = [{"label": r["label"], "n": r["n"], "k": conn.execute("SELECT COUNT(*) FROM classwork_marks WHERE sid = ?", (r["sid"],)).fetchone()[0]}
                     for r in conn.execute("SELECT * FROM classwork_sets WHERE class_id = ? AND day = ? ORDER BY ts", (self.class_id, self.day.isoformat()))]
-        return {"cls": cls, "students": students, "reward": reward, "three": three, "show_three": show_three, "arrivals": arrivals,
+        return {"cls": cls, "students": students, "reward": reward, "three": three, "three_html": three_html if show_three else "", "show_three": show_three, "arrivals": arrivals,
                 "code": sess["code"] or "", "start": sess["start_time"] or "", "shouts": shouts, "drafts": drafts, "cw_today": cw_today}
 
     def state_json(self, conn) -> dict:
@@ -156,6 +157,7 @@ class Board:
             "togo": self.S["reward_to_go"].format(label=r.label, n=r.to_go),
             "three": (", ".join(st["three"]) if st["three"] else self.S["board_none"]) if st["show_three"] else "",
             "show_three": st["show_three"],
+            "three_html": str(st["three_html"]),
             "arrivals": st["arrivals"],
             "reactions": self.reactions_text,
             "moments": conn.execute("SELECT COUNT(*) FROM moments WHERE session_id = ?", (self.session_id,)).fetchone()[0],
@@ -249,7 +251,7 @@ class Board:
         return tpl.render(S=self.S, page="board", mascot=brand.data_uri(self.cfg), mascot_px=brand.mascot_px(self.cfg), cls=st["cls"],
                           banner=ops.banner(st["cls"]), classes=classes,
                           rules=generate._rules(conn, self.cfg, st["cls"], st["reward"], self.day), students=st["students"], reward=st["reward"],
-                          three=st["three"], show_three=st["show_three"], shouts=st["shouts"], drafts=st["drafts"], poll=self.poll,
+                          three=st["three"], three_html=st["three_html"], show_three=st["show_three"], shouts=st["shouts"], drafts=st["drafts"], poll=self.poll,
                           cw_sets=__import__("console.classwork", fromlist=["x"]).set_names(self.cfg),
                           cw_today=[self.S["cw_board_state"].format(label=x["label"], n=x["n"], k=x["k"], t=len(st["students"])) for x in st["cw_today"]], code=st["code"], start=st["start"], arrivals=st["arrivals"],
                           reactions=self.reactions_text, poll_seconds=self.cfg.board_poll_seconds,
@@ -374,6 +376,8 @@ def make_handler(board: Board):
                     return self._json(T.remote_view(board.cfg))
                 if path == "/api/teacher/voice":              # F19.1
                     return self._json(T.voice_view(conn, day))
+                if path == "/api/teacher/avatars":            # F22.4 아바타 확인
+                    return self._json(T.avatars_view(conn))
                 if path == "/api/teacher/reviews":            # F18.3
                     return self._json(T.reviews_view(conn, board.cfg, day))
                 if path == "/api/teacher/rounds":             # F14
@@ -438,6 +442,8 @@ def make_handler(board: Board):
                         return self._json(T.remote_setup(conn, board.cfg, body))
                     if self.path == "/api/teacher/draft":                # F19.1 장면 초안: 승인 / ✗
                         return self._json(T.draft_decide(conn, body))
+                    if self.path == "/api/teacher/avatar":               # F22.4: 승인 / 거절
+                        return self._json(T.avatar_decide(conn, board.cfg, body))
                     if self.path == "/api/teacher/review":               # F18.3: 승인 / 숨김
                         return self._json(T.review_decide(conn, board.cfg, body))
                     if self.path == "/api/teacher/review-vote":          # F18.3: 지금 투표 열기
@@ -634,4 +640,21 @@ def serve(db_path: str, cfg: Config, class_name: str | None, port: int = 8787, p
         stop.set()
         httpd.server_close()
 
+
+def _three_html(conn, rows) -> str:
+    """F22.4: today's 3점 names (korea mode only) with each student's own avatar (preset, or an approved picture)."""
+    import base64
+    from markupsafe import Markup, escape
+    from . import prefs as PF
+    out = []
+    for r in rows:
+        a = PF.resolve(conn, r["id"])
+        if a["kind"] == "svg":
+            inner = Markup(PF.avatar_svg(a["id"]))
+        elif a["kind"] == "img":
+            inner = Markup('<img src="data:%s;base64,%s" alt="">') % (a["mime"], base64.b64encode(a["data"]).decode())
+        else:
+            inner = Markup("<span>%s</span>") % r["display_name"][:1]
+        out.append(Markup('<span class="three-av"><span class="av ring">%s</span>%s</span>') % (inner, escape(r["display_name"])))
+    return Markup("").join(out)
 

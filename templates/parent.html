@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_rows.html" import solved_strip, video_tiles, skill_map with context %}
+{% from "_rows.html" import solved_strip, video_tiles, skill_map, avatar with context %}
 {% macro report(w) %}
 <section class="card report">
   <h2>{{ w.title }}</h2>
@@ -87,7 +87,7 @@
 {% endmacro %}
 {% block body %}
 <header class="room-top">
-  <span class="av ring sm"><span>{{ me.initial }}</span></span>
+  {{ avatar(me, "sm") }}
   <div class="room-head">
     <div class="room-title">{% if mascot %}<img class="mascot" src="{{ mascot }}" alt="" width="{{ mascot_px }}" height="{{ mascot_px }}" style="--mpx: {{ mascot_px }}px">{% endif %}{{ S.room_title | fmt(name=me.display_name) }}</div>
     <div class="room-sub">{{ S.room_sub }} · {{ me.class_name }}</div>

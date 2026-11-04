@@ -62,7 +62,7 @@
 {% if show_three %}
 <section class="card">
   <h2>{{ S.board_three }}</h2>
-  <p id="b-three">{{ three|join(', ') if three else S.board_none }}</p>
+  <p id="b-three">{{ three_html if three else S.board_none }}</p>
 </section>
 {% endif %}
 {% if show_three %}

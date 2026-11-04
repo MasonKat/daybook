@@ -15,11 +15,13 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from markupsafe import Markup
 
 from . import lint as lintmod
 from . import watch as W
 from . import vrank
 from . import brand
+from . import prefs as PF
 from . import models as M
 from .config import ROOT, Config, strings
 from .db import log_event, now_utc_iso
@@ -28,7 +30,8 @@ TEMPLATES = ROOT / "templates"
 STATIC = ROOT / "static"
 
 SVG_W, SVG_H = 320, 150
-JS_STRINGS = ("wt_todo", "wt_done", "wt_queued", "wt_err", "wt_closed", "wt_hard_max", "wt_edit", "wt_open", "wt_title", "done_title", "streak_label", "class_plus", "reward_to_go", "uploading", "upload_error",
+JS_STRINGS = ("set_up_pending", "set_up_approved", "set_up_rejected", "set_up_limit", "set_up_err", "set_up_taste", "set_saved", "set_err",
+              "set_move_up", "set_move_down", "wt_todo", "wt_done", "wt_queued", "wt_err", "wt_closed", "wt_hard_max", "wt_edit", "wt_open", "wt_title", "done_title", "streak_label", "class_plus", "reward_to_go", "uploading", "upload_error",
               "upload_rate", "upload_offline", "replaced", "no_worker", "today_set", "set_default", "weekdays", "story_streak",
               "recorded_at", "recorded", "ritual_class", "ritual_study", "study_cta", "end_cta", "ck_done", "ck_bad",
               "ck_closed", "ck_none", "ck_rate", "ck_error", "chip_ok", "chip_confused", "chip_rewatch", "day_class",
@@ -426,6 +429,8 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
     from . import reviews as RV
     from . import voice as VC
     rv_anon = practice.manitoba(conn, cfg)                                 # F18.3: manitoba mode is always anonymous
+    has_mascot = bool(brand.source(cfg) and (not taste or brand.public(cfg)))   # F22.4: the mascot is one avatar choice
+    from . import ops
     rv_names = {cid: RV.page_name_hashes(conn, cid) for cid in classes}    # classmates' display names, hashed only
     from . import classwork as CW
     cw_tags = CW.load_tags(cfg)                                            # F21.2: the local tag file (never online)
@@ -536,6 +541,11 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             if st_["key"] == "review":
                 content = [st_["focus"], [v["url"] for v in st_["items"]], st_["line"]]
             st_["hash"] = _hash([st_["key"], content, rw.total if st_["key"] == "goal" and rw else 0])
+        # F22.4 ⚙ 설정: the student's own order (reorder only: every section stays) and avatar
+        pf = {} if taste else PF.load(conn, s["id"])
+        r_order = PF.ordered("rings", pf.get("rings"))
+        stories.sort(key=lambda x: r_order.index(x["key"]) if x["key"] in r_order else len(r_order))
+        avatar = _avatar(conn, s["id"], pf, has_mascot, S)
 
         # parent room: one report message per week (last PARENT_WEEKS weeks), newest open, earlier ones one line
         room = []
@@ -643,6 +653,11 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                       if taste else {})},
             "S": {k: S[k] for k in JS_STRINGS},
             "tour": tour_data(S, TOUR_STUDENT),                                # F22.2
+            # F22.4: the saved settings, the known ids, the class window (the routine is pinned first inside it)
+            "prefs": pf, "sections": PF.SECTIONS, "colors": PF.COLORS, "mascot": has_mascot,
+            "win": list(ops.class_window(cls)) if cls and ops.class_window(cls) else None,
+            "avImg": avatar["img"] if avatar else "",
+            "secLabels": {k: {i: S["sec_" + i] for i in ids} for k, ids in PF.SECTIONS.items()},
         }
         students.append({
             "id": s["id"],
@@ -657,6 +672,8 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "rv_win": _rv_win(RV.parent_win(conn, s["id"], today), scrub) if not taste else None,   # F18.3: own win only
             "rv_anon": rv_anon,
             "rules": _rules(conn, cfg, cls, rw, today) if cls and rw else None,     # F22.1: the rule sheet
+            "avatar": avatar,                                                # F22.4 (own page + parent page only)
+            "order": {"today": PF.ordered("today", pf.get("today")), "profile": PF.ordered("profile", pf.get("profile"))},
             "skills": CW.skill_map(conn, cfg, s["id"], cw_tags),           # F21.2: 내 실력 지도 (own page; parent: share_classwork)
             "share_classwork": s["share_classwork"] == "yes",
             "rank": rank,
@@ -703,7 +720,23 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         # F15.4: the academy's mascot next to the wordmark (taste build: only with brand.mascot_public)
         "mascot": "/b/mascot.png" if brand.source(cfg) and (not taste or brand.public(cfg)) else "",
         "mascot_px": brand.mascot_px(cfg),                                   # F19 add-on: 28-44, default 36
+        # F22.4 ⚙ 설정: the preset gallery (in-house SVG) and its colours
+        "av_gallery": [{"d": d, "svg": Markup(PF.gallery_svg(d, S["av_preset"].format(n=i + 1)))} for i, d in enumerate(PF.DESIGN_IDS)],
+        "av_colors": PF.COLORS,
     }
+
+
+def _avatar(conn, student_id: int, pf: dict, has_mascot: bool, S: dict) -> dict | None:
+    """F22.4: the student's chosen avatar for their own page and their parent's page (None = the initial circle)."""
+    from markupsafe import Markup
+    a = PF.resolve(conn, student_id, pf, mascot=has_mascot)
+    if a["kind"] == "svg":
+        return {"svg": Markup(PF.avatar_svg(a["id"])), "img": "", "data": None, "mascot": False}
+    if a["kind"] == "img":
+        return {"svg": None, "img": "me." + PF.ext(a["mime"]), "data": a["data"], "mascot": False}
+    if a["kind"] == "mascot":
+        return {"svg": None, "img": "", "data": None, "mascot": True}
+    return None
 
 
 def _rules(conn, cfg, cls, rw, today) -> dict:
@@ -879,6 +912,9 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
         sd = out / "s" / (TASTE_PATH if taste else s["student_token"])
         sd.mkdir(parents=True)
         (sd / "index.html").write_text(st.render(ctx, me=s, page="student"), encoding="utf-8")
+        av = s.get("avatar") or {}
+        if av.get("data"):                       # F22.4: an approved own picture: this page and the parent page only
+            (sd / av["img"]).write_bytes(av["data"])
         manifest = {
             "name": ctx["S"]["page_title"], "short_name": ctx["S"]["app_name"], "lang": "ko",
             "start_url": "./#today", "scope": "./", "display": "standalone",
@@ -892,6 +928,8 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
         pd = out / "p" / (TASTE_PATH if taste else s["parent_token"])
         pd.mkdir(parents=True)
         (pd / "index.html").write_text(pt.render(ctx, me=s, page="parent"), encoding="utf-8")
+        if av.get("data"):
+            (pd / av["img"]).write_bytes(av["data"])
     if taste:
         (out / "index.html").write_text(e.get_template("taste.html").render(ctx, page="taste"), encoding="utf-8")
         (out / "static" / "remote.js").write_text(remote_js(), encoding="utf-8", newline="")        # F19.4: a simulated remote

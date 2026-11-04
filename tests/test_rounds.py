@@ -81,7 +81,7 @@ def test_pull_fetches_reports_from_the_worker(conn, rnd):
     _, studs = rnd
     pages = {"/submissions": {"items": [], "now": "2026-11-06T12:00:00Z"}, "/checkins": {"items": []},
              "/live/results": {"items": []}, "/reports": {"items": [item(studs[1]["student_token"])]},
-             "/watches": {"items": []}, "/reviews-pull": {"reviews": [], "votes": []}, "/vreacts-pull": {"items": []}, "/shouts-pull": {"items": []}, "/classwork-pull": {"sets": [], "marks": []}}
+             "/watches": {"items": []}, "/reviews-pull": {"reviews": [], "votes": []}, "/vreacts-pull": {"items": []}, "/shouts-pull": {"items": []}, "/classwork-pull": {"sets": [], "marks": []}, "/avatars-pull": {"prefs": [], "avatars": []}}
     rep = pullmod.pull(conn, lambda path: json.dumps(pages[path.split("?")[0]]).encode())
     assert rep.reports == 1 and conn.execute("SELECT student_id FROM test_reports").fetchone()[0] == studs[1]["id"]
 

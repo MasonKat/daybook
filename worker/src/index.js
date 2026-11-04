@@ -17,8 +17,9 @@ const RID_RE = /^[a-f0-9]{16}$/;
 // G1: bumped with every feature the console relies on (doctor warns when the deployed Worker is older):
 // 1 base, 2 출석, 3 장면 + Live, 4 푼 문제 수, 5 주간 테스트 reports, 6 /health version + /tokmap-info, 7 /watch,
 // 8 Web Push, 9 consent (no watch / push without the parent's yes), 10 학생 리뷰, 11 영상 반응 (5-way, pooled per grade),
-// 12 the teacher remote (/t/remote: tap who, speak what), 13 수업 문제 (in-class ○/✕/– checks)
-export const WORKER_VERSION = 13;
+// 12 the teacher remote (/t/remote: tap who, speak what), 13 수업 문제 (in-class ○/✕/– checks),
+// 14 ⚙ 설정 (per-token settings JSON + a pre-moderated own avatar picture)
+export const WORKER_VERSION = 14;
 const DAILY_CRON = '17 19 * * *';
 // the worst words, used until the console has sent the full list (filters/review_words.txt)
 const CORE_WORDS = '시발\n씨발\nㅅㅂ\nㅆㅂ\n병신\nㅂㅅ\n좆\n지랄\n존나\n개새끼\nfuck\nshit\n!시발점\n!시발표';
@@ -34,6 +35,11 @@ const REASONS = ['개념탈락', '계산실수', '정보이해부족', '시간�
 const REACTIONS = ['fire', 'clap', 'mind'];
 const MAX_BYTES = 8 * 1024 * 1024;
 const DAY = 86400;
+// F22.4 ⚙ 설정: the section ids the pages know. An order must name every id of its kind exactly once (reorder, never hide).
+// console/prefs.py SECTIONS must stay equal (tests/test_prefs.py compares them).
+export const PREF_SECTIONS = {"rings":["moments","videos","popular","streak","goal","review","teacher"],"today":["routine","test","classwork","vote"],"profile":["watched","solved","tiles","lines","skills","shouts","notes"]};
+const AVATAR_RE = /^(|own|mascot|p:[a-z]{2,10}-[0-7])$/;
+const AVATAR_MAX = 60 * 1024;
 
 export const seoulDay = (ms) => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10);
 const addDays = (day, n) => seoulDay(Date.parse(day + 'T00:00:00+09:00') + n * DAY * 1000);
@@ -110,6 +116,12 @@ export const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS cwmarks (sid TEXT NOT NULL, token TEXT NOT NULL, marks TEXT NOT NULL, ts TEXT NOT NULL, updated TEXT NOT NULL,
      PRIMARY KEY (sid, token))`,
   'CREATE INDEX IF NOT EXISTS cwmarks_updated ON cwmarks (updated)',
+  // F22.4 ⚙ 설정: one small JSON per token (<= 1 KB, validated ids), and an own avatar picture's moderation state (the
+  // picture itself waits in KV until the teacher decides; after that it lives on the laptop only)
+  'CREATE TABLE IF NOT EXISTS prefs (token TEXT PRIMARY KEY, prefs TEXT NOT NULL, updated TEXT NOT NULL)',
+  'CREATE INDEX IF NOT EXISTS prefs_updated ON prefs (updated)',
+  'CREATE TABLE IF NOT EXISTS avatars (token TEXT PRIMARY KEY, status TEXT NOT NULL, ts TEXT NOT NULL, updated TEXT NOT NULL)',
+  'CREATE INDEX IF NOT EXISTS avatars_updated ON avatars (updated)',
 ];
 const ready = new WeakMap();   // per database binding: create the tables once (no-op afterwards)
 function init(env) {
@@ -988,6 +1000,92 @@ export class LiveRoom {
   async alarm() { await this.close(); }   // 90 minutes after opening
 }
 
+// ---------------------------------------------------------------- ⚙ 설정 (F22.4)
+export function checkPrefs(raw) {
+  if (typeof raw !== 'string' || raw.length > 1024) return null;
+  let o;
+  try { o = JSON.parse(raw); } catch { return null; }
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return null;
+  const out = {};
+  for (const [k, v] of Object.entries(o)) {
+    if (Object.prototype.hasOwnProperty.call(PREF_SECTIONS, k)) {
+      const want = PREF_SECTIONS[k];
+      if (!Array.isArray(v) || v.length !== want.length || new Set(v).size !== v.length || !v.every((x) => want.includes(x))) return null;
+      out[k] = v;
+    } else if (k === 'avatar') {
+      if (typeof v !== 'string' || !AVATAR_RE.test(v)) return null;
+      out[k] = v;
+    } else return null;
+  }
+  return JSON.stringify(out);
+}
+async function prefsGet(env, url, h) {
+  const token = (url.searchParams.get('t') || '').toLowerCase();
+  if (!TOKEN_RE.test(token)) return json({ ok: false, error: 'bad_token' }, 400, h);
+  const [p, a] = await Promise.all([one(env, 'SELECT prefs FROM prefs WHERE token = ?', token), one(env, 'SELECT status FROM avatars WHERE token = ?', token)]);
+  return json({ ok: true, prefs: p ? JSON.parse(p.prefs) : null, avatar: a ? a.status : null }, 200, h);
+}
+async function prefsPut(req, env, h) {
+  const now = Date.now(), day = seoulDay(now), iso = new Date(now).toISOString();
+  let form;
+  try { form = await req.formData(); } catch { return json({ ok: false, error: 'bad_form' }, 400, h); }
+  const token = String(form.get('t') || '').toLowerCase();
+  if (!TOKEN_RE.test(token)) return json({ ok: false, error: 'bad_token' }, 400, h);
+  const prefs = checkPrefs(String(form.get('prefs') || ''));
+  if (!prefs) return json({ ok: false, error: 'bad_prefs' }, 200, h);
+  if (!(await classOf(env, token))) return json({ ok: false, error: 'unknown_token' }, 200, h);
+  const rl = `rp:${token}:${Math.floor(now / 3600e3)}`;
+  if ((await peek(env, rl)) >= num(env.PREFS_PER_HOUR, 30)) return json({ ok: false, error: 'rate_limited' }, 200, h);
+  await bump(env, rl, day);
+  await run(env, `INSERT INTO prefs (token, prefs, updated) VALUES (?, ?, ?)
+    ON CONFLICT (token) DO UPDATE SET prefs = excluded.prefs, updated = excluded.updated`, token, prefs, iso);
+  return json({ ok: true, updated: iso }, 200, h);
+}
+async function avatarPut(req, env, h) {
+  const now = Date.now(), day = seoulDay(now), iso = new Date(now).toISOString();
+  let form;
+  try { form = await req.formData(); } catch { return json({ ok: false, error: 'bad_form' }, 400, h); }
+  const token = String(form.get('t') || '').toLowerCase(), image = String(form.get('image') || '');
+  if (!TOKEN_RE.test(token)) return json({ ok: false, error: 'bad_token' }, 400, h);
+  let bytes;
+  try { bytes = Uint8Array.from(atob(image), (c) => c.charCodeAt(0)); } catch { return json({ ok: false, error: 'bad_image' }, 200, h); }
+  const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8, png = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+  if (!bytes.length || bytes.length > AVATAR_MAX || !(jpeg || png)) return json({ ok: false, error: 'bad_image' }, 200, h);
+  if (!(await classOf(env, token))) return json({ ok: false, error: 'unknown_token' }, 200, h);
+  const rl = `av:${day}:${token}`;                        // one picture a day per student (it waits for the teacher anyway)
+  if ((await peek(env, rl)) >= 1) return json({ ok: false, error: 'rate_limited' }, 200, h);
+  await bump(env, rl, day);
+  await env.SUBMISSIONS.put(`avatar:${token}`, bytes.buffer, { expirationTtl: 30 * DAY });
+  await run(env, `INSERT INTO avatars (token, status, ts, updated) VALUES (?, 'pending', ?, ?)
+    ON CONFLICT (token) DO UPDATE SET status = 'pending', ts = excluded.ts, updated = excluded.updated`, token, iso, iso);
+  return json({ ok: true, status: 'pending' }, 200, h);
+}
+async function avatarsPull(env, since) {
+  const prefs = await all(env, 'SELECT token, prefs, updated FROM prefs WHERE updated > ? ORDER BY updated', since);
+  const rows = await all(env, "SELECT token, status, ts, updated FROM avatars WHERE status = 'pending' ORDER BY updated");
+  const avatars = [];
+  for (const r of rows) {
+    const img = await env.SUBMISSIONS.get(`avatar:${r.token}`, 'arrayBuffer');
+    if (!img) continue;
+    let bin = '';
+    for (const b of new Uint8Array(img)) bin += String.fromCharCode(b);
+    avatars.push({ ...r, image: btoa(bin) });
+  }
+  return { now: new Date().toISOString(), prefs, avatars };
+}
+async function avatarDecide(req, env) {
+  let b;
+  try { b = await req.json(); } catch { return json({ ok: false, error: 'bad_json' }, 400, {}); }
+  const token = String((b && b.token) || '');
+  if (!TOKEN_RE.test(token)) return json({ ok: false, error: 'bad_token' }, 400, {});
+  const iso = new Date().toISOString();
+  await run(env, "UPDATE avatars SET status = ?, updated = ? WHERE token = ? AND status = 'pending' AND ts = ?",
+    b.ok ? 'approved' : 'rejected', iso, token, String(b.ts || ''));
+  const row = await one(env, 'SELECT status FROM avatars WHERE token = ?', token);
+  if (row && row.status !== 'pending') await env.SUBMISSIONS.delete(`avatar:${token}`);   // the laptop has it now
+  return json({ ok: true, status: row ? row.status : null }, 200, {});
+}
+
 // ---------------------------------------------------------------- teacher reads
 async function getPhoto(url, env) {
   const key = url.searchParams.get('key') || '';
@@ -1017,6 +1115,9 @@ async function route(req, env, url, h) {
   if (p === '/reviews' && req.method === 'GET') return reviewList(env, url, h);
   if (p === '/t/remote' || p.startsWith('/t/remote/')) return remoteRoute(req, env, url);
   if (p === '/classwork-mark' && req.method === 'POST') return classworkMark(req, env, h);
+  if (p === '/prefs' && req.method === 'GET') return prefsGet(env, url, h);
+  if (p === '/prefs' && req.method === 'POST') return prefsPut(req, env, h);
+  if (p === '/avatar' && req.method === 'POST') return avatarPut(req, env, h);
   if (p === '/vreact' && req.method === 'POST') return vreact(req, env, h);
   if (p === '/vreacts' && req.method === 'GET') return vreactList(env, url, h);
   if (p === '/push/unsubscribe' && req.method === 'POST') return pushUnsubscribe(req, env, h);
@@ -1053,7 +1154,7 @@ async function route(req, env, url, h) {
     return new Response(img, { headers: { ...h, 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=600' } });
   }
   const teacherPaths = ['/submissions', '/photo', '/checkins', '/session', '/moment-put', '/tokmap',
-    '/live/open', '/live/next', '/live/reveal', '/live/close', '/live/state', '/live/results', '/rounds', '/reports', '/tokmap-info', '/watches', '/push/send', '/push/count', '/reviews-sync', '/reviews-pull', '/vreacts-pull', '/remote-roster', '/shouts-pull', '/classwork-open', '/classwork-pull'];
+    '/live/open', '/live/next', '/live/reveal', '/live/close', '/live/state', '/live/results', '/rounds', '/reports', '/tokmap-info', '/watches', '/push/send', '/push/count', '/reviews-sync', '/reviews-pull', '/vreacts-pull', '/remote-roster', '/shouts-pull', '/classwork-open', '/classwork-pull', '/avatars-pull', '/avatar-decide'];
   if (teacherPaths.includes(p)) {
     if (!teacherOk(req, env)) return json({ ok: false, error: 'unauthorized' }, 401, {});
     const since = url.searchParams.get('since') || '';
@@ -1092,6 +1193,8 @@ async function route(req, env, url, h) {
       const marks = await all(env, 'SELECT sid, token, marks, ts, updated FROM cwmarks WHERE updated > ? ORDER BY updated', since);
       return json({ now: new Date().toISOString(), sets, marks }, 200, {});
     }
+    if (p === '/avatars-pull' && req.method === 'GET') return json(await avatarsPull(env, since), 200, {});
+    if (p === '/avatar-decide' && req.method === 'POST') return avatarDecide(req, env);
     if (p === '/remote-roster' && req.method === 'PUT') {
       let b;
       try { b = await req.json(); } catch { return json({ ok: false, error: 'bad_json' }, 400, {}); }
@@ -1166,7 +1269,7 @@ export default {
     const url = new URL(req.url);
     const h = corsHeaders(req, env);
     const origin = req.headers.get('Origin');
-    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react', '/report', '/watch', '/push/subscribe', '/push/unsubscribe', '/review', '/review/vote', '/reviews', '/vreact', '/vreacts', '/classwork-mark', '/live/join', '/live/answer'].includes(url.pathname)
+    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react', '/report', '/watch', '/push/subscribe', '/push/unsubscribe', '/review', '/review/vote', '/reviews', '/vreact', '/vreacts', '/classwork-mark', '/prefs', '/avatar', '/live/join', '/live/answer'].includes(url.pathname)
       || (url.pathname === '/live/state' && url.searchParams.has('t'));
     // CORS: browsers may only call the student endpoints from the Pages origin.
     if (isStudent && origin && origin !== env.ALLOWED_ORIGIN) return json({ ok: false, error: 'origin' }, 403, h);
@@ -1201,6 +1304,8 @@ export default {
       env.DB.prepare('DELETE FROM shouts WHERE updated < ?').bind(addDays(day, -30) + 'T00:00:00.000Z'),
       env.DB.prepare('DELETE FROM cwmarks WHERE updated < ?').bind(keep + 'T00:00:00.000Z'),
       env.DB.prepare('DELETE FROM cwsets WHERE open_until < ?').bind(keep + 'T00:00:00.000Z'),
+      env.DB.prepare("DELETE FROM avatars WHERE status != 'pending' AND updated < ?").bind(addDays(day, -60) + 'T00:00:00.000Z'),
+      env.DB.prepare('DELETE FROM prefs WHERE token NOT IN (SELECT token FROM tokmap) AND updated < ?').bind(addDays(day, -60) + 'T00:00:00.000Z'),
     ]);
   },
 };

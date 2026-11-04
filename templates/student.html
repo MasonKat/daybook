@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_rows.html" import solved_strip, video_tiles, skill_map, rules_sheet with context %}
+{% from "_rows.html" import solved_strip, video_tiles, skill_map, rules_sheet, avatar with context %}
 {% macro vrx(v, compact=false) %}<div class="vrx{{ ' compact' if compact }}" data-v="{{ v.id }}" role="group" aria-label="{{ S.vr_label }}">{% for l in vr_labels %}<button type="button" class="vrb" data-r="{{ l.key }}" aria-pressed="false" title="{{ l.text }}" aria-label="{{ l.text }}"><span class="ve" aria-hidden="true">{{ l.emoji }}</span><span class="vl">{{ l.text }}</span><span class="vn tnum"></span></button>{% endfor %}</div>{% endmacro %}
 {% block head %}
 <link rel="manifest" href="manifest.webmanifest">
@@ -18,7 +18,7 @@
   <button type="button" class="rvpill" id="rv-open" aria-label="{{ S.rv_pill }}"><svg viewBox="0 0 24 24" class="rvstar" aria-hidden="true"><defs><linearGradient id="rvg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset=".55" stop-color="#ec4899"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs><path fill="url(#rvg)" d="M12 2.6l2.8 5.8 6.4.9-4.6 4.5 1.1 6.3L12 17.1l-5.7 3 1.1-6.3-4.6-4.5 6.4-.9z"/></svg><span class="rvpill-t">{{ S.rv_pill }}</span><span class="rvdot" id="rv-dot" hidden></span></button>
   {# F19.3: the rotating TOP 5 ticker (one entry at a time; a tap opens the 2-week list); no ticker without a list #}
   {% if me.rank %}<button type="button" class="rkt" id="rk-open" aria-label="TOP 5 · {{ me.rank.label }}"><span class="rkt-l" id="rk-line" data-top="{{ me.rank.top | map(attribute='entry') | list | tojson | forceescape }}">{{ me.rank.top[0].entry }}</span><span class="rkt-more" id="rk-more" hidden>TOP 5 ›</span></button>{% else %}<span class="rkt-gap"></span>{% endif %}
-  <span class="av ring sm" title="{{ me.display_name }}"><span>{{ me.initial }}</span></span>
+  {{ avatar(me, "sm", me.display_name) }}
 </header>
 
 <div class="stories" id="stories">
@@ -107,23 +107,33 @@
 
 <section id="tab-today" class="panel" role="tabpanel">
   <div class="rhead"><h1 class="rtitle" id="r-title">{{ S.ritual_study }}</h1><p class="chip set-chip" id="today-set" hidden></p><span class="rdate tnum" id="today-date">&nbsp;</span><button type="button" class="chip livebtn" id="live-open">{{ S.live_btn }}</button></div>
-  <div class="card wtcard" id="wt-card" hidden>
+  {% set sec_test %}
+  <div class="card wtcard" id="wt-card" data-sec="test" hidden>
     <div class="wt-row"><b id="wt-label">{{ S.wt_title }}</b><span class="muted wt-leg" id="wt-state"></span></div>
     <button type="button" class="btn primary" id="wt-open">{{ S.wt_open }}</button>
   </div>
-  <div class="card wtcard" id="cw-card" hidden>
+  {% endset %}
+  {% set sec_classwork %}
+  <div class="card wtcard" id="cw-card" data-sec="classwork" hidden>
     <div class="wt-row"><b id="cw-label">{{ S.cw_title }}</b><span class="muted wt-leg" id="cw-state"></span></div>
     <button type="button" class="btn primary" id="cw-open">{{ S.cw_open }}</button>
   </div>
-  <div class="card rvcard" id="rv-card" hidden>
+  {% endset %}
+  {% set sec_vote %}
+  <div class="card rvcard" id="rv-card" data-sec="vote" hidden>
     <div class="wt-row"><b>{{ S.rv_vote_title }}</b><span class="muted wt-leg" id="rv-card-state"></span></div>
     <button type="button" class="btn primary" id="rv-card-open">{{ S.rv_vote_go }}</button>
   </div>
-  <ol class="steps" id="steps" hidden>
+  {% endset %}
+  {% set sec_routine %}
+  <ol class="steps" id="steps" data-sec="routine" hidden>
     <li id="sp-ck"><span class="sn">1</span><span class="sl">{{ S.step_checkin }}</span><span class="sv2" id="sp-ck-v"></span></li>
     <li id="sp-m" role="button" tabindex="0"><span class="sn">2</span><span class="sl">{{ S.step_moment }}</span><span class="sv2" id="sp-m-v"></span></li>
     <li id="sp-end"><span class="sn">3</span><span class="sl">{{ S.step_end }}</span><span class="sv2" id="sp-end-v"></span></li>
   </ol>
+  {% endset %}
+  {% set today_secs = {"routine": sec_routine, "test": sec_test, "classwork": sec_classwork, "vote": sec_vote} %}
+  <div class="today-cards" id="today-cards">{% for k in me.order.today %}{{ today_secs[k] }}{% endfor %}</div>
   <input id="photo" class="vh" type="file" accept="image/*" capture="environment">
   <div id="st-checkin" class="state center" hidden>
     <button type="button" class="plus ck" id="ck-open"><span aria-hidden="true">✋</span><span class="vh">{{ S.checkin_cta }}</span></button>
@@ -186,24 +196,31 @@
 
 <section id="tab-me" class="panel" role="tabpanel" hidden>
   <div class="profile">
-    <span class="av ring lg"><span>{{ me.initial }}</span></span>
+    {{ avatar(me, "lg") }}
     <div class="pname"><b>{{ me.display_name }}</b><span class="bio" id="bio">{{ me.bio }}</span></div>
+    <button type="button" class="chip set-open" id="set-open">{{ S.set_open }}</button>
   </div>
   <ul class="counters">
     <li><b class="tnum" id="c-streak">{{ me.streak }}</b><span>{{ S.count_streak }}</span></li>
     <li><b class="tnum" id="c-sub">{{ me.n_sub }}</b><span>{{ S.count_sub }}</span></li>
     <li><b class="tnum">{{ me.cumulative }}</b><span>{{ S.count_points }}</span></li>
   </ul>
-  {% set myw = me.room[-1] %}
-  <div class="mywk">
-    <p class="mywk-h">{{ S.videos_me | fmt(n=myw.videos) }}</p>
-    {{ video_tiles(myw, "videos-me") }}
-    {% if myw.solved is not none %}<p class="mywk-h">{{ S.row_solved }}</p>{{ solved_strip(myw, "solved-me", S.solved_me | fmt(n=myw.solved)) }}{% endif %}
-  </div>
   {% set role, hint = "s", S.push_hint_s %}{% if vapid and me.consent %}<div class="pushbox" id="push" data-role="{{ role }}" data-vapid="{{ vapid }}" data-worker="{{ worker }}" data-s="{{ {"on": S.push_on, "off": S.push_off, "done": S.push_on_done, "ios": S.push_ios, "denied": S.push_denied, "err": S.push_err, "hint": hint} | tojson | forceescape }}" hidden>
   <button type="button" class="btn ghost push-btn" aria-pressed="false">{{ S.push_on }}</button>
   <p class="muted push-note">{{ hint }}</p>
 </div>{% endif %}
+  {% set myw = me.room[-1] %}
+  {% set pb_watched %}
+  <div class="mywk" data-sec="watched">
+    <p class="mywk-h">{{ S.videos_me | fmt(n=myw.videos) }}</p>
+    {{ video_tiles(myw, "videos-me") }}
+  </div>
+  {% endset %}
+  {% set pb_solved %}
+  <div class="mywk" data-sec="solved">{% if myw.solved is not none %}<p class="mywk-h">{{ S.row_solved }}</p>{{ solved_strip(myw, "solved-me", S.solved_me | fmt(n=myw.solved)) }}{% endif %}</div>
+  {% endset %}
+  {% set pb_tiles %}
+  <div data-sec="tiles">
   {% if me.months|length > 1 %}
   <div class="highlights" id="highlights">
     {% for m in me.months %}<button type="button" class="hl-b" data-month="{{ m.key }}"><span class="ring"><span class="hl-in tnum">{{ m.n }}</span></span><span class="hl-l">{{ m.label }}</span></button>{% endfor %}
@@ -213,23 +230,35 @@
     {% for t in me.tiles %}{% if t.month %}<li class="mhead" id="m-{{ t.key }}">{{ t.month }}</li>{% else %}<li class="tile {{ t.st }}" data-date="{{ t.date }}"><span class="tl tnum">{{ t.label }}</span><span class="tw">{{ t.note or t.wd }}</span>{% if t.heart %}<span class="hrt" title="{{ S.tile_heart }}">♥</span>{% endif %}{% if t.st == 'miss' %}<span class="mdot" aria-hidden="true"></span>{% endif %}</li>{% endif %}{% endfor %}
   </ol>
   <p class="legend"><span class="lg-sw sub"></span>{{ S.tile_sub }}<span class="lg-sw hl"></span>{{ S.tile_heart }}<span class="lg-sw miss"></span>{{ S.tile_miss }}<span class="lg-sw off"></span>{{ S.tile_off }}<span class="lg-sw cancel"></span>{{ S.tile_cancel }}</p>
-
+  </div>
+  {% endset %}
+  {% set pb_lines %}
+  <div data-sec="lines">
   <h2 class="sec-h">{{ S.my_lines }}</h2>
   <ul class="mylines" id="mylines">
     {% for l in me.lines %}<li data-date="{{ l.date }}"><span class="ld">{{ l.label }}</span>{% if l.chip %}<span class="lchip">{{ l.chip }}</span>{% endif %}{% if l.text %}<span class="lt2">{{ l.text }}</span>{% endif %}</li>{% else %}<li class="muted empty">{{ S.lines_empty }}</li>{% endfor %}
   </ul>
-
+  </div>
+  {% endset %}
+  {% set pb_skills %}
+  <div data-sec="skills">
   {% if me.skills.any %}
   <h2 class="sec-h">🧭 {{ S.sk_title }}</h2>
   <p class="muted">{{ S.sk_hint }}</p>
   <div class="skmap" id="skmap">{{ skill_map(me.skills) }}</div>
   {% endif %}
-
+  </div>
+  {% endset %}
+  {% set pb_shouts %}
+  <div data-sec="shouts">
   {% if me.shouts %}
   <h2 class="sec-h">🎤 {{ S.vc_student_title }} <span class="muted tnum">{{ S.vc_student_total | fmt(n=me.mic) }}</span></h2>
   <ul class="shoutlist" id="shouts">{% for x in me.shouts %}<li><span class="sd">{{ x.label }}</span>{{ x.text }}</li>{% endfor %}</ul>
   {% endif %}
-
+  </div>
+  {% endset %}
+  {% set pb_notes %}
+  <div data-sec="notes">
   <h2 class="sec-h">{{ S.teacher_messages }}</h2>
   <div class="msgs">
     {% for n in me.notes %}
@@ -239,6 +268,10 @@
     {% endfor %}
   </div>
   <p class="muted center hint">{{ S.reply_hint }}</p>
+  </div>
+  {% endset %}
+  {% set me_secs = {"watched": pb_watched, "solved": pb_solved, "tiles": pb_tiles, "lines": pb_lines, "skills": pb_skills, "shouts": pb_shouts, "notes": pb_notes} %}
+  <div class="me-blocks" id="me-blocks">{% for k in me.order.profile %}{{ me_secs[k] }}{% endfor %}</div>
   <p class="center"><button type="button" class="btn ghost" id="tour-again">❓ {{ S.tour_again }}</button></p>
 </section>
 </main>
@@ -326,6 +359,33 @@
   </div>
 </div>
 
+<div class="wt set" id="set" role="dialog" aria-modal="true" aria-labelledby="set-h" hidden>
+  <div class="wt-top"><b id="set-h">{{ S.set_title }}</b><button type="button" class="live-x" id="set-x" aria-label="{{ S.close }}">×</button></div>
+  <div class="wt-body">
+    <p class="wt-q">{{ S.set_av }}</p>
+    <div class="set-avs" id="set-avs" style="--avc: {{ av_colors[0] }}">
+      <button type="button" class="set-av" data-av="" aria-pressed="false"><span class="av ring"><span>{{ me.initial }}</span></span><span class="vh">{{ S.set_av_none }}</span></button>
+      {% for g in av_gallery %}<button type="button" class="set-av" data-d="{{ g.d }}" aria-pressed="false">{{ g.svg }}</button>{% endfor %}
+      {% if mascot %}<button type="button" class="set-av" data-av="mascot" aria-pressed="false"><img src="{{ mascot }}" alt="{{ S.set_av_mascot }}"></button>{% endif %}
+      <button type="button" class="set-av" data-av="own" aria-pressed="false" id="set-own"{% if not (me.avatar and me.avatar.img) %} hidden{% endif %}>{% if me.avatar and me.avatar.img %}<img src="{{ me.avatar.img }}" alt="{{ S.set_av_own }}">{% endif %}</button>
+    </div>
+    <p class="wt-q">{{ S.set_color }}</p>
+    <div class="set-cols" id="set-cols">{% for c in av_colors %}<button type="button" class="set-col" data-c="{{ loop.index0 }}" style="background: {{ c }}" aria-pressed="false" aria-label="{{ S.av_color | fmt(n=loop.index) }}"></button>{% endfor %}</div>
+    <details class="set-up" id="set-up">
+      <summary>{{ S.set_up_title }}</summary>
+      <p class="muted">{{ S.set_up_rule }}</p>
+      <input id="set-file" class="vh" type="file" accept="image/*">
+      <div class="set-up-row"><label class="btn ghost" for="set-file">{{ S.set_up_pick }}</label><canvas id="set-canvas" width="256" height="256" hidden></canvas>
+        <button type="button" class="btn primary" id="set-send" disabled>{{ S.set_up_send }}</button></div>
+      <p class="muted" id="set-up-st" aria-live="polite"></p>
+    </details>
+    <p class="wt-q">{{ S.set_order }}</p>
+    <p class="muted">{{ S.set_order_hint }}</p>
+    {% for k in ("rings", "today", "profile") %}<p class="set-oh">{{ S["set_" ~ k] }}</p><ol class="set-ord" data-kind="{{ k }}"></ol>{% endfor %}
+    <p class="err" id="set-err" aria-live="polite"></p>
+    <div class="set-btns"><button type="button" class="btn ghost" id="set-reset">{{ S.set_reset }}</button><button type="button" class="btn primary" id="set-save">{{ S.set_save }}</button></div>
+  </div>
+</div>
 <div class="wt" id="cw" role="dialog" aria-modal="true" aria-labelledby="cw-h" hidden>
   <div class="wt-top"><b id="cw-h">{{ S.cw_title }}</b><button type="button" class="live-x" id="cw-x" aria-label="{{ S.close }}">×</button></div>
   <div class="wt-body">

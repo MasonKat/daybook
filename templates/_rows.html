@@ -45,3 +45,6 @@
   <p class="gr-never">{{ S.gr_never }}</p>
 </div>
 {% endmacro %}
+
+{# F22.4: the student's own avatar (a preset SVG, an approved own picture, the mascot) or the initial circle #}
+{% macro avatar(me, size, title='') %}<span class="av ring {{ size }} me-av" data-init="{{ me.initial }}"{% if title %} title="{{ title }}"{% endif %}>{% if me.avatar and me.avatar.svg %}{{ me.avatar.svg }}{% elif me.avatar and me.avatar.img %}<img src="{{ me.avatar.img }}" alt="">{% elif me.avatar and me.avatar.mascot and mascot %}<img src="{{ mascot }}" alt="">{% else %}<span>{{ me.initial }}</span>{% endif %}</span>{% endmacro %}

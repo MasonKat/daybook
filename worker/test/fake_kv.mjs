@@ -1,6 +1,6 @@
 // In-memory stand-in for a Workers KV namespace (get/put/list/delete/getWithMetadata + expirationTtl).
 export class FakeKV {
-  constructor(clock = () => Date.now()) { this.m = new Map(); this.clock = clock; this.ops = { list: 0, put: 0, get: 0 }; }
+  constructor(clock = () => Date.now()) { this.m = new Map(); this.clock = clock; this.ops = { list: 0, put: 0, get: 0, delete: 0 }; }
   _live(k) {
     const e = this.m.get(k);
     if (!e) return null;
@@ -22,7 +22,7 @@ export class FakeKV {
     if (opts.metadata && JSON.stringify(opts.metadata).length > 1024) throw new Error('metadata too large');
     this.m.set(k, { v: val, meta: opts.metadata ?? null, exp: opts.expirationTtl ? this.clock() + opts.expirationTtl * 1000 : 0, ttl: opts.expirationTtl });
   }
-  async delete(k) { this.m.delete(k); }
+  async delete(k) { this.ops.delete++; this.m.delete(k); }
   async list({ prefix = '', cursor } = {}) {
     this.ops.list++;
     const keys = [...this.m.keys()].filter((k) => k.startsWith(prefix) && this._live(k)).sort();

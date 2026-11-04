@@ -447,11 +447,19 @@ The current `practice_mode = manitoba` is only the teacher's personal practice l
 - The default rubric: 1점 출석하고 과제 사진을 올렸어요 · 2점 1점 + 수업 중 질문·발표·풀이 설명을 1번 이상 했어요 · 3점 2점 + 오늘 문제를 끝까지 풀었거나, 오답을 스스로 고쳤거나, 친구를 도와줬어요.
 - The rule sheet: in the student's 반 목표 story (tap the ring) and behind "규칙 보기" on the board: the reward ladder (a bar per milestone with its label, ✓ when reached), "점수는 이렇게 모여요" (the class's rubric), the bonuses (AMP Live 80 % → +live_bonus, 반 전체 칭찬 → +1~3), past months for a month cycle, and "점수는 깎이지 않아요. 지각·결석은 0점일 뿐이에요." It never shows a name, so manitoba mode keeps it as is. The term total still counts everything (it never decreases). Demo: 고1A has three labelled milestones; 기초B runs month cycles with last month as history.
 
+## F22.4: ⚙ 설정 — the student's own avatar and section order (2026-11-05)
+- 내 기록 → ⚙ 설정. **Avatar:** 24 in-house inline-SVG presets (faces, animals, shapes; no library, no characters) × 8 background colours, the academy mascot when brand.mascot is set, the initial circle (default), or an own picture.
+- **Own picture, pre-moderated:** cropped to a square on the phone (canvas, ≤ 256 px, ≤ 60 KB JPEG), with "실제 얼굴 사진, 다른 사람 사진은 안 돼요". The Worker keeps it in KV (`avatar:<token>`, 30-day TTL, never listed) with a D1 row `avatars` (pending), one upload per token per Seoul day. `pull` copies pending pictures into SQLite `avatar_uploads`; Teacher tab → 아바타 확인 (승인 / 거절) decides, the console tells the Worker (`/avatar-decide`), which deletes its KV copy. An approved picture is published at the next 발행 as `me.jpg|png` next to the student's own page and their parent's page only.
+- **Where avatars show:** the student's header and profile, their parent page, and (korea mode only) next to the name in the board's 오늘 3점 list. Never on another student's page; manitoba mode shows no names, so no avatars either.
+- **Section order (reorder, never hide):** the story rings (moments, videos, popular, streak, goal, review, teacher), the 오늘 cards (routine, test, classwork, vote) and the profile blocks (watched, solved, tiles, lines, skills, shouts, notes), with ▲ ▼ buttons (keyboard and screen-reader friendly) and 기본 순서로. The Worker accepts an order only when it names every id of its kind exactly once (≤ 1 KB, known ids only: `PREF_SECTIONS`, kept equal to console/prefs.py `SECTIONS` by a test). On class days inside the class window (F21.3) the routine (① 출석 → ② 장면 → ③ 과제 끝) is pinned first; outside it, the student's order holds.
+- **Storage:** D1 `prefs` (one JSON per token) so it follows the student across devices (the page reads `/prefs` on open, with a localStorage copy offline); `pull` copies it to SQLite `student_prefs` and the generator renders pages in that order. Worker v14. The class-day budget includes every student loading the settings on each open, saving twice, and 5 own pictures (kvWrite 2.9 %, kvDelete 0.5 %).
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).
 - deferred: a real-device install test on iPhone Safari and Android Chrome (manifest, icons, apple meta tags and standalone mode are in place; only Chromium was tested here).
 - deferred: the Cloudflare deploy itself (needs the teacher's account: README "Teacher deploy steps").
 - deferred: the `effort` table is created empty (P2 data source not defined yet).
+- deferred (F22.4): avatars next to 베스트 리뷰 winners and on the remote's name buttons (both are drawn from data the Worker holds without avatars); drag-to-reorder in ⚙ 설정 (▲ ▼ buttons only).
 - out of scope: login, database server, chat, push notifications, app store, analytics; nothing talks to Notion, Google or make.com.
 - not in P0: retiring Google Forms / make.com (the teacher decides later).
