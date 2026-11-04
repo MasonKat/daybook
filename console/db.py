@@ -227,6 +227,25 @@ CREATE TABLE IF NOT EXISTS moment_drafts (    -- F19.1 장면: text-only drafts;
     ts       TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS video_reactions (  -- F19.2: one per student per video (the latest wins; pulled from the Worker)
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    video_id   TEXT NOT NULL,
+    r          TEXT NOT NULL CHECK (r IN ('fire', 'good', 'curious', 'hard', 'try')),
+    day        TEXT NOT NULL,                  -- KST date of the reaction
+    ts         TEXT NOT NULL,
+    PRIMARY KEY (student_id, video_id)
+);
+
+CREATE TABLE IF NOT EXISTS video_ranks (      -- F19.3: the 2-week TOP list per pool (frozen once the period is over)
+    period_from TEXT NOT NULL,
+    pool        TEXT NOT NULL,
+    rank        INTEGER NOT NULL,
+    video_id    TEXT NOT NULL,
+    score       INTEGER NOT NULL,
+    watchers    INTEGER NOT NULL,
+    PRIMARY KEY (period_from, pool, rank)
+);
+
 CREATE TABLE IF NOT EXISTS class_bonus (  -- F7: class-wide points (AMP Live: >= 80 % of the class correct)
     id         INTEGER PRIMARY KEY,
     class_id   INTEGER NOT NULL REFERENCES classes(id),

@@ -774,6 +774,24 @@ print(json.dumps([dict(r) for r in c.execute(q, (sys.argv[2],))]))`, env.DAYBOOK
       check((await rp2.textContent('#rv-list')).includes('선생님 판서가 오늘은 피카소급' + two[0].display_name),
         'a classmate sees the approved review with the writer\'s display name (korea mode)');
       await shot(rp2, 'student-review.png');
+      await rp2.click('#rv-x');
+      // F19.3: the header TOP 3 ticker opens the 2-week list (videos only, no counts)
+      check(await rp2.isVisible('#rk-open') && /^TOP 3 · \d+\/\d+–\d+\/\d+$/.test((await rp2.textContent('.rkt-h')).trim()), `the header ticker: ${(await rp2.textContent('#rk-open')).trim()}`);
+      await rp2.click('#rk-open');
+      check((await rp2.locator('#rk .rk-list li').count()) >= 1 && !/\d+명/.test(await rp2.textContent('#rk .rk-list')), `TOP list: ${await rp2.locator('#rk .rk-list li').count()} videos, no counts`);
+      await rp2.click('#rk-x');
+      // F19.2: a reaction on a reel goes to the Worker; the next pull brings it to the console
+      await rp2.click('#t-videos');
+      const fireBtn = rp2.locator('#feed .reel').first().locator('.vrb[data-r="fire"]');
+      await fireBtn.click();
+      await rp2.waitForFunction(() => document.querySelector('#feed .reel .vrb[data-r="fire"]').getAttribute('aria-pressed') === 'true', null, { timeout: 5000 }).catch(() => {});
+      check((await fireBtn.getAttribute('aria-pressed')) === 'true', 'F19.2: 🔥 on a reel is the student\'s own choice (pressed)');
+      daybook('pull');
+      const nrx = execFileSync(PYTHON, ['-c', `
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+print(c.execute("SELECT COUNT(*) FROM video_reactions x JOIN students s ON s.id = x.student_id WHERE s.student_token = ? AND x.r = 'fire' AND x.ts NOT LIKE '%T10:00:00.000Z'", (sys.argv[2],)).fetchone()[0])`, env.DAYBOOK_DB, two[1].student_token], { encoding: 'utf-8' }).trim();
+      check(Number(nrx) >= 1, `daybook pull brought the reaction into the console (${nrx})`);
       check(rerr.length === 0, `0 console errors on the review pages (${rerr.slice(0, 2).join(' | ')})`);
       await rc.close();
     }
@@ -954,6 +972,15 @@ print(json.dumps([dict(r) for r in c.execute(q, (sys.argv[2],))]))`, env.DAYBOOK
       check(/확인 중/.test(await tp.textContent('#rv-mine')), 'taste: a review is "확인 중" on the phone only');
       await shot(tp, 'taste-student-review.png');
       await tp.click('#rv-x');
+      // F19.2: a live practice reaction (simulated totals on the first videos; nothing is sent)
+      await tp.click('#t-videos');
+      const tvb = tp.locator('#feed .reel').first().locator('.vrb[data-r="fire"]');
+      const before = Number((await tvb.locator('.vn').textContent()) || 0);
+      await tvb.click();
+      check((await tvb.getAttribute('aria-pressed')) === 'true' && Number(await tvb.locator('.vn').textContent()) === before + 1
+        && (await tp.locator('#feed .reel').first().locator('.vrb[data-r="hard"] .vn').textContent()) === '',
+        `taste: a practice 🔥 (${before} → ${before + 1}); 어려워요 never shows a count`);
+      await tp.click('#t-today');
       await tp.goto(TASTE + '/p/kong/', { waitUntil: 'networkidle' });
       check(await tp.isVisible('.taste-bar') && /AMP 수학 · 콩/.test(await tp.textContent('.room-title')), 'parent page /p/kong/ with the banner');
       check(/^수업 18:00–20:00 · 자습 ~21:00$/.test((await tp.textContent('#hours')).trim()), `taste parent: class hours and self-study ("${(await tp.textContent('#hours')).trim()}")`);
@@ -967,6 +994,32 @@ print(json.dumps([dict(r) for r in c.execute(q, (sys.argv[2],))]))`, env.DAYBOOK
       check(terrs.length === 0, `0 console errors in the taste build (${terrs.length})`);
       await tctx.close();
     } finally { tsrv.close(); }
+
+    console.log('\n[8] F19 mascot size: brand.mascot_px 44 keeps the student header on one line at 360 px');
+    {
+      const c44 = { ...cfgCopy, brand: { ...(cfgCopy.brand || {}), mascot_px: 44 } };
+      const cfg44 = path.join(TMP, 'daybook44.json'), out44 = path.join(TMP, 'dist44');
+      fs.writeFileSync(cfg44, JSON.stringify(c44));
+      execFileSync(...dbCmd(['publish', '--out', out44]), { env: { ...env, DAYBOOK_CONFIG: cfg44, PYTHONIOENCODING: 'utf-8' }, cwd: ROOT, encoding: 'utf-8' });
+      const s44 = staticServer(out44, 8792);
+      try {
+        await waitFor('http://127.0.0.1:8792/');
+        const tok44 = fs.readdirSync(path.join(out44, 's'))[0];
+        const mc = await browser.newContext({ viewport: { width: 360, height: 740 } });
+        const mp = await mc.newPage();
+        await mp.goto(`http://127.0.0.1:8792/s/${tok44}/#today`, { waitUntil: 'networkidle' });
+        const hd = await mp.evaluate(() => {
+          const h = document.querySelector('.sbar'), kids = Array.from(h.children).filter((k) => !k.hidden && k.getBoundingClientRect().width > 0);
+          const rs = kids.map((k) => k.getBoundingClientRect());
+          return { sw: document.documentElement.scrollWidth, hsw: h.scrollWidth - h.clientWidth, right: Math.max(...rs.map((r) => r.right)),
+            mascot: Math.round(document.querySelector('.mslot').getBoundingClientRect().width),
+            spread: Math.max(...rs.map((r) => r.top + r.height / 2)) - Math.min(...rs.map((r) => r.top + r.height / 2)) };
+        });
+        check(hd.mascot === 44 && hd.sw <= 360 && hd.hsw <= 0 && hd.right <= 360 && hd.spread <= 4,
+          `mascot ${hd.mascot}px; page width ${hd.sw}; header right edge ${Math.round(hd.right)}; one line (centers within ${Math.round(hd.spread)}px)`);
+        await mc.close();
+      } finally { s44.close(); }
+    }
   } finally {
     await browser.close();
     srv.close();

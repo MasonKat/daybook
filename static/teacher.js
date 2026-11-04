@@ -536,6 +536,12 @@
           tr.appendChild(el('td', { 'class': 'tnum' }, fmt(VV.avg, { p: v.avg_pct }) + ' · ' + fmt(VV.minutes, { m: v.minutes })));
           tr.appendChild(el('td', { 'class': 'tnum muted' }, typeof v.views === 'number' || typeof v.views_7d === 'number'
             ? fmt(VV.views, { a: (v.views || 0).toLocaleString('ko-KR'), w: (v.views_7d || 0).toLocaleString('ko-KR'), n: v.students }) : ''));
+          var rxd = el('td', { 'class': 'tnum vrx-t' });                     /* F19.2: reactions, 어려워요 included (teacher only) */
+          (j.labels || []).forEach(function (l) {
+            var n = (v.rx || {})[l.key] || 0; if (!n) return;
+            rxd.appendChild(el(l.key === 'hard' ? 'b' : 'span', { 'class': 'vrx-n' + (l.key === 'hard' ? ' hard' : ''), title: l.text }, l.emoji + ' ' + n + ' '));
+          });
+          tr.appendChild(rxd);
           tb.appendChild(tr);
         });
         t.appendChild(tb); if (c.videos.length) box.appendChild(t);

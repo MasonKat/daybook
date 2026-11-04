@@ -532,8 +532,8 @@ tr.rc.skipped td:nth-child(2) { color: var(--err); }
 .pushbox .push-btn[aria-pressed=true] { border-color: var(--ok); color: var(--ok); }
 
 /* F15.4: the mascot slot (the academy's own image; nothing without it) */
-.mascot { width: 24px; height: 24px; object-fit: contain; vertical-align: -6px; margin-right: 6px; border-radius: 6px; }
-.room-title .mascot { width: 22px; height: 22px; vertical-align: -5px; }
+.mascot { width: var(--mpx, 36px); height: var(--mpx, 36px); object-fit: contain; vertical-align: middle; margin-right: 6px; border-radius: 6px; }
+.room-title .mascot { vertical-align: middle; }
 
 /* F16.3: comment warnings (never block) */
 .cwarn { flex-basis: 100%; grid-column: 1 / -1; font-size: 12px; color: var(--adjust); margin: 2px 0 6px; }
@@ -566,9 +566,9 @@ select.consent.unknown { border-color: var(--adjust); } select.consent.no { bord
 
 /* ---------- F18.4 header: wordmark → mascot slot → 학생 리뷰 pill → date → avatar */
 .sbar .wordmark { flex: none; }
-.mslot { flex: none; display: inline-flex; width: 28px; height: 28px; }
-.mslot .mascot { width: 28px; height: 28px; margin: 0; vertical-align: 0; }
-.mph { width: 28px; height: 28px; }
+.mslot { flex: none; display: inline-flex; width: var(--mpx, 36px); height: var(--mpx, 36px); }
+.mslot .mascot { width: 100%; height: 100%; margin: 0; vertical-align: 0; }
+.mph { width: 100%; height: 100%; }
 .mph rect { fill: var(--card); stroke: var(--line); }
 .mph circle { fill: var(--muted); opacity: .45; }
 .rvpill { position: relative; flex: none; display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 0 12px 0 8px;
@@ -617,3 +617,36 @@ select.consent.unknown { border-color: var(--adjust); } select.consent.no { bord
 .shoutlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .shoutlist li { background: var(--card); border-radius: 12px; padding: 10px 12px; min-width: 0; }
 .shoutlist .sd { display: block; color: var(--muted); font-size: 12px; }
+
+/* ---------- F19.2 영상 반응: 5 buttons on each reel / 강의 card; totals only from 3 students; 어려워요 has no count */
+.vrx { display: flex; gap: 4px; margin-top: 8px; max-width: 100%; }
+.vrb { flex: 1 1 0; min-width: 0; min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 1px; padding: 4px 2px; border-radius: 12px; border: 0; background: rgba(255, 255, 255, .14); color: inherit; font: 600 10px var(--font);
+  cursor: pointer; }
+.vrb .ve { font-size: 18px; line-height: 1.1; }
+.vrb .vl { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vrb .vn:empty { display: none; }
+.vrb .vn { font-size: 11px; opacity: .9; }
+.vrb[aria-pressed="true"] { background: var(--accent); color: #fff; }
+/* 강의 cards: compact emoji buttons on the thumbnail (the card does not grow); the label is the button's name */
+.vrx.compact { position: absolute; z-index: 2; left: 8px; bottom: 8px; margin: 0; gap: 4px; max-width: calc(100% - 72px); }
+.vrx.compact .vrb { flex: 0 0 auto; min-height: 34px; min-width: 34px; flex-direction: row; gap: 2px; padding: 2px 6px;
+  background: rgba(0, 0, 0, .55); color: #fff; border-radius: 999px; }
+.vrx.compact .vrb .vl { display: none; }
+.vrx.compact .vrb .ve { font-size: 16px; }
+.vrx.compact .vrb[aria-pressed="true"] { background: var(--accent); }
+.feed.grid .vrx { display: none; }
+.vrx-n.hard { color: var(--err); }
+
+/* ---------- F19.3 header TOP 3 ticker and the full list */
+.rkt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 0;
+  border: 0; background: none; color: var(--fg); font: 600 12px/1.25 var(--font); cursor: pointer; padding: 0; text-align: right; }
+.rkt-h { color: var(--muted); font-size: 10px; font-weight: 600; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.rkt-l { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rk-list { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.rk-list li { display: flex; align-items: center; gap: 10px; background: var(--card); border-radius: 12px; padding: 10px 12px; min-width: 0; }
+.rk-n { flex: none; width: 28px; text-align: center; font-size: 18px; font-weight: 700; }
+.rk-t { flex: 1; min-width: 0; }
+.rk-w { display: block; font-size: 12px; }
+.rk-list .watch { flex: none; }
+.rk-friends .chip { margin: 2px; font-size: 14px; padding: 4px 12px; }

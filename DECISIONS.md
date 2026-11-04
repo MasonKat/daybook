@@ -382,6 +382,23 @@ The current `practice_mode = manitoba` is only the teacher's personal practice l
 - **개념** lines go to the teacher-only "오늘의 개념 메모" list (a later overnight video seed). **장면** lines become text-only drafts; 승인 offers the text on the board's 장면 올리기 box (a suggestion list), ✗ drops it. The demo seeds call signs (새벽 = 4번) and imports `demo/voice/clova_sample.txt` (synthetic) for 콩's class, so the taste build shows 콩's 선생님 한마디.
 - The Shortcut endpoint (a direct call from the phone) is later; this is the paste/file path only.
 
+## F19.2: video reactions (2026-11-04)
+- Five options on every reel and 강의 card: 🔥 최고예요 · 👍 좋아요 · 🤔 궁금해요 · 😵 어려워요 · 💪 도전해볼래요 (labels in daybook.json `"video_reactions": {"fire": "…", "good": …, "curious": …, "hard": …, "try": …}`, emoji first; the keys are fixed). 어려워요 replaces a 싫어요: it tells the teacher which videos need re-teaching.
+- One per student per video, changeable; tapping the chosen one again takes it back (kept in D1 as an empty reaction so the console's pull sees the removal). Reactions work for every student (like 장면 reactions), consent or not; they are not watch signals.
+- A page gets only the student's own choice and the pool's totals for 🔥 👍 🤔 💪, and only for a video at least 3 different students reacted to. The 어려워요 count never leaves the Worker for a page; the console pulls every reaction (`/vreacts-pull`) and the Teacher tab's 영상 shows all five per class and video, 어려워요 in red. Pools follow `rank_scope` (F19.3): every token-map push sends class key → pool key; a changed scope re-pools older reactions too (totals are read by class). Rate limit 60 per student per hour. Worker v11 (doctor wants it); reactions are kept 60 days.
+- Reels show the five buttons with their labels under the title; 강의 cards show them as compact emoji buttons on the thumbnail (the label is each button's accessible name and tooltip), so a card does not grow and two still fit one 844 px screen.
+- The taste build: practice totals on the first two videos and a live reaction, in memory only.
+
+## F19.3: the 2-week video rank, pooled per grade (2026-11-04)
+- `rank_scope`: `grade` (default: about 10 students per grade, while a class has 5–6, and G10 and G11 watch different videos), `class` or `all`. A class without a grade is its own pool.
+- Videos are ranked, never students: score = different students who watched it ≥ 10 s + reactions weighted (최고 3, 좋아요 2, 도전 2, 궁금해요 1, 어려워요 0), over the 베스트 리뷰 periods (14 days from Monday 2026-01-05). Every 발행 recomputes the running period; a finished period is written once (at the first publish after it) and then frozen. A student sees the running period's list, or the last frozen one while the new one is still empty, with its label ("11/2–11/15"), and only videos they can see (F10 tags).
+- The header shows a compact ticker in the date's place, "TOP 3 · 11/2–11/15" over 🥇 → 🥈 → 🥉 titles (every 3 s; no rotation with reduced motion); a tap opens the list (titles, medals, a watch link). Pages carry no counts (F15.2 still holds).
+- "우리 반 열심히 본 친구" in that list: per class, positive-only, the top 3 display names by different videos watched (≥ 10 s) in the period, no numbers, never a bottom list. korea mode only (like the board's 3점 names); manitoba mode shows no names. Watch data exists only for students whose parents said yes (F17), so only they can appear. The page lint's "another student's name" warning skips exactly this marked list on student pages (`data-lint="class-names"`); the taste build shows no names at all (its lint refuses them).
+- Budget: every student reacting once to each of 12 videos a day, plus the totals on every page open, stays far under 30 % (budget test).
+
+## F19 add-on: the mascot size (2026-11-04)
+- `brand.mascot_px` (default 36, 28–44; anything else falls back to 36) sizes the mascot on the student header, the parent room title and the board. The embedded PNG is 96 px, 128 px when the size is above 36 (sharp on 3x screens), with the 30 KB cap kept. The student header stays on one line at 360 px: the 학생 리뷰 pill is already only its star there, and the ticker / date slot is the one that shrinks (ellipsis). The e2e publishes with 44 and checks 360 px: no horizontal scroll, the header's items on one line.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

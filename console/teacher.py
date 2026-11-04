@@ -467,6 +467,9 @@ def videos_view(conn: sqlite3.Connection, cfg: Config, day: date, days: int = 7)
     from . import watch as W
     view = W.teacher_view(conn, generate.load_videos(cfg), day, 14 if days == 14 else 7)
     view["text"] = W.report_text(view)
+    from . import vrank
+    from .config import strings
+    view["labels"] = vrank.labels(cfg, strings())                    # F19.2: the 5 reactions (어려워요 shown here only)
     return view
 
 

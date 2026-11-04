@@ -3,7 +3,8 @@
 // one AMP Live round (20 students x 10 questions, everyone polling every 2 s for ~20 minutes), and (F14) an open
 // weekly-test round: every student sends the report and edits it once; (F15) 3 watch records each, push opt-in and
 // one push after 발행; (F18.3) the review wordlist + name hashes synced, every student writes 1 review, opens the review
-// sheet on each of the 5 page opens, and votes once; the hourly vote cron runs 24 times.
+// sheet on each of the 5 page opens, and votes once; the hourly vote cron runs 24 times; (F19.2) every student reacts once to
+// every one of 12 videos (the worst case of one reaction per student per video per day) and loads the totals on every open.
 import fs from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -30,7 +31,7 @@ test('a full class day stays under 30 % of every free daily limit', async () => 
   const toks = Array.from({ length: 20 }, (_, i) => 'abcdefghijklmnopqrstuvwxy'.slice(0, 24) + 'abcdefghijklmnopqrst'[i] + 'z');
   const tokmap = Object.fromEntries(toks.map((t) => [t, 'c1']));
 
-  await teacher('/tokmap', 'PUT', { tokmap });                                  // publish
+  await teacher('/tokmap', 'PUT', { tokmap, pools: { c1: 'g10' } });             // publish (F19.2: the grade pool)
   await teacher('/rounds', 'PUT', { rounds: [{ rid: '0123456789abcdef', classes: ['c1'], n: 20, label: '주간 테스트',
     open_from: new Date(Date.now() - 3600e3).toISOString(), open_until: new Date(Date.now() + 86400e3).toISOString() }] });
   await teacher('/session', 'PUT', { class: 'c1', date: day, code: '1234', start: '18:00', tokmap,
@@ -42,7 +43,11 @@ test('a full class day stays under 30 % of every free daily limit', async () => 
   await teacher('/reviews-sync', 'PUT', { words, rounds: [rround],                // F18.3: 발행 sends the list, hashes, the round
     names: { c1: Array.from({ length: 20 }, (_, i) => (i.toString(16) + '0123456789abcdef').slice(0, 16)) } });
   for (const t of toks) {
-    for (let i = 0; i < 5; i++) { await student(`/status?t=${t}`); await student(`/moments?t=${t}`); await student(`/reviews?t=${t}`); }   // 5 page opens
+    for (let i = 0; i < 5; i++) { await student(`/status?t=${t}`); await student(`/moments?t=${t}`); await student(`/reviews?t=${t}`); await student(`/vreacts?t=${t}`); }   // 5 page opens
+    for (let k = 0; k < 12; k++) {                                           // F19.2: 12 videos, one reaction each
+      const xf = new FormData(); xf.append('t', t); xf.append('v', `AMPvideo0${String(k).padStart(2, '0')}`); xf.append('r', ['fire', 'good', 'curious', 'hard', 'try'][k % 5]);
+      assert.equal((await student('/vreact', xf)).ok, true);
+    }
     { const rf = new FormData(); rf.append('t', t); rf.append('text', `오늘 수업 웃겼던 순간 ${t.slice(-2)}`); rf.append('hide', '0');
       assert.equal((await student('/review', rf)).ok, true); }                   // F18.3: one review a day
     const wrong = new FormData(); wrong.append('t', t); wrong.append('code', '0000');
@@ -112,7 +117,7 @@ test('a full class day stays under 30 % of every free daily limit', async () => 
   assert.equal((await teacher('/push/send', 'POST', { classes: ['c1'], kind: 'video', body: 'x' })).sent, 0);   // daily cap
   await teacher('/push/count');
   await teacher('/submissions'); await teacher('/checkins'); await teacher('/live/results'); await teacher('/reports'); await teacher('/watches');
-  await teacher('/reviews-pull?since=2020-01-01');                              // Saturday-style pull
+  await teacher('/reviews-pull?since=2020-01-01'); await teacher('/vreacts-pull?since=2020-01-01');   // Saturday-style pull
 
   const kv = env.SUBMISSIONS.ops, d1 = env.DB.usage;
   const dO = env.LIVE.usage;

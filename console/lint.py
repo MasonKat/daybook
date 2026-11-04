@@ -133,6 +133,8 @@ def lint_dir(root: Path, students: list[PrivateRow], page_title: str) -> list[Fi
             parts = rel.split("/")
             if len(parts) >= 3 and parts[0] in ("s", "p") and parts[1] in by_token:
                 owner = by_token[parts[1]]
+                if parts[0] == "s":     # F19.3: korea mode's "열심히 본 친구" names classmates on purpose (student pages only)
+                    text = CLASS_NAMES_RE.sub("", text)
                 for s in students:
                     if s.id != owner.id and s.display_name and s.display_name != owner.display_name \
                             and len(s.display_name) >= 2 and s.display_name in text:
@@ -142,6 +144,8 @@ def lint_dir(root: Path, students: list[PrivateRow], page_title: str) -> list[Fi
                 findings.append(Finding("error", rel, "third_party", url))
     return findings
 
+
+CLASS_NAMES_RE = re.compile(r'<p class="rk-friends" data-lint="class-names">.*?</p>', re.S)
 
 # H4: words that mean test data leaked into the build students see
 TEST_WORD_RE = re.compile(r"(?<![A-Za-z])(e2e|test|tests|fixture|fixtures|dummy)(?![A-Za-z])", re.I)

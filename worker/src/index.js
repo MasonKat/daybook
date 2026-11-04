@@ -14,13 +14,17 @@ const CHIPS = new Set(['ok', 'confused', 'rewatch']);
 const RID_RE = /^[a-f0-9]{16}$/;
 // G1: bumped with every feature the console relies on (doctor warns when the deployed Worker is older):
 // 1 base, 2 출석, 3 장면 + Live, 4 푼 문제 수, 5 주간 테스트 reports, 6 /health version + /tokmap-info, 7 /watch,
-// 8 Web Push, 9 consent (no watch / push without the parent's yes), 10 학생 리뷰
-export const WORKER_VERSION = 10;
+// 8 Web Push, 9 consent (no watch / push without the parent's yes), 10 학생 리뷰, 11 영상 반응 (5-way, pooled per grade)
+export const WORKER_VERSION = 11;
 const DAILY_CRON = '17 19 * * *';
 // the worst words, used until the console has sent the full list (filters/review_words.txt)
 const CORE_WORDS = '시발\n씨발\nㅅㅂ\nㅆㅂ\n병신\nㅂㅅ\n좆\n지랄\n존나\n개새끼\nfuck\nshit\n!시발점\n!시발표';
 const PUSH_KINDS = ['video', 'message', 'report', 'test', 'vote'];
-const KIND_MATCH = { vote: 'message' };     // a vote push goes to whoever takes teacher messages (students only)
+const KIND_MATCH = { vote: 'message' };
+// F19.2 영상 반응: one per student per video (changeable). 'hard' (어려워요) is never returned to a page: teacher-only.
+const VREACT = ['fire', 'good', 'curious', 'hard', 'try'];
+const VREACT_SHOWN = ['fire', 'good', 'curious', 'try'];
+const POOL_RE = /^[a-z0-9]{1,32}$/;     // a vote push goes to whoever takes teacher messages (students only)
 const DEFAULT_KINDS = { s: 'video,message,report,test', p: 'report' };
 const VID_RE = /^[A-Za-z0-9_-]{6,20}$/;
 const REASONS = ['개념탈락', '계산실수', '정보이해부족', '시간부족'];   // F14: the teacher's Notion "Reasoning" options
@@ -85,6 +89,11 @@ export const SCHEMA = [
   'CREATE TABLE IF NOT EXISTS rbest (review TEXT PRIMARY KEY, class TEXT NOT NULL, period TEXT NOT NULL, text TEXT NOT NULL, label TEXT)',
   'CREATE TABLE IF NOT EXISTS rwords (w TEXT PRIMARY KEY)',
   'CREATE TABLE IF NOT EXISTS rnames (class TEXT NOT NULL, h TEXT NOT NULL, PRIMARY KEY (class, h))',
+  // F19.2: video reactions, totals pooled per grade (or class / all: the console's rank_scope sends class -> pool)
+  `CREATE TABLE IF NOT EXISTS vreacts (token TEXT NOT NULL, v TEXT NOT NULL, class TEXT NOT NULL, pool TEXT NOT NULL, r TEXT NOT NULL,
+     ts TEXT NOT NULL, PRIMARY KEY (token, v))`,
+  'CREATE INDEX IF NOT EXISTS vreacts_pool ON vreacts (pool, v)',
+  'CREATE TABLE IF NOT EXISTS pools (class TEXT PRIMARY KEY, pool TEXT NOT NULL)',
 ];
 const ready = new WeakMap();   // per database binding: create the tables once (no-op afterwards)
 function init(env) {
@@ -533,6 +542,56 @@ async function openVotes(env) {
   }
 }
 
+// ---------------------------------------------------------------- F19.2 영상 반응
+async function poolOf(env, cls) {
+  const r = await one(env, 'SELECT pool FROM pools WHERE class = ?', cls);
+  return r ? r.pool : cls;
+}
+// the classes sharing a pool now (a changed rank_scope re-pools older reactions too)
+async function poolClasses(env, cls) {
+  const r = await one(env, 'SELECT pool FROM pools WHERE class = ?', cls);
+  return r ? (await all(env, 'SELECT class FROM pools WHERE pool = ?', r.pool)).map((x) => x.class) : [cls];
+}
+// totals per video for a pool, only where at least 3 different students reacted; 어려워요 never leaves the Worker
+async function vtotals(env, cls, v) {
+  const cs = await poolClasses(env, cls);
+  const rows = await all(env, `SELECT v, r, COUNT(*) AS n FROM vreacts WHERE class IN (${cs.map(() => '?').join(',')})${v ? ' AND v = ?' : ''}
+    AND r != '' GROUP BY v, r`, ...cs, ...(v ? [v] : []));
+  const by = {};
+  for (const x of rows) { (by[x.v] = by[x.v] || { _n: 0 })._n += x.n; by[x.v][x.r] = x.n; }
+  const out = {};
+  for (const [vid, t] of Object.entries(by)) {
+    if (t._n < 3) continue;
+    out[vid] = Object.fromEntries(VREACT_SHOWN.map((k) => [k, t[k] || 0]));
+  }
+  return out;
+}
+async function vreact(req, env, h) {
+  const now = Date.now(), day = seoulDay(now);
+  let form;
+  try { form = await req.formData(); } catch { return json({ ok: false, error: 'bad_form' }, 400, h); }
+  const token = String(form.get('t') || '').toLowerCase(), v = String(form.get('v') || ''), r = String(form.get('r') || '');
+  if (!TOKEN_RE.test(token) || !VID_RE.test(v) || (r && !VREACT.includes(r))) return json({ ok: false, error: 'bad_request' }, 400, h);
+  const rl = `rv:${token}:${Math.floor(now / 3600e3)}`;
+  if ((await peek(env, rl)) >= num(env.VREACTS_PER_HOUR, 60)) return json({ ok: false, error: 'rate_limited' }, 200, h);
+  const cls = await classOf(env, token);
+  if (!cls) return json({ ok: false, error: 'unknown_token' }, 200, h);
+  await bump(env, rl, day);
+  const pool = await poolOf(env, cls), iso = new Date(now).toISOString();
+  // tapping the same one again sends r = '': kept as an empty row so the console's pull sees the removal too
+  await run(env, `INSERT INTO vreacts (token, v, class, pool, r, ts) VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT (token, v) DO UPDATE SET r = excluded.r, ts = excluded.ts, class = excluded.class, pool = excluded.pool`, token, v, cls, pool, r, iso);
+  return json({ ok: true, mine: r || null, totals: (await vtotals(env, cls, v))[v] || null }, 200, h);
+}
+async function vreactList(env, url, h) {
+  const token = (url.searchParams.get('t') || '').toLowerCase();
+  if (!TOKEN_RE.test(token)) return json({ ok: false, error: 'bad_token' }, 400, h);
+  const cls = await classOf(env, token);
+  if (!cls) return json({ ok: true, mine: {}, totals: {} }, 200, h);
+  const mine = Object.fromEntries((await all(env, "SELECT v, r FROM vreacts WHERE token = ? AND r != ''", token)).map((x) => [x.v, x.r]));
+  return json({ ok: true, mine, totals: await vtotals(env, cls) }, 200, h);
+}
+
 // ---------------------------------------------------------------- 출석 (F2)
 async function putSession(req, env) {
   let b;
@@ -822,6 +881,8 @@ async function route(req, env, url, h) {
   if (p === '/review' && req.method === 'POST') return reviewWrite(req, env, h);
   if (p === '/review/vote' && req.method === 'POST') return reviewVote(req, env, h);
   if (p === '/reviews' && req.method === 'GET') return reviewList(env, url, h);
+  if (p === '/vreact' && req.method === 'POST') return vreact(req, env, h);
+  if (p === '/vreacts' && req.method === 'GET') return vreactList(env, url, h);
   if (p === '/push/unsubscribe' && req.method === 'POST') return pushUnsubscribe(req, env, h);
   if (p === '/live/join' && req.method === 'POST') return liveStudent(req, env, url, h, 'join');
   if (p === '/live/answer' && req.method === 'POST') return liveStudent(req, env, url, h, 'answer');
@@ -855,7 +916,7 @@ async function route(req, env, url, h) {
     return new Response(img, { headers: { ...h, 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=600' } });
   }
   const teacherPaths = ['/submissions', '/photo', '/checkins', '/session', '/moment-put', '/tokmap',
-    '/live/open', '/live/next', '/live/reveal', '/live/close', '/live/state', '/live/results', '/rounds', '/reports', '/tokmap-info', '/watches', '/push/send', '/push/count', '/reviews-sync', '/reviews-pull'];
+    '/live/open', '/live/next', '/live/reveal', '/live/close', '/live/state', '/live/results', '/rounds', '/reports', '/tokmap-info', '/watches', '/push/send', '/push/count', '/reviews-sync', '/reviews-pull', '/vreacts-pull'];
   if (teacherPaths.includes(p)) {
     if (!teacherOk(req, env)) return json({ ok: false, error: 'unauthorized' }, 401, {});
     const since = url.searchParams.get('since') || '';
@@ -882,6 +943,10 @@ async function route(req, env, url, h) {
     }
     if (p === '/push/send' && req.method === 'POST') return pushSendAll(req, env);
     if (p === '/reviews-sync' && req.method === 'PUT') return reviewSync(req, env);
+    if (p === '/vreacts-pull' && req.method === 'GET') {
+      // every reaction (with 어려워요) for the teacher's console: token, video, reaction, time; never a name
+      return json({ now: new Date().toISOString(), items: await all(env, 'SELECT token, v, r, ts FROM vreacts WHERE ts > ? ORDER BY ts', since) }, 200, {});
+    }
     if (p === '/reviews-pull' && req.method === 'GET') {
       const reviews = await all(env, 'SELECT id, token, day, text, hide, status, ts, updated FROM reviews WHERE ts > ? ORDER BY ts', since);
       const votes = await all(env, 'SELECT round, token, review, ts FROM rvotes WHERE ts > ? ORDER BY ts', since);
@@ -915,7 +980,13 @@ async function route(req, env, url, h) {
       let b;
       try { b = await req.json(); } catch { return json({ ok: false, error: 'bad_json' }, 400, {}); }
       if (!b || typeof b.tokmap !== 'object') return json({ ok: false, error: 'bad_tokmap' }, 400, {});
-      return json({ ok: true, n: await replaceTokmap(env, b.tokmap, b.parents, b.no_consent) }, 200, {});
+      const n = await replaceTokmap(env, b.tokmap, b.parents, b.no_consent);
+      if (b.pools && typeof b.pools === 'object') {                // F19.2: class key -> reaction pool (rank_scope)
+        const st = [env.DB.prepare('DELETE FROM pools')];
+        for (const [c, pl] of Object.entries(b.pools)) if (CLASS_RE.test(c) && POOL_RE.test(String(pl))) st.push(env.DB.prepare('INSERT INTO pools (class, pool) VALUES (?, ?)').bind(c, String(pl)));
+        await env.DB.batch(st);
+      }
+      return json({ ok: true, n }, 200, {});
     }
     return json({ ok: false, error: 'method' }, 405, {});
   }
@@ -933,7 +1004,7 @@ export default {
     const url = new URL(req.url);
     const h = corsHeaders(req, env);
     const origin = req.headers.get('Origin');
-    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react', '/report', '/watch', '/push/subscribe', '/push/unsubscribe', '/review', '/review/vote', '/reviews', '/live/join', '/live/answer'].includes(url.pathname)
+    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react', '/report', '/watch', '/push/subscribe', '/push/unsubscribe', '/review', '/review/vote', '/reviews', '/vreact', '/vreacts', '/live/join', '/live/answer'].includes(url.pathname)
       || (url.pathname === '/live/state' && url.searchParams.has('t'));
     // CORS: browsers may only call the student endpoints from the Pages origin.
     if (isStudent && origin && origin !== env.ALLOWED_ORIGIN) return json({ ok: false, error: 'origin' }, 403, h);
@@ -964,6 +1035,7 @@ export default {
       env.DB.prepare('DELETE FROM reports WHERE updated < ?').bind(keep + 'T00:00:00.000Z'),
       env.DB.prepare('DELETE FROM watches WHERE day < ?').bind(keep),
       env.DB.prepare("DELETE FROM reviews WHERE day < ? AND id NOT IN (SELECT review FROM rbest)").bind(addDays(day, -120)),
+      env.DB.prepare('DELETE FROM vreacts WHERE ts < ?').bind(addDays(day, -60) + 'T00:00:00.000Z'),
     ]);
   },
 };

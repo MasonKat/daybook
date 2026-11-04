@@ -226,6 +226,10 @@ def _seed_watches(conn: sqlite3.Connection, today: date, rng: random.Random) -> 
             sec = rng.randint(25, 60) if v.startswith("AMPshort") else rng.randint(120, 1200)
             conn.execute("INSERT OR IGNORE INTO watches (student_id, video_id, day, sec, pct, ts) VALUES (?, ?, ?, ?, ?, ?)",
                          (r["id"], v, day.isoformat(), sec, rng.randint(35, 100), "2026-01-01T00:00:00.000Z"))
+            if rng.random() < 0.6:                    # F19.2: most watchers also reacted (어려워요 on the hardest one)
+                rx = rng.choice(["hard", "hard", "curious", "good"] if v == "AMPdemo0003" else ["fire", "fire", "good", "try", "curious"])
+                conn.execute("INSERT OR REPLACE INTO video_reactions (student_id, video_id, r, day, ts) VALUES (?, ?, ?, ?, ?)",
+                             (r["id"], v, rx, day.isoformat(), f"{day.isoformat()}T10:00:00.000Z"))
 
 
 def M_(hhmm: str) -> int:

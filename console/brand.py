@@ -12,8 +12,20 @@ from pathlib import Path
 
 from .config import ROOT, Config
 
-SIZE = 96          # px (shown at 28 px; 96 keeps it sharp on 3x screens)
+SIZE = 96          # px of the embedded PNG (sharp on 3x screens up to 32 px; 128 above 36 px)
+SIZE_BIG = 128
 MAX_BYTES = 30_000
+DEFAULT_PX, MIN_PX, MAX_PX = 36, 28, 44        # F19 add-on: brand.mascot_px, the shown size on pages and the board
+
+
+def mascot_px(cfg: Config) -> int:
+    b = cfg.extra.get("brand") or {}
+    v = b.get("mascot_px") if isinstance(b, dict) else None
+    return v if isinstance(v, int) and not isinstance(v, bool) and MIN_PX <= v <= MAX_PX else DEFAULT_PX
+
+
+def png_size(cfg: Config) -> int:
+    return SIZE_BIG if mascot_px(cfg) > 36 else SIZE
 
 
 def source(cfg: Config) -> Path | None:
@@ -33,24 +45,24 @@ def public(cfg: Config) -> bool:
     return isinstance(b, dict) and b.get("mascot_public") is True
 
 
-def png_bytes(src: Path) -> bytes:
-    """A small square PNG (transparency kept), at most SIZE px."""
+def png_bytes(src: Path, size: int = SIZE) -> bytes:
+    """A small square PNG (transparency kept), at most `size` px (96, or 128 for a mascot shown above 36 px)."""
     from PIL import Image
     with Image.open(src) as im:
         im = im.convert("RGBA")
-        im.thumbnail((SIZE, SIZE), Image.LANCZOS)
+        im.thumbnail((size, size), Image.LANCZOS)
         buf = io.BytesIO()
         im.save(buf, "PNG", optimize=True)
     data = buf.getvalue()
     if len(data) > MAX_BYTES:
-        raise ValueError(f"the mascot is still {len(data)} bytes at {SIZE} px; use a simpler image")
+        raise ValueError(f"the mascot is still {len(data)} bytes at {size} px; use a simpler image")
     return data
 
 
 def data_uri(cfg: Config) -> str:
     """For the local board (no file route needed)."""
     src = source(cfg)
-    return "data:image/png;base64," + base64.b64encode(png_bytes(src)).decode() if src else ""
+    return "data:image/png;base64," + base64.b64encode(png_bytes(src, png_size(cfg))).decode() if src else ""
 
 
 def write_placeholder(path: Path) -> Path:

@@ -18,6 +18,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from . import lint as lintmod
 from . import watch as W
+from . import vrank
 from . import brand
 from . import models as M
 from .config import ROOT, Config, strings
@@ -37,7 +38,7 @@ JS_STRINGS = ("wt_todo", "wt_done", "wt_queued", "wt_err", "wt_closed", "wt_hard
               # F18.3 학생 리뷰
               "rv_blocked", "rv_length", "rv_one_a_day", "rv_sent", "rv_err", "rv_st_pending", "rv_st_approved",
               "rv_st_hidden", "rv_empty", "rv_anon", "rv_me", "rv_vote_until", "rv_vote_btn", "rv_voted", "rv_vote_own",
-              "rv_vote_closed", "rv_best_empty")
+              "rv_vote_closed", "rv_best_empty", "vr_err")
 # the taste build's simulated class reviews (synthetic, shown without names; nothing is sent). The first is 콩's own.
 TASTE_REVIEWS = ["선생님 판서가 오늘은 피카소급", "분수 대결 명승부였다", "시발점 문제 풀다가 다 같이 웃음",
                  "불 꺼진 줄 알았는데 프로젝터였음", "18문제 다 맞아서 소리 지름"]
@@ -384,6 +385,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
     # Re-read classes: reward_for may have frozen a goal.
     classes = {r["id"]: r for r in conn.execute("SELECT * FROM classes")}
     videos = load_videos(cfg)
+    vrank.update_ranks(conn, cfg, today, videos)     # F19.3: this period's TOP list per pool (a finished one stays frozen)
 
     class_att: dict[int, list[tuple[date, int]]] = {}
     for cid in classes:
@@ -493,6 +495,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         my_videos = [dict(v, hot=True) if v["id"] == hot else v for v in videos if video_for(v, cls)]
         my_shorts = [v for v in my_videos if v["kind"] == "short"]
         my_longs = sorted((v for v in my_videos if v["kind"] == "long"), key=lambda v: not v["pin"])
+        rank = _rank(conn, cfg, cls, today, my_videos, rv_anon or taste) if cls else None     # F19.3 (taste: no names)
         if pop_pin:                                     # the 인기 video first in its own list (sorts are stable)
             my_shorts.sort(key=lambda v: not v.get("hot"))
             my_longs.sort(key=lambda v: not v.get("hot"))
@@ -650,6 +653,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "mic": 0 if rv_anon else VC.mic_total(conn, s["id"]),
             "rv_win": _rv_win(RV.parent_win(conn, s["id"], today), scrub) if not taste else None,   # F18.3: own win only
             "rv_anon": rv_anon,
+            "rank": rank,
             "parent_token": s["parent_token"],
             "week": week,
             "streak": streak,
@@ -688,9 +692,29 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         # F15.3: the VAPID public key (not secret) turns on the opt-in box; never in the taste build
         "vapid": "" if taste or not cfg.worker else str(cfg.extra.get("vapid_public") or ""),
         "show_videos": bool(cfg.extra.get("parent_shows_videos", True)),     # F18.1: the 영상 row (parents)
+        "vr_labels": [l for l in vrank.labels(cfg, S)],                       # F19.2: the 5 video reactions
         # F15.4: the academy's mascot next to the wordmark (taste build: only with brand.mascot_public)
         "mascot": "/b/mascot.png" if brand.source(cfg) and (not taste or brand.public(cfg)) else "",
+        "mascot_px": brand.mascot_px(cfg),                                   # F19 add-on: 28-44, default 36
     }
+
+
+MEDALS = ("🥇", "🥈", "🥉")
+
+
+def _rank(conn: sqlite3.Connection, cfg: Config, cls, today: date, my_videos: list[dict], anon: bool) -> dict | None:
+    """F19.3: the pool's TOP list (videos this student can see), the header ticker's top 3, and — korea mode only — the
+    class's "열심히 본 친구" (3 names, positive-only, no numbers)."""
+    from .reviews import period
+    by = {v["id"]: v for v in my_videos}
+    r = vrank.ranks_for(conn, cfg, cls, today, set(by))
+    if not r:
+        return None
+    rows = [{"n": i + 1, "medal": MEDALS[i] if i < 3 else "", "title": by[x["video_id"]]["title"], "url": by[x["video_id"]]["url"]}
+            for i, x in enumerate(r["rows"])]
+    start, end = period(today) if r["current"] else period(today - timedelta(days=14))
+    friends = [] if anon else vrank.top_watchers(conn, cls["id"], start, end)
+    return {"label": r["label"], "rows": rows, "top": rows[:3], "friends": friends}
 
 
 def _shouts(conn: sqlite3.Connection, student_id: int, scrub, wk: list[str]) -> list[dict]:
@@ -774,7 +798,7 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
                 make_thumb(v["thumb_src"], out / "t" / f"{v['id']}.jpg", max_w=360 if v["kind"] == "short" else 480)
     if ctx["mascot"]:                                              # F15.4
         (out / "b").mkdir()
-        (out / "b" / "mascot.png").write_bytes(brand.png_bytes(brand.source(cfg)))
+        (out / "b" / "mascot.png").write_bytes(brand.png_bytes(brand.source(cfg), brand.png_size(cfg)))
     from .moments import page_copy
     wanted = {m["src"]: m["image_key"] for s_ in ctx["students"] for st_ in s_["stories"] if st_["key"] == "moments"
               for m in st_["items"]}

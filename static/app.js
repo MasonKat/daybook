@@ -998,6 +998,59 @@
     }
     renderWT();
 
+    /* ---- F19.3: the header TOP 3 ticker (🥇 → 🥈 → 🥉 every 3 s; still with reduced motion) and the full list */
+    if ($('rk-open')) {
+      var rkTop = []; try { rkTop = JSON.parse($('rk-line').getAttribute('data-top') || '[]'); } catch (e) { rkTop = []; }
+      var rkI = 0, MED = ['🥇', '🥈', '🥉'];
+      if (!reduced && rkTop.length > 1) setInterval(function () { rkI = (rkI + 1) % rkTop.length; $('rk-line').textContent = MED[rkI] + ' ' + rkTop[rkI]; }, 3000);
+      $('rk-open').addEventListener('click', function () { $('rk').hidden = false; });
+      $('rk-x').addEventListener('click', function () { $('rk').hidden = true; });
+    }
+
+    /* ---- F19.2 영상 반응: one per video (tap again to take it back). Only the student's own choice and the pool's totals
+       (from 3 different students, never 어려워요's count) come back; in the taste build everything stays on the phone. */
+    var VR = { mine: {}, totals: {} }, VRKEY = 'daybook.vr.' + tok;
+    function vrRender() {
+      Array.prototype.forEach.call(document.querySelectorAll('.vrx'), function (g) {
+        var v = g.getAttribute('data-v'), t = VR.totals[v] || null;
+        Array.prototype.forEach.call(g.querySelectorAll('.vrb'), function (b) {
+          var r = b.getAttribute('data-r');
+          b.setAttribute('aria-pressed', VR.mine[v] === r ? 'true' : 'false');
+          b.querySelector('.vn').textContent = t && r !== 'hard' && t[r] ? String(t[r]) : '';
+        });
+      });
+    }
+    if (TASTE) {   /* 콩 can try it: practice totals on the first two videos, kept in memory */
+      Array.prototype.slice.call(document.querySelectorAll('.vrx'), 0, 2).forEach(function (g, i) {
+        VR.totals[g.getAttribute('data-v')] = [{ fire: 4, good: 3, curious: 1, try: 2 }, { fire: 2, good: 2, curious: 2, try: 1 }][i];
+      });
+    } else {
+      try { var vr0 = JSON.parse(LS.get(VRKEY) || 'null'); if (vr0) VR = vr0; } catch (e) { /* ignore */ }
+      if (D.worker && tok) fetch(D.worker + '/vreacts?t=' + tok, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+        if (j && j.ok) { VR = { mine: j.mine || {}, totals: j.totals || {} }; LS.set(VRKEY, JSON.stringify(VR)); vrRender(); }
+      }, function () { /* offline: the last copy stays */ });
+    }
+    vrRender();
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('.vrb');
+      if (!b) return;
+      var v = b.closest('.vrx').getAttribute('data-v'), r = b.getAttribute('data-r'), was = VR.mine[v] || '', now = was === r ? '' : r;
+      if (now) VR.mine[v] = now; else delete VR.mine[v];
+      if (TASTE) {
+        var t = VR.totals[v];
+        if (t) { if (was && was !== 'hard') t[was] = Math.max(0, (t[was] || 0) - 1); if (now && now !== 'hard') t[now] = (t[now] || 0) + 1; }
+        vrRender(); return;
+      }
+      vrRender();
+      if (!D.worker) return;
+      var fd = new FormData(); fd.append('t', tok); fd.append('v', v); fd.append('r', now);
+      fetch(D.worker + '/vreact', { method: 'POST', body: fd }).then(function (res) { return res.json(); }).then(function (j) {
+        if (!j || !j.ok) { if (was) VR.mine[v] = was; else delete VR.mine[v]; vrRender(); return; }
+        if (j.totals) VR.totals[v] = j.totals; else delete VR.totals[v];
+        LS.set(VRKEY, JSON.stringify(VR)); vrRender();
+      }, function () { if (was) VR.mine[v] = was; else delete VR.mine[v]; vrRender(); });
+    });
+
     /* ---- F18.3 학생 리뷰: write one line a day (filtered here and again in the Worker; nothing is stored when blocked),
        see the class's approved reviews, vote once when a vote is open (never for your own), and the 베스트 리뷰 history.
        Classmates' names are checked by salted hash only; the wordlist ships in /static/review_filter.js. */

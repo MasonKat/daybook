@@ -118,3 +118,25 @@ test('F18.3 the hourly cron opens a scheduled vote with one push (not in quiet h
   await worker.scheduled({ cron: '7 * * * *' }, env);                                    // pushed once, not twice
   assert.equal(pushes, 1);
 });
+
+test('F19.2 video reactions: one per token per video (changeable), totals pooled, shown only from 3 students, 어려워요 never shown', async () => {
+  const env = mkEnv(); await allow(env, ALL);
+  // c1 and c2 share the grade pool g10
+  await call(env, new Request('https://w.example/tokmap', { method: 'PUT', headers: { 'X-Teacher-Token': TEACHER, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tokmap: ALL, pools: { c1: 'g10', c2: 'g10' } }) }));
+  const react = (t, r, v = 'AMPvideo001') => { const fd = new FormData(); fd.append('t', t); fd.append('v', v); fd.append('r', r);
+    return call(env, new Request('https://w.example/vreact', { method: 'POST', body: fd, headers: { Origin: ORIGIN } })); };
+  let j = (await react(TOK, 'fire')).body;
+  assert.deepEqual([j.ok, j.mine, j.totals], [true, 'fire', null]);                       // 1 student: no totals yet
+  await react(TOK, 'good');                                                               // changed, still one row
+  await react(A, 'hard');
+  j = (await react(B, 'fire')).body;                                                      // another class, same grade pool
+  assert.deepEqual(j.totals, { fire: 1, good: 1, curious: 0, try: 0 });                   // 3 students; 어려워요 not in it
+  assert.equal((await react(A, 'nope')).status, 400);
+  const list = (await studentGet(env, `/vreacts?t=${TOK}`)).body;
+  assert.equal(list.mine.AMPvideo001, 'good'); assert.ok(!('hard' in list.totals.AMPvideo001));
+  await react(TOK, '');                                                                   // tapping it again removes it
+  assert.equal((await studentGet(env, `/vreacts?t=${TOK}`)).body.totals.AMPvideo001, undefined);   // back to 2 students
+  const pulled = await call(env, new Request('https://w.example/vreacts-pull?since=2020-01-01', { headers: { 'X-Teacher-Token': TEACHER } }));
+  assert.deepEqual(pulled.body.items.map((x) => x.r).sort(), ['', 'fire', 'hard']);       // 어려워요, and the removal
+});

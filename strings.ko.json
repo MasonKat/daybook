@@ -600,5 +600,16 @@
   "vc_recent": "최근 칭찬",
   "vc_board": "오늘의 칭찬",
   "vc_student_title": "선생님 한마디",
-  "vc_student_total": "🎤 {n}"
+  "vc_student_total": "🎤 {n}",
+  "vr_fire": "🔥 최고예요",
+  "vr_good": "👍 좋아요",
+  "vr_curious": "🤔 궁금해요",
+  "vr_hard": "😵 어려워요",
+  "vr_try": "💪 도전해볼래요",
+  "vr_label": "이 영상 어땠어요?",
+  "vr_wait": "3명 이상 반응하면 합계가 보여요",
+  "vr_err": "지금은 보내지 못했어요",
+  "rk_title": "2주 인기 영상 TOP",
+  "rk_hint": "같은 학년 친구들이 많이 보고 좋아한 영상이에요 (본 사람 수 + 반응). 2주마다 새로 정해져요.",
+  "rk_friends": "우리 반 열심히 본 친구"
 }

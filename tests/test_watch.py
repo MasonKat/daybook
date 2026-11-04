@@ -71,7 +71,7 @@ def test_teacher_view_per_class_and_per_student(conn, klass, tmp_path):
     v7 = W.teacher_view(conn, videos, TODAY, 7)
     c = v7["classes"][0]
     assert c["videos"] == [{"id": "AMPvideo001", "title": "영상1", "kind": "short", "students": 3, "minutes": 6.0, "avg_pct": 80,
-                            "views": 1240, "views_7d": 88}]
+                            "views": 1240, "views_7d": 88, "rx": {"fire": 0, "good": 0, "curious": 0, "hard": 0, "try": 0}}]
     assert c["popular"] == "AMPvideo001" and [s["n"] for s in c["students"]] == [1, 1, 1]
     v14 = W.teacher_view(conn, videos, TODAY, 14)
     assert {v["id"] for v in v14["classes"][0]["videos"]} == {"AMPvideo001", "AMPvideo002"}

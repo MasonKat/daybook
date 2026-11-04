@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_rows.html" import solved_strip, video_tiles with context %}
+{% macro vrx(v, compact=false) %}<div class="vrx{{ ' compact' if compact }}" data-v="{{ v.id }}" role="group" aria-label="{{ S.vr_label }}">{% for l in vr_labels %}<button type="button" class="vrb" data-r="{{ l.key }}" aria-pressed="false" title="{{ l.text }}" aria-label="{{ l.text }}"><span class="ve" aria-hidden="true">{{ l.emoji }}</span><span class="vl">{{ l.text }}</span><span class="vn tnum"></span></button>{% endfor %}</div>{% endmacro %}
 {% block head %}
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="/static/icon-180.png">
@@ -13,9 +14,10 @@
 <header class="sbar">
   <span class="wordmark">{{ S.app_name }}</span>
   {# F18.4: the mascot slot (the academy's art when brand.mascot is set; a neutral placeholder shape until then) #}
-  <span class="mslot" aria-hidden="true">{% if mascot %}<img class="mascot" src="{{ mascot }}" alt="" width="28" height="28">{% else %}<svg viewBox="0 0 28 28" class="mph"><rect x="2" y="2" width="24" height="24" rx="8"/><circle cx="14" cy="14" r="5.5"/></svg>{% endif %}</span>
+  <span class="mslot" aria-hidden="true" style="--mpx: {{ mascot_px }}px">{% if mascot %}<img class="mascot" src="{{ mascot }}" alt="" width="{{ mascot_px }}" height="{{ mascot_px }}">{% else %}<svg viewBox="0 0 28 28" class="mph"><rect x="2" y="2" width="24" height="24" rx="8"/><circle cx="14" cy="14" r="5.5"/></svg>{% endif %}</span>
   <button type="button" class="rvpill" id="rv-open" aria-label="{{ S.rv_pill }}"><svg viewBox="0 0 24 24" class="rvstar" aria-hidden="true"><defs><linearGradient id="rvg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset=".55" stop-color="#ec4899"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs><path fill="url(#rvg)" d="M12 2.6l2.8 5.8 6.4.9-4.6 4.5 1.1 6.3L12 17.1l-5.7 3 1.1-6.3-4.6-4.5 6.4-.9z"/></svg><span class="rvpill-t">{{ S.rv_pill }}</span><span class="rvdot" id="rv-dot" hidden></span></button>
-  <span class="sdate" id="today-date">&nbsp;</span>
+  {% if me.rank %}<button type="button" class="rkt" id="rk-open" aria-label="TOP 3 · {{ me.rank.label }}"><span class="rkt-h tnum">TOP 3 · {{ me.rank.label }}</span><span class="rkt-l" id="rk-line" data-top="{{ me.rank.top | map(attribute='title') | list | tojson | forceescape }}">🥇 {{ me.rank.top[0].title }}</span></button>{% endif %}
+  <span class="sdate" id="today-date"{% if me.rank %} hidden{% endif %}>&nbsp;</span>
   <span class="av ring sm" title="{{ me.display_name }}"><span>{{ me.initial }}</span></span>
 </header>
 
@@ -69,6 +71,7 @@
           {% if v.hot %}<span class="chip hot">🔥 {{ S.story_popular }}</span>{% endif %}{% if v.group %}<span class="chip">{{ v.group }}</span>{% endif %}
           <h3 class="rt">{{ v.title }}</h3>
           <a class="watch" href="{{ v.url }}" target="_blank" rel="noopener noreferrer">{{ S.watch }} ›</a>
+          {{ vrx(v) }}
         </div>
       </div>
     </article>
@@ -87,6 +90,7 @@
         <a class="play" href="{{ v.url }}" target="_blank" rel="noopener noreferrer" aria-label="{{ S.watch }}"><span aria-hidden="true">▶</span></a>
         {% endif %}
         {% if v.duration %}<span class="dur tnum">{{ v.duration }}</span>{% endif %}
+        {{ vrx(v, true) }}
       </div>
       <div class="lmeta">
         <h3 class="lt">{{ v.title }}</h3>
@@ -268,6 +272,20 @@
     <button type="button" class="btn primary wide" id="wt-send">{{ S.wt_send }}</button>
   </div>
 </div>
+
+{% if me.rank %}
+<div class="wt" id="rk" role="dialog" aria-modal="true" aria-labelledby="rk-h" hidden>
+  <div class="wt-top"><b id="rk-h">{{ S.rk_title }} · {{ me.rank.label }}</b><button type="button" class="live-x" id="rk-x" aria-label="{{ S.close }}">×</button></div>
+  <div class="wt-body">
+    <p class="muted">{{ S.rk_hint }}</p>
+    <ol class="rk-list">{% for x in me.rank.rows %}<li><span class="rk-n tnum">{{ x.medal or x.n }}</span><span class="rk-t">{{ x.title }}</span><a class="watch" href="{{ x.url }}" target="_blank" rel="noopener noreferrer">{{ S.watch }} ›</a></li>{% endfor %}</ol>
+    {% if me.rank.friends %}
+    <p class="wt-q">👏 {{ S.rk_friends }}</p>
+    <p class="rk-friends" data-lint="class-names">{% for n in me.rank.friends %}<span class="chip">{{ n }}</span>{% endfor %}</p>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 
 <div class="wt rv" id="rv" role="dialog" aria-modal="true" aria-labelledby="rv-h" hidden>
   <div class="wt-top"><b id="rv-h">{{ S.rv_title }}</b><button type="button" class="live-x" id="rv-x" aria-label="{{ S.close }}">×</button></div>

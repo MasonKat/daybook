@@ -48,11 +48,16 @@ def teacher_view(conn: sqlite3.Connection, videos: list[dict], today: date, days
     for c in conn.execute("SELECT id, name FROM classes ORDER BY id"):
         n_active = conn.execute("SELECT COUNT(*) FROM students_public WHERE class_id = ? AND active = 1", (c["id"],)).fetchone()[0]
         stats = class_stats(conn, c["id"], start, today)
+        from .vrank import KEYS, reaction_counts                # F19.2: with 어려워요 (teacher-only)
+        rx = reaction_counts(conn, [c["id"]], start, today)
+        for vid in rx:
+            stats.setdefault(vid, {"students": 0, "minutes": 0, "avg_pct": 0})
         rows = []
         for vid, st in sorted(stats.items(), key=lambda kv: (-kv[1]["students"], -kv[1]["minutes"])):
             v = by_id.get(vid, {})
             rows.append({"id": vid, "title": v.get("title") or vid, "kind": v.get("kind", ""), **st,
-                         "views": v.get("views"), "views_7d": v.get("views_7d")})
+                         "views": v.get("views"), "views_7d": v.get("views_7d"),
+                         "rx": rx.get(vid, {k: 0 for k in KEYS})})
         students = []
         for s in conn.execute("SELECT id, display_name FROM students_public WHERE class_id = ? AND active = 1 ORDER BY id", (c["id"],)):
             ids = watched_ids(conn, s["id"], start, today)

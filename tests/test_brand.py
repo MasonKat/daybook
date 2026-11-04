@@ -41,3 +41,16 @@ def test_board_shows_the_mascot(conn, klass, tmp_path):
     db = conn.execute("PRAGMA database_list").fetchone()["file"]
     b = boardmod.Board(db, Config(moments_dir=str(tmp_path / "mm"), extra={"brand": {"mascot": str(png)}}), "고1A", TODAY, poll=False)
     assert '<img class="mascot" src="data:image/png;base64,' in b.page()
+
+
+def test_mascot_px_is_configurable_and_clamped(conn, tmp_path):
+    from PIL import Image
+    import io
+    png = brand.write_placeholder(tmp_path / "m.png")
+    cfg = lambda px: Config(extra={"brand": {"mascot": str(png), "mascot_px": px}})   # noqa: E731
+    assert [brand.mascot_px(cfg(p)) for p in (28, 36, 44, 20, 50, "40", True)] == [28, 36, 44, 36, 36, 36, 36]
+    assert brand.mascot_px(Config()) == 36
+    assert brand.png_size(cfg(36)) == 96 and brand.png_size(cfg(44)) == 128
+    big = brand.png_bytes(png, brand.png_size(cfg(44)))
+    assert max(Image.open(io.BytesIO(big)).size) <= 128 and len(big) <= brand.MAX_BYTES     # at most 128 px; 30 KB cap
+    assert generate.publish(conn, cfg(44), tmp_path / "d", today=TODAY).ok

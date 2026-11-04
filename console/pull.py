@@ -49,8 +49,10 @@ def push_tokmap(conn: sqlite3.Connection, cfg: Config) -> str:
     if not cfg.worker or not cfg.teacher_token:
         return ""
     try:
+        from . import vrank
         r = http_put_json(cfg, "/tokmap", {"tokmap": tokmap(conn), "parents": parent_tokmap(conn),
-                                           "no_consent": no_consent_tokens(conn)})
+                                           "no_consent": no_consent_tokens(conn),
+                                           "pools": vrank.pools(conn, cfg)})        # F19.2: reaction totals per grade
         msg = f"Worker: {r.get('n', '?')} student links accepted"
     except PullError as e:
         return f"warning: student links not sent to the Worker ({e}); uploads from new links wait until it is"
@@ -92,6 +94,7 @@ class PullReport:
     watches: int = 0
     reviews: int = 0
     votes: int = 0
+    reactions: int = 0
 
 
 def _token_map(conn: sqlite3.Connection) -> dict[str, int]:
@@ -235,6 +238,12 @@ def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None =
         rep.watches = apply_watches(conn, wt.get("items", []))
     except PullError:
         pass  # an older Worker without watch signals
+    try:
+        from . import vrank                         # F19.2: video reactions (the latest per student and video)
+        vr = json.loads(fetch("/vreacts-pull" + (f"?since={urllib.parse.quote(since)}" if since else "")))
+        rep.reactions = vrank.apply_pull(conn, vr.get("items", []))
+    except PullError:
+        pass  # an older Worker without video reactions
     from . import reviews as RV                     # F18.3: new 학생 리뷰 and votes; finished votes get their winners
     rep.reviews, rep.votes = RV.pull_and_close(conn, fetch)
     now = datetime.fromisoformat(body.get("now", datetime.now(timezone.utc).isoformat()).replace("Z", "+00:00"))
@@ -255,6 +264,6 @@ def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None =
     log_event(conn, "pull", {"since": since, "next_since": next_since, "fetched": rep.fetched, "new": rep.new,
                              "updated": rep.updated, "unknown_tokens": rep.unknown_tokens,
                              "checkins": rep.checkins, "live": rep.live, "reports": rep.reports, "watches": rep.watches,
-                             "reviews": rep.reviews})
+                             "reviews": rep.reviews, "reactions": rep.reactions})
     conn.commit()
     return rep
