@@ -655,3 +655,7 @@ select.consent.unknown { border-color: var(--adjust); } select.consent.no { bord
 .rk-w { display: block; font-size: 12px; }
 .rk-list .watch { flex: none; }
 .rk-friends .chip { margin: 2px; font-size: 14px; padding: 4px 12px; }
+.rm-qr { margin: 8px 0; max-width: 260px; background: #fff; padding: 8px; border-radius: 12px; }
+.rm-qr svg { width: 100%; height: auto; display: block; }
+.tlist li.hold { font-weight: 600; }
+select.hold { min-height: 32px; border-radius: 8px; margin-left: 4px; }

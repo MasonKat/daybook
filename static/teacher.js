@@ -575,7 +575,8 @@
       tr.appendChild(el('td', {}, VC.kinds[r.kind] + (r.dropped ? ' · ' + VC.dropped : '')));
       tr.appendChild(el('td', {}, r.kind === 'praise' ? (r.heard || '') + (r.match === 'fuzzy' ? ' (' + VC.fuzzy + ')' : '') : ''));
       var td = el('td');
-      if (r.kind === 'praise') {
+      if (r.kind === 'praise' && r.target === 'class') td.appendChild(el('b', {}, VC['class']));   /* 반 전체: the class goal */
+      else if (r.kind === 'praise') {
         var sel = el('select', { 'aria-label': VC.who });
         sel.appendChild(el('option', { value: '' }, VC.who));
         vcStudents.forEach(function (st) { sel.appendChild(el('option', { value: String(st.id) }, st.display_name + (st.callsign ? ' (' + st.callsign + ')' : ''))); });
@@ -595,7 +596,12 @@
       var tx = el('input', { type: 'text', value: r.text, maxlength: '200', 'aria-label': 'text', 'class': 'vc-line' });
       tx.onchange = function () { r.text = tx.value; };
       var tt = el('td'); tt.appendChild(tx);
-      if (r.private) tt.appendChild(el('span', { 'class': 'chip warn' }, VC.private + ' · ' + (VC.why[r.private] || r.private)));
+      if (r.private === 'negative') {                       /* 확인 필요: the teacher decides (a negated one leans 공개) */
+        var pub = el('select', { 'aria-label': VC.hold, 'class': 'hold' });
+        pub.appendChild(el('option', { value: '1' }, VC.hold + ' · ' + VC.show)); pub.appendChild(el('option', { value: '0' }, VC.hold + ' · ' + VC.hide));
+        pub.value = r.publish ? '1' : '0'; pub.onchange = function () { r.publish = pub.value === '1'; };
+        tt.appendChild(pub);
+      } else if (r.private) tt.appendChild(el('span', { 'class': 'chip warn' }, VC.private + ' · ' + (VC.why[r.private] || r.private)));
       tr.appendChild(tt);
       tb.appendChild(tr);
     });
@@ -616,7 +622,7 @@
   $('vc-save').onclick = function () {
     $('vc-save').disabled = true;
     api('/api/teacher/voice-save', { 'class': $('vc-class').value, date: $('vc-date').value, rows: vcRows.map(function (r) {
-      return { kind: r.kind, keep: !!r.keep && !r.dropped, student_id: r.student_id, points: r.points, text: r.text };
+      return { kind: r.kind, keep: !!r.keep && !r.dropped, student_id: r.student_id, points: r.points, text: r.text, target: r.target, publish: !!r.publish };
     }) }).then(function (j) {
       $('vc-msg').textContent = j.ok ? fmt(VC.saved, j) : (j.error || '');
       if (j.ok) { vcRows = []; vcRender(); $('vc-text').value = ''; loadVoice(); }
@@ -637,11 +643,33 @@
       });
       if (!j.drafts.length) d.appendChild(el('li', { 'class': 'muted' }, VC.none));
       var r = $('vc-recent'); r.innerHTML = '';
-      j.shoutouts.forEach(function (x) { r.appendChild(el('li', {}, x.day + ' · ' + x.class_name + ' · ' + x.display_name + ' 🎤' + x.points + ' — ' + x.text + (x.private ? ' (' + VC.private + ')' : ''))); });
+      j.shoutouts.forEach(function (x) {
+        var li = el('li', { 'class': x.hold ? 'wrow hold' : '' }, x.day + ' · ' + x.class_name + ' · ' + x.display_name + ' 🎤' + x.points + ' — ' + x.text
+          + (x.hold ? ' (' + VC.hold + ')' : x.private ? ' (' + VC.private + ')' : '') + (x.source === 'remote' ? ' 📱' : ''));
+        if (x.hold) [[true, VC.show], [false, VC.hide]].forEach(function (a) {
+          var b = btn(a[1]); b.onclick = function () { api('/api/teacher/shout', { id: x.id, show: a[0] }).then(loadVoice); }; li.appendChild(b);
+        });
+        r.appendChild(li);
+      });
+      (j.class_shouts || []).forEach(function (x) { r.appendChild(el('li', {}, x.day + ' · ' + x.class_name + ' · ' + VC['class'] + ' 🎤' + x.points + ' — ' + x.text)); });
       if (!j.shoutouts.length) r.appendChild(el('li', { 'class': 'muted' }, VC.none));
     });
   }
   loadVoice();
+
+  /* ------------------------------------------------------------ F19.4: 리모컨 (the setup QR is shown on screen only) */
+  var rmLink = '';
+  function rmShow(rotate) {
+    if (rotate && !window.confirm(S.vc.rm_rotate_confirm || '새 키를 만들면 지금 연결된 휴대폰은 QR을 다시 열어야 해요.')) return;
+    api('/api/teacher/remote', { rotate: !!rotate }).then(function (j) {
+      if (!j.ok) { $('rm-msg').textContent = j.error || S.vc.rm_need; return; }
+      rmLink = j.link; $('rm-qr').innerHTML = j.qr; $('rm-qr').hidden = false; $('rm-copy').hidden = false;
+      $('rm-msg').textContent = j.message || '';
+    });
+  }
+  $('rm-show').onclick = function () { rmShow(false); };
+  $('rm-rotate').onclick = function () { rmShow(true); };
+  $('rm-copy').onclick = function () { copy(rmLink, $('rm-copy')); };
 
   /* ------------------------------------------------------------ F18.3: 학생 리뷰 (승인 / 숨김 before anyone sees it) */
   var RVT = S.rv;

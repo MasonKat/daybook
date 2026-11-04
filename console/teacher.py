@@ -157,7 +157,7 @@ def publish(conn: sqlite3.Connection, cfg: Config, out: Path | None = None, db_p
     steps = []
     if cfg.worker and cfg.teacher_token:
         try:
-            rep = pull(conn, http_fetch(cfg))
+            rep = pull(conn, http_fetch(cfg), cfg=cfg)
             steps.append(f"pull: new {rep.new}, updated {rep.updated}, check-ins {rep.checkins}")
         except PullError as e:
             steps.append(f"pull skipped: {e}")
@@ -619,9 +619,11 @@ def voice_view(conn: sqlite3.Connection, day: date) -> dict:
                              WHERE n.day >= ? ORDER BY n.day DESC, n.id""", (day - timedelta(days=7)).isoformat()),
             "drafts": q("""SELECT d.id, d.day, c.name AS class_name, d.text, d.status FROM moment_drafts d LEFT JOIN classes c ON c.id = d.class_id
                            WHERE d.status = 'draft' ORDER BY d.day DESC, d.id"""),
-            "shoutouts": q("""SELECT s.day, c.name AS class_name, p.display_name, s.points, s.text, s.private FROM shoutouts s
-                              JOIN students p ON p.id = s.student_id LEFT JOIN classes c ON c.id = s.class_id
-                              ORDER BY s.day DESC, s.id DESC LIMIT 30""")}
+            "shoutouts": q("""SELECT s.id, s.day, c.name AS class_name, p.display_name, s.points, s.text, s.private, s.hold, s.source
+                              FROM shoutouts s JOIN students p ON p.id = s.student_id LEFT JOIN classes c ON c.id = s.class_id
+                              ORDER BY s.hold DESC, s.day DESC, s.id DESC LIMIT 40"""),
+            "class_shouts": q("""SELECT x.day, c.name AS class_name, x.points, x.text, x.private, x.source FROM class_shouts x
+                                 LEFT JOIN classes c ON c.id = x.class_id ORDER BY x.day DESC, x.id DESC LIMIT 10""")}
 
 
 def draft_decide(conn: sqlite3.Connection, body: dict) -> dict:
@@ -634,3 +636,31 @@ def draft_decide(conn: sqlite3.Connection, body: dict) -> dict:
     log_event(conn, "moment_draft_" + ("approve" if status == "approved" else "drop"), {"id": r["id"]})
     conn.commit()
     return {"ok": True}
+
+
+def shout_decide(conn: sqlite3.Connection, body: dict) -> dict:
+    """F19 addendum: 확인 필요 -> 공개 / 비공개."""
+    from . import voice as VC
+    try:
+        VC.decide(conn, int(body.get("id") or 0), bool(body.get("show")))
+    except VC.VoiceError as e:
+        raise TeacherError(str(e)) from e
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------- F19.4: the teacher remote (setup QR on screen only)
+
+def remote_view(cfg: Config) -> dict:
+    from . import remote as RM
+    return {"ok": True, "ready": bool(cfg.worker and cfg.teacher_token), "set_up": RM.key(cfg) is not None}
+
+
+def remote_setup(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
+    from . import remote as RM
+    try:
+        if body.get("rotate"):
+            RM.ensure_key(cfg, rotate=True)
+        url = RM.link(cfg)
+    except RM.RemoteError as e:
+        raise TeacherError(str(e)) from e
+    return {"ok": True, "link": url, "qr": RM.qr_svg(url), "message": RM.push(conn, cfg)}

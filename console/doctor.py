@@ -18,7 +18,7 @@ from . import models as M
 from .config import Config
 from .db import SCHEMA_VERSION
 
-MIN_WORKER_VERSION = 11       # 출석, 장면/Live, 푼 문제 수, 주간 테스트, /tokmap-info, /watch, push, consent, 학생 리뷰, 영상 반응
+MIN_WORKER_VERSION = 12       # 출석, 장면/Live, 푼 문제 수, 주간 테스트, /tokmap-info, /watch, push, consent, 학생 리뷰, 영상 반응, 리모컨
 OK, WARN, FAIL = "✓", "⚠", "✗"
 REDEPLOY = "redeploy: cd worker && npx wrangler deploy"
 
@@ -85,7 +85,7 @@ def check_worker(conn: sqlite3.Connection, cfg: Config, fetch: Callable[[str], b
                     "check database_id in worker/wrangler.toml, then " + REDEPLOY))
     ver = int(h.get("version") or 0)
     out.append(Line(OK, "Worker version", f"v{ver}") if ver >= MIN_WORKER_VERSION else
-               Line(WARN, "Worker version", f"v{ver} (needs v{MIN_WORKER_VERSION}: 출석, 주간 테스트, 푼 문제 수, 학생 리뷰, 영상 반응)", REDEPLOY))
+               Line(WARN, "Worker version", f"v{ver} (needs v{MIN_WORKER_VERSION}: 출석, 주간 테스트, 푼 문제 수, 학생 리뷰, 영상 반응, 리모컨)", REDEPLOY))
     try:
         info = json.loads(fetch("/tokmap-info"))
     except (PullError, ValueError) as e:

@@ -45,7 +45,7 @@ def test_taste_build_only_kong_and_no_worker(demo_db, tmp_path):
     assert res.ok, [str(f) for f in res.findings]
     out = tmp_path / "dist-taste"
     pages = sorted(p.relative_to(out).as_posix() for p in out.rglob("index.html"))
-    assert pages == ["index.html", "p/kong/index.html", "s/kong/index.html"]
+    assert pages == ["index.html", "p/kong/index.html", "remote/index.html", "s/kong/index.html"]   # F19.4: the simulated remote
     others = [r["display_name"] for r in demo_db.execute("SELECT display_name FROM students WHERE slug != '콩'")]
     for f in out.rglob("*"):
         if f.suffix in (".html", ".json", ".webmanifest", ".css", ".js") or f.name == "_headers":

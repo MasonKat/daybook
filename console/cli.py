@@ -604,11 +604,13 @@ def submit(obj: Ctx, slug, d, source):
 def pull(obj: Ctx, photos_dir):
     """Fetch new submissions from the Worker."""
     try:
-        rep = do_pull(obj.conn, http_fetch(obj.cfg), photos_dir)
+        rep = do_pull(obj.conn, http_fetch(obj.cfg), photos_dir, cfg=obj.cfg)
     except PullError as e:
         fail(str(e))
     click.echo(f"fetched {rep.fetched}: new {rep.new}, updated {rep.updated}, check-ins {rep.checkins}, "
                f"weekly-test reports {rep.reports}, unknown tokens {rep.unknown_tokens}")
+    if rep.shouts:
+        click.echo(f"리모컨 칭찬: {rep.shouts}")
     if rep.reviews or rep.votes:
         click.echo(f"학생 리뷰: new {rep.reviews} (waiting for 승인), votes {rep.votes}")
     if rep.photos:
@@ -1327,6 +1329,33 @@ def voice_import(obj: Ctx, source, class_name, d, save):
         return
     n = VC.save(conn, obj.cfg, cls["id"], parse_date(d), pv["rows"])
     click.echo(f"saved: 칭찬 {n['praise']} (선생님만 {n['private']}), 개념 {n['concept']}, 장면 초안 {n['scene']}; skipped {n['skipped']}")
+
+
+# ---------------------------------------------------------------- F19.4: the teacher remote
+
+@cli.group()
+def remote():
+    """The teacher remote: a phone page on the Worker (/t/remote) to tap a student and say the praise."""
+
+
+@remote.command("link")
+@click.option("--rotate", is_flag=True, help="A new key: the phone set up before must open the new link")
+@click.pass_obj
+def remote_link(obj: Ctx, rotate):
+    """Print the one-time setup link for the teacher's phone (it carries the teacher token: open it on the phone, never
+    print it on paper or send it to anyone)."""
+    from . import remote as RM
+    try:
+        if rotate:
+            RM.ensure_key(obj.cfg, rotate=True)
+        url = RM.link(obj.cfg)
+    except RM.RemoteError as e:
+        fail(str(e))
+    msg = RM.push(obj.conn, obj.cfg)
+    click.echo(url)
+    if msg:
+        click.echo(msg, err=msg.startswith("warning"))
+    click.echo("open it once on your own phone (Teacher tab → 리모컨 shows it as a QR); it holds the teacher token", err=True)
 
 
 if __name__ == "__main__":

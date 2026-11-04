@@ -113,7 +113,7 @@ class Board:
         arrivals = [{"initial": r["display_name"][:1], "time": hm(r["ck"])}
                     for r in sorted((r for r in rows if r["ck"]), key=lambda r: r["ck"])]
         from . import voice as VC        # F19.1: 오늘의 칭찬 (korea mode, positive lines only) and approved 장면 drafts
-        shouts = VC.today_board(conn, self.class_id, self.day) if show_three else []
+        shouts = VC.today_board(conn, self.class_id, self.day, self.S["vc_class"]) if show_three else []
         drafts = [r[0] for r in conn.execute("SELECT text FROM moment_drafts WHERE class_id = ? AND status = 'approved' ORDER BY id DESC LIMIT 5",
                                              (self.class_id,))]
         return {"cls": cls, "students": students, "reward": reward, "three": three, "show_three": show_three, "arrivals": arrivals,
@@ -133,6 +133,7 @@ class Board:
             "arrivals": st["arrivals"],
             "reactions": self.reactions_text,
             "moments": conn.execute("SELECT COUNT(*) FROM moments WHERE session_id = ?", (self.session_id,)).fetchone()[0],
+            "shouts": [{"display_name": x["display_name"], "text": x["text"], "points": x["points"]} for x in st["shouts"]],
         }
 
     deploy_runner = None   # tests replace the wrangler call
@@ -236,7 +237,7 @@ class Board:
             self.polling = True
             try:
                 with self.lock, self.conn() as conn:
-                    pull(conn, fetch)
+                    pull(conn, fetch, cfg=self.cfg)
                 self.refresh_reactions(fetch)
             except PullError as e:
                 print(f"board: pull failed: {e}")
@@ -309,6 +310,8 @@ def make_handler(board: Board):
                     return self._json(T.push_view(conn, board.cfg))
                 if path == "/api/teacher/videos":             # F15.1/F15.2
                     return self._json(T.videos_view(conn, board.cfg, day, int((q.get("days") or ["7"])[0] or 7)))
+                if path == "/api/teacher/remote":             # F19.4
+                    return self._json(T.remote_view(board.cfg))
                 if path == "/api/teacher/voice":              # F19.1
                     return self._json(T.voice_view(conn, day))
                 if path == "/api/teacher/reviews":            # F18.3
@@ -361,6 +364,10 @@ def make_handler(board: Board):
                         return self._json(T.voice_preview(conn, body))
                     if self.path == "/api/teacher/voice-save":
                         return self._json(T.voice_save(conn, board.cfg, body, board.day))
+                    if self.path == "/api/teacher/shout":                # F19 addendum: 확인 필요 -> 공개 / 비공개
+                        return self._json(T.shout_decide(conn, body))
+                    if self.path == "/api/teacher/remote":               # F19.4: the setup link + an on-screen QR
+                        return self._json(T.remote_setup(conn, board.cfg, body))
                     if self.path == "/api/teacher/draft":                # F19.1 장면 초안: 승인 / ✗
                         return self._json(T.draft_decide(conn, body))
                     if self.path == "/api/teacher/review":               # F18.3: 승인 / 숨김

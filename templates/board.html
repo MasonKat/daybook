@@ -50,10 +50,10 @@
   <p id="b-three">{{ three|join(', ') if three else S.board_none }}</p>
 </section>
 {% endif %}
-{% if shouts %}
-<section class="card" id="b-shouts">
+{% if show_three %}
+<section class="card" id="b-shouts"{% if not shouts %} hidden{% endif %}>
   <h2>🎤 {{ S.vc_board }}</h2>
-  <ul class="shouts">{% for x in shouts %}<li><b>{{ x.display_name }}</b> {{ x.text }}</li>{% endfor %}</ul>
+  <ul class="shouts">{% for x in shouts %}<li><b>{{ x.display_name }}</b> {{ x.text }}{% if x.points %} 🎤{{ x.points }}{% endif %}</li>{% endfor %}</ul>
 </section>
 {% endif %}
 </main>

@@ -12,7 +12,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 KST = timezone(timedelta(hours=9))  # Asia/Seoul has no DST
 
 SCHEMA = """
@@ -207,7 +207,22 @@ CREATE TABLE IF NOT EXISTS shoutouts (        -- F19.1 칭찬 from the teacher's
     points     INTEGER NOT NULL DEFAULT 0,     -- the 🎤 count (not 태도 unless voice_points_to_attitude)
     text       TEXT NOT NULL,
     private    INTEGER NOT NULL DEFAULT 0,     -- 1 = teacher-only (negative, filtered, or the PII lint)
-    source     TEXT NOT NULL DEFAULT 'voice-import'
+    source     TEXT NOT NULL DEFAULT 'voice-import',   -- voice-import | remote (F19.4)
+    ref        TEXT,                           -- F19.4: the remote's id (one row per id; an undo deletes it)
+    hold       INTEGER NOT NULL DEFAULT 0      -- F19 addendum: 1 = 확인 필요 (a negative word; teacher-only until 공개)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS shoutouts_ref ON shoutouts (ref);
+
+CREATE TABLE IF NOT EXISTS class_shouts (     -- F19 addendum: 반 전체 shout-outs (the class goal via class_bonus; no student)
+    id         INTEGER PRIMARY KEY,
+    class_id   INTEGER NOT NULL REFERENCES classes(id),
+    day        TEXT NOT NULL,
+    ts         TEXT NOT NULL,
+    points     INTEGER NOT NULL DEFAULT 0,
+    text       TEXT NOT NULL,
+    private    INTEGER NOT NULL DEFAULT 0,
+    source     TEXT NOT NULL DEFAULT 'voice-import',
+    ref        TEXT UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS concept_notes (    -- F19.1 개념: teacher-only "오늘의 개념 메모"
@@ -371,6 +386,7 @@ def migrate(conn: sqlite3.Connection) -> None:
     added = {   # table -> {column: declaration} for columns that arrived after v1 (additive only)
         "sessions": {"start_time": "TEXT", "code": "TEXT", "cancelled": "TEXT"},
         "students": {"left_on": "TEXT", "consent": "TEXT NOT NULL DEFAULT 'unknown'", "callsign": "TEXT"},
+        "shoutouts": {"ref": "TEXT", "hold": "INTEGER NOT NULL DEFAULT 0"},
         "contacts": {"tag": "TEXT"},
         "submissions": {"reflection": "TEXT", "chip": "TEXT", "solved": "INTEGER"},
         "classes": {"grade": "TEXT", "start_time": "TEXT", "end_time": "TEXT", "self_study_until": "TEXT", "late_min": "INTEGER DEFAULT 10",

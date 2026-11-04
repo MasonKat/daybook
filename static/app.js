@@ -1312,6 +1312,12 @@
       $('b-fill').style.width = st.pct.toFixed(1) + '%';
       $('b-togo').textContent = st.togo;
       if ($('b-three')) $('b-three').textContent = st.three;   /* F16.1: absent in manitoba practice mode */
+      if ($('b-shouts') && st.shouts) {                          /* F19.4: 오늘의 칭찬 (the remote's saves arrive with the poll) */
+        var ul = $('b-shouts').querySelector('ul'); ul.innerHTML = '';
+        st.shouts.forEach(function (x) { var li = document.createElement('li'), b = document.createElement('b');
+          b.textContent = x.display_name; li.appendChild(b); li.appendChild(document.createTextNode(' ' + x.text + (x.points ? ' 🎤' + x.points : ''))); ul.appendChild(li); });
+        $('b-shouts').hidden = !st.shouts.length;
+      }
       if (st.reactions && $('b-rx')) $('b-rx').textContent = (D.rxLabel || '') + ' · ' + st.reactions;
       if (st.arrivals) {
         var a = $('b-arrivals');

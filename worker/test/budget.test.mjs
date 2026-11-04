@@ -4,7 +4,8 @@
 // weekly-test round: every student sends the report and edits it once; (F15) 3 watch records each, push opt-in and
 // one push after 발행; (F18.3) the review wordlist + name hashes synced, every student writes 1 review, opens the review
 // sheet on each of the 5 page opens, and votes once; the hourly vote cron runs 24 times; (F19.2) every student reacts once to
-// every one of 12 videos (the worst case of one reaction per student per video per day) and loads the totals on every open.
+// every one of 12 videos (the worst case of one reaction per student per video per day) and loads the totals on every open;
+// (F19.4) the teacher remote: 40 taps in class (each a save, half with the badge refresh), 3 undos, the roster twice.
 import fs from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -90,6 +91,18 @@ test('a full class day stays under 30 % of every free daily limit', async () => 
     await student(`/reviews?t=${t}`);
   }
   for (let h = 0; h < 24; h++) await worker.scheduled({ cron: '7 * * * *' }, env);
+  // F19.4: the teacher remote during class
+  await teacher('/remote-roster', 'PUT', { blob: 'A'.repeat(4000) });
+  const tr = (path, body) => go(path, body ? { method: 'POST', headers: { 'X-Teacher-Token': TEACHER, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    : { headers: { 'X-Teacher-Token': TEACHER } });
+  for (let k = 0; k < 2; k++) { await go('/t/remote/'); await go('/t/remote/remote.js'); await tr('/t/remote/roster'); }
+  const t0 = Date.now();
+  for (let k = 0; k < 40; k++) {
+    const sid = (k + 1).toString(16).padStart(16, '0');
+    assert.equal((await tr('/t/remote/shout', { id: sid, t: toks[k % 20], points: 1 + (k % 3), text: '풀이 깔끔', at: t0 + k * 4000 })).ok, true);
+    if (k % 2) await tr('/t/remote/today?class=c1');
+    if (k % 13 === 0) await tr('/t/remote/undo', { id: sid });
+  }
   for (let poll = 0; poll < 180; poll++) {                                       // the board: 3 h at 60 s
     await teacher('/submissions?since=2026-01-01T00:00:00.000Z');
     await teacher('/checkins?since=2026-01-01T00:00:00.000Z');
@@ -117,7 +130,8 @@ test('a full class day stays under 30 % of every free daily limit', async () => 
   assert.equal((await teacher('/push/send', 'POST', { classes: ['c1'], kind: 'video', body: 'x' })).sent, 0);   // daily cap
   await teacher('/push/count');
   await teacher('/submissions'); await teacher('/checkins'); await teacher('/live/results'); await teacher('/reports'); await teacher('/watches');
-  await teacher('/reviews-pull?since=2020-01-01'); await teacher('/vreacts-pull?since=2020-01-01');   // Saturday-style pull
+  await teacher('/reviews-pull?since=2020-01-01'); await teacher('/vreacts-pull?since=2020-01-01');
+  await teacher('/shouts-pull?since=2020-01-01');                              // Saturday-style pull
 
   const kv = env.SUBMISSIONS.ops, d1 = env.DB.usage;
   const dO = env.LIVE.usage;

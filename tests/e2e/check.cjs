@@ -898,8 +898,9 @@ print(c.execute("SELECT COUNT(*) FROM video_reactions x JOIN students s ON s.id 
     await tpage.click('#vc-preview');
     await tpage.waitForSelector('#vc-rows tr', { timeout: 5000 }).catch(() => {});
     const vcN = await tpage.locator('#vc-rows tr').count();
-    check(vcN === 9 && (await tpage.locator('#vc-rows tr.off').count()) === 1 && /선생님만/.test(await tpage.textContent('#vc-rows')),
-      `음성 메모: ${vcN} rows in the preview, one 취소됨, the negative line marked 선생님만`);
+    check(vcN === 9 && (await tpage.locator('#vc-rows tr.off').count()) === 1 && (await tpage.locator('#vc-rows select.hold').count()) === 1
+      && (await tpage.locator('#vc-rows select.hold').inputValue()) === '0',
+      `음성 메모: ${vcN} rows in the preview, one 취소됨, the negative line 확인 필요 (비공개 unless the teacher picks 공개)`);
     const whoRow = tpage.locator('#vc-rows tr').last();
     check((await whoRow.locator('select').inputValue()) === '' && (await whoRow.locator('.chipbtn').count()) >= 2, '누구?: a call sign not in this class offers 2-3 candidate chips and is not guessed');
     await whoRow.locator('.chipbtn').first().click();
@@ -920,6 +921,66 @@ print(c.execute("SELECT COUNT(*) FROM video_reactions x JOIN students s ON s.id 
     check(terr.length === 0, `Teacher tab: 0 console errors (${terr.length})`);
     await tpage.setViewportSize({ width: 1100, height: 900 });
     await shot(tpage, 'teacher.png', { fullPage: false });
+
+    console.log('\n[6c] F19.4 리모컨: tap who, speak what (the setup QR, save, the 3 s guard, undo, offline replay, the board)');
+    {
+      await tpage.click('#rm-show');
+      await tpage.waitForSelector('#rm-qr svg', { timeout: 5000 }).catch(() => {});
+      check(await tpage.isVisible('#rm-qr svg'), 'Teacher tab → 리모컨: the setup QR is shown on screen');
+      const setup = await (await fetch(BOARD + '/api/teacher/remote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).json();
+      check(/\/t\/remote\/#t=.+&k=[A-Za-z0-9_-]{43}$/.test(setup.link) && /encrypted/.test(setup.message), `the setup link carries the token and key in the #fragment; ${setup.message}`);
+      const rc = await browser.newContext({ viewport: { width: 360, height: 740 }, colorScheme: 'dark' });
+      const rp = await rc.newPage();
+      const rerrs = [];
+      rp.on('console', (m) => { if (m.type() === 'error') rerrs.push(m.text()); });
+      rp.on('pageerror', (e) => rerrs.push(String(e)));
+      await rp.goto(setup.link.replace('http://127.0.0.1:8788', WORKER), { waitUntil: 'networkidle' });
+      await rp.waitForSelector('#grid .who:not(.whole)', { timeout: 8000 }).catch(() => {});
+      await rp.selectOption('#cls', { label: CLASS_ON }).catch(() => {});
+      await rp.waitForTimeout(300);
+      const lay = await rp.evaluate(() => { const b = Array.from(document.querySelectorAll('#grid .who:not(.whole)')).map((x) => x.getBoundingClientRect());
+        return { n: b.length, h: Math.min(...b.map((r) => r.height)), cols: new Set(b.map((r) => Math.round(r.left))).size,
+          sw: document.documentElement.scrollWidth, frag: location.hash, whole: !!document.querySelector('#grid .who.whole') }; });
+      check(lay.n >= 4 && lay.h >= 56 && lay.cols === 2 && lay.sw <= 360 && lay.frag === '' && lay.whole,
+        `remote at 360 px: ${lay.n} name buttons, 2 columns, >= ${Math.round(lay.h)} px tall, 반 전체 on top, no horizontal scroll; the #fragment is gone`);
+      const who = rp.locator('#grid .who:not(.whole)');
+      const name0 = (await who.nth(0).locator('.nm').textContent()).trim();
+      await who.nth(0).click();
+      await rp.click('#pts button[data-p="2"]');
+      await rp.locator('#chips .qc', { hasText: '풀이 깔끔' }).click();
+      await rp.click('#save');
+      await rp.waitForSelector('#toast .undo', { timeout: 3000 }).catch(() => {});
+      await rp.waitForFunction(() => /🎤 1/.test(document.querySelector('#grid .who:not(.whole)').textContent), null, { timeout: 5000 }).catch(() => {});
+      check(/🎤 1/.test(await who.nth(0).textContent()), `tap ${name0} → +2 → 풀이 깔끔 → 저장: the 🎤 badge`);
+      await who.nth(0).click(); await rp.click('#save');
+      check(/3초/.test(await rp.textContent('#toast')), 'a second save for the same student within 3 s is refused (double tap)');
+      await who.nth(1).click(); await rp.fill('#txt', '칠판 풀이 최고'); await rp.click('#save');
+      await rp.waitForSelector('#toast .undo', { timeout: 3000 }).catch(() => {});
+      await rp.click('#toast .undo');
+      await rp.waitForFunction(() => /취소했어요/.test(document.getElementById('toast').textContent), null, { timeout: 5000 }).catch(() => {});
+      check(/취소했어요/.test(await rp.textContent('#toast')), '취소 undoes the last save');
+      await rc.setOffline(true);
+      await who.nth(2).click(); await rp.fill('#txt', '질문 좋았어'); await rp.click('#save');
+      check(/보낼 것 1개/.test(await rp.textContent('#net')), `offline: kept on the phone (${await rp.textContent('#net')})`);
+      await rc.setOffline(false);
+      await rp.evaluate(() => window.dispatchEvent(new Event('online')));
+      await rp.waitForFunction(() => document.getElementById('net').textContent === '', null, { timeout: 8000 }).catch(() => {});
+      await rp.evaluate(() => window.dispatchEvent(new Event('online')));          // a second replay must not duplicate
+      await rp.waitForTimeout(500);
+      check((await rp.textContent('#net')) === '', 'back online: the queue is sent once');
+      const realErrs = rerrs.filter((e) => !/ERR_INTERNET_DISCONNECTED/.test(e));     // the offline step's own network log
+      check(realErrs.length === 0, `remote: 0 console errors (${realErrs.slice(0, 2).join(' | ')})`);
+      await shot(rp, 'remote.png');
+      await rc.close();
+      console.log('      ' + daybook('pull').trim().split('\n').filter((l) => /리모컨/.test(l)).join(' '));
+      const rows = execFileSync(PYTHON, ['-c', `
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+print(c.execute("SELECT COUNT(*), SUM(text = '질문 좋았어'), SUM(text = '칠판 풀이 최고') FROM shoutouts WHERE source = 'remote'").fetchone())`, env.DAYBOOK_DB], { encoding: 'utf-8' }).trim();
+      check(rows === '(2, 1, 0)', `daybook pull: the saved shout-outs, the replayed one once, the undone one gone ${rows}`);
+      await bp.reload({ waitUntil: 'networkidle' });
+      check(/풀이 깔끔/.test(await bp.textContent('#b-shouts')) && !/칠판 풀이 최고/.test(await bp.textContent('#b-shouts')), `the board's 오늘의 칭찬: ${(await bp.textContent('#b-shouts')).replace(/\s+/g, ' ').trim()}`);
+    }
     await bctx.close();
 
     console.log('\n[7] taste build (F1): only 콩, no Worker, nothing stored');
@@ -931,7 +992,7 @@ print(c.execute("SELECT COUNT(*) FROM video_reactions x JOIN students s ON s.id 
       const pagesT = [];
       const walkT = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walkT(path.join(d, e.name)) : [path.join(d, e.name)]));
       for (const f of walkT(TDIST)) if (f.endsWith('index.html')) pagesT.push(path.relative(TDIST, f).split(path.sep).join('/'));
-      check(JSON.stringify(pagesT.sort()) === JSON.stringify(['index.html', 'p/kong/index.html', 's/kong/index.html']), `dist-taste holds only the landing, /s/kong/, /p/kong/ (${pagesT.join(', ')})`);
+      check(JSON.stringify(pagesT.sort()) === JSON.stringify(['index.html', 'p/kong/index.html', 'remote/index.html', 's/kong/index.html']), `dist-taste holds only the landing, /s/kong/, /p/kong/, /remote/ (${pagesT.join(', ')})`);
       const tctx = await browser.newContext({ viewport: PHONE });
       const tp = await tctx.newPage();
       const terrs = [], treqs = [];
@@ -1012,6 +1073,12 @@ print(c.execute("SELECT COUNT(*) FROM video_reactions x JOIN students s ON s.id 
         && (await tp.locator('#feed .reel').first().locator('.vrb[data-r="hard"] .vn').textContent()) === '',
         `taste: a practice 🔥 (${before} → ${before + 1}); 어려워요 never shows a count`);
       await tp.click('#t-today');
+      // F19.4: the simulated remote (8 synthetic students, nothing sent)
+      await tp.goto(TASTE + '/remote/', { waitUntil: 'networkidle' });
+      await tp.waitForSelector('#grid .who:not(.whole)', { timeout: 5000 }).catch(() => {});
+      check((await tp.locator('#grid .who:not(.whole)').count()) === 8 && await tp.isVisible('.taste-bar'), 'taste: the remote with 8 synthetic students and the banner');
+      await tp.locator('#grid .who:not(.whole)').first().click(); await tp.click('#save');
+      check(/🎤 1/.test(await tp.locator('#grid .who:not(.whole)').first().textContent()), 'taste: a practice save (kept in this page only)');
       await tp.goto(TASTE + '/p/kong/', { waitUntil: 'networkidle' });
       check(await tp.isVisible('.taste-bar') && /AMP 수학 · 콩/.test(await tp.textContent('.room-title')), 'parent page /p/kong/ with the banner');
       check(/^수업 18:00–20:00 · 자습 ~21:00$/.test((await tp.textContent('#hours')).trim()), `taste parent: class hours and self-study ("${(await tp.textContent('#hours')).trim()}")`);

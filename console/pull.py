@@ -59,6 +59,10 @@ def push_tokmap(conn: sqlite3.Connection, cfg: Config) -> str:
     from . import rounds as R                     # F14: the weekly-test rounds travel with the token map
     if R.worker_payload(conn):
         msg += "\n" + R.push(conn, cfg)
+    from . import remote                          # F19.4: the remote's class lists (encrypted), once it is set up
+    rm = remote.push(conn, cfg)
+    if rm:
+        msg += "\n" + rm
     return msg
 
 
@@ -95,6 +99,7 @@ class PullReport:
     reviews: int = 0
     votes: int = 0
     reactions: int = 0
+    shouts: int = 0
 
 
 def _token_map(conn: sqlite3.Connection) -> dict[str, int]:
@@ -211,7 +216,7 @@ def apply_live(conn: sqlite3.Connection, items: list[dict], rep: PullReport) -> 
             rep.live += 1
 
 
-def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None = None) -> PullReport:
+def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None = None, cfg: Config | None = None) -> PullReport:
     last = last_event(conn, "pull") or {}
     since = last.get("next_since", "")
     body = json.loads(fetch("/submissions" + (f"?since={urllib.parse.quote(since)}" if since else "")))
@@ -244,6 +249,12 @@ def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None =
         rep.reactions = vrank.apply_pull(conn, vr.get("items", []))
     except PullError:
         pass  # an older Worker without video reactions
+    try:
+        from . import voice as VC                   # F19.4: shout-outs from the teacher remote (and their undo)
+        sh = json.loads(fetch("/shouts-pull" + (f"?since={urllib.parse.quote(since)}" if since else "")))
+        rep.shouts = VC.apply_remote(conn, cfg or Config(), sh.get("items", []))
+    except PullError:
+        pass  # an older Worker without the remote
     from . import reviews as RV                     # F18.3: new 학생 리뷰 and votes; finished votes get their winners
     rep.reviews, rep.votes = RV.pull_and_close(conn, fetch)
     now = datetime.fromisoformat(body.get("now", datetime.now(timezone.utc).isoformat()).replace("Z", "+00:00"))
@@ -264,6 +275,7 @@ def pull(conn: sqlite3.Connection, fetch: Fetch, photos_dir: str | Path | None =
     log_event(conn, "pull", {"since": since, "next_since": next_since, "fetched": rep.fetched, "new": rep.new,
                              "updated": rep.updated, "unknown_tokens": rep.unknown_tokens,
                              "checkins": rep.checkins, "live": rep.live, "reports": rep.reports, "watches": rep.watches,
-                             "reviews": rep.reviews, "reactions": rep.reactions})
+                             "reviews": rep.reviews, "reactions": rep.reactions,
+                             "shouts": rep.shouts})
     conn.commit()
     return rep

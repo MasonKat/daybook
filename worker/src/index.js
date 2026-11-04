@@ -1,6 +1,7 @@
 // DAYBOOK Worker. Never sees names: tokens, opaque class keys, dates.
 import { send as pushSend } from './webpush.js';
 import { check as reviewCheck, parseList, pieces, readings } from './review_filter.js';
+import { REMOTE_JS, remoteHtml } from './remote_client.js';
 // Bindings: D1 DB (records: submissions, check-ins, sessions, token map, moments, reactions, rate counters),
 //           KV SUBMISSIONS (photos and moment JPEGs only, with TTLs), R2 PHOTOS (only when PHOTO_STORE = "r2").
 // Secret: TEACHER_TOKEN. No KV `list` anywhere: the free plan allows ~1,000 lists a day (see DECISIONS, H1).
@@ -14,8 +15,9 @@ const CHIPS = new Set(['ok', 'confused', 'rewatch']);
 const RID_RE = /^[a-f0-9]{16}$/;
 // G1: bumped with every feature the console relies on (doctor warns when the deployed Worker is older):
 // 1 base, 2 출석, 3 장면 + Live, 4 푼 문제 수, 5 주간 테스트 reports, 6 /health version + /tokmap-info, 7 /watch,
-// 8 Web Push, 9 consent (no watch / push without the parent's yes), 10 학생 리뷰, 11 영상 반응 (5-way, pooled per grade)
-export const WORKER_VERSION = 11;
+// 8 Web Push, 9 consent (no watch / push without the parent's yes), 10 학생 리뷰, 11 영상 반응 (5-way, pooled per grade),
+// 12 the teacher remote (/t/remote: tap who, speak what)
+export const WORKER_VERSION = 12;
 const DAILY_CRON = '17 19 * * *';
 // the worst words, used until the console has sent the full list (filters/review_words.txt)
 const CORE_WORDS = '시발\n씨발\nㅅㅂ\nㅆㅂ\n병신\nㅂㅅ\n좆\n지랄\n존나\n개새끼\nfuck\nshit\n!시발점\n!시발표';
@@ -94,6 +96,12 @@ export const SCHEMA = [
      ts TEXT NOT NULL, PRIMARY KEY (token, v))`,
   'CREATE INDEX IF NOT EXISTS vreacts_pool ON vreacts (pool, v)',
   'CREATE TABLE IF NOT EXISTS pools (class TEXT PRIMARY KEY, pool TEXT NOT NULL)',
+  // F19.4 the teacher remote: the class lists arrive encrypted (labels only the teacher's laptop and phone can read);
+  // shout-outs are keyed by token, never by name
+  'CREATE TABLE IF NOT EXISTS remote (k TEXT PRIMARY KEY, blob TEXT NOT NULL, updated TEXT NOT NULL)',
+  `CREATE TABLE IF NOT EXISTS shouts (id TEXT PRIMARY KEY, token TEXT NOT NULL, class TEXT NOT NULL, day TEXT NOT NULL, points INTEGER NOT NULL,
+     text TEXT NOT NULL, at INTEGER NOT NULL, ts TEXT NOT NULL, updated TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)`,
+  'CREATE INDEX IF NOT EXISTS shouts_token ON shouts (token, at)',
 ];
 const ready = new WeakMap();   // per database binding: create the tables once (no-op afterwards)
 function init(env) {
@@ -592,6 +600,77 @@ async function vreactList(env, url, h) {
   return json({ ok: true, mine, totals: await vtotals(env, cls) }, 200, h);
 }
 
+// ---------------------------------------------------------------- F19.4 the teacher remote ("tap who, speak what")
+const REMOTE_H = { 'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; "
+  + "img-src 'self' data:; manifest-src 'self'; worker-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+  'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff' };
+const REMOTE_SW = `'use strict';
+var C = 'remote-shell-1', SHELL = ['/t/remote/', '/t/remote/remote.js', '/t/remote/manifest.webmanifest'];
+self.addEventListener('install', function (e) { e.waitUntil(caches.open(C).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); })); });
+self.addEventListener('activate', function (e) { e.waitUntil(self.clients.claim()); });
+self.addEventListener('fetch', function (e) {
+  var u = new URL(e.request.url);
+  if (e.request.method !== 'GET' || SHELL.indexOf(u.pathname) < 0) return;      // the API is never cached
+  e.respondWith(fetch(e.request).then(function (r) { var c2 = r.clone(); caches.open(C).then(function (c) { c.put(e.request, c2); }); return r; },
+    function () { return caches.match(e.request); }));
+});`;
+const REMOTE_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96"><rect width="96" height="96" rx="22" fill="#2563eb"/>'
+  + '<circle cx="48" cy="40" r="14" fill="#fff"/><rect x="40" y="58" width="16" height="22" rx="8" fill="#fff"/></svg>';
+
+async function remoteRoute(req, env, url) {
+  const p = url.pathname;
+  const page = (body, type, extra = {}) => new Response(body, { headers: { ...REMOTE_H, 'Content-Type': type, 'Cache-Control': 'no-cache', ...extra } });
+  if (p === '/t/remote') return new Response(null, { status: 302, headers: { Location: '/t/remote/' } });       // the fragment survives
+  if (p === '/t/remote/') return page(remoteHtml({ taste: false }, '/t/remote/remote.js', '/t/remote/manifest.webmanifest'), 'text/html; charset=utf-8');
+  if (p === '/t/remote/remote.js') return page(REMOTE_JS, 'text/javascript; charset=utf-8');
+  if (p === '/t/remote/sw.js') return page(REMOTE_SW, 'text/javascript; charset=utf-8', { 'Service-Worker-Allowed': '/t/remote/' });
+  if (p === '/t/remote/icon.svg') return page(REMOTE_ICON, 'image/svg+xml');
+  if (p === '/t/remote/manifest.webmanifest') {
+    return page(JSON.stringify({ name: 'AMP 리모컨', short_name: '리모컨', start_url: '/t/remote/', scope: '/t/remote/', display: 'standalone',
+      background_color: '#0b0f17', theme_color: '#0b0f17', icons: [{ src: '/t/remote/icon.svg', sizes: 'any', type: 'image/svg+xml' }] }), 'application/manifest+json');
+  }
+  // every data call needs the teacher token (a student's or a parent's link token is just a wrong token here)
+  if (!teacherOk(req, env)) return json({ ok: false, error: 'unauthorized' }, 401, REMOTE_H);
+  const now = Date.now(), iso = new Date(now).toISOString();
+  if (p === '/t/remote/roster' && req.method === 'GET') {
+    const r = await one(env, "SELECT blob, updated FROM remote WHERE k = 'roster'");
+    return json({ ok: true, blob: r ? r.blob : null, updated: r ? r.updated : null }, 200, REMOTE_H);
+  }
+  if (p === '/t/remote/today' && req.method === 'GET') {
+    const cls = url.searchParams.get('class') || '';
+    if (!CLASS_RE.test(cls)) return json({ ok: false, error: 'bad_class' }, 400, REMOTE_H);
+    const rows = await all(env, 'SELECT token, COUNT(*) AS n FROM shouts WHERE class = ? AND day = ? AND deleted = 0 GROUP BY token', cls, seoulDay(now));
+    return json({ ok: true, counts: Object.fromEntries(rows.map((x) => [x.token, x.n])) }, 200, REMOTE_H);
+  }
+  let b;
+  try { b = await req.json(); } catch { return json({ ok: false, error: 'bad_json' }, 400, REMOTE_H); }
+  if (p === '/t/remote/shout' && req.method === 'POST') {
+    const id = String(b.id || ''), token = String(b.t || '').toLowerCase(), points = Number(b.points), text = clean(b.text).slice(0, 200);
+    const whole = token === '*';                                     // 반 전체: a class shout-out (the class goal, no student)
+    if (!/^[a-f0-9]{16}$/.test(id) || !(whole || TOKEN_RE.test(token)) || ![1, 2, 3].includes(points)) return json({ ok: false, error: 'bad_request' }, 400, REMOTE_H);
+    if (await one(env, 'SELECT 1 AS x FROM shouts WHERE id = ?', id)) return json({ ok: true, dup: true }, 200, REMOTE_H);   // a replay
+    const cls = whole ? ((CLASS_RE.test(String(b.class || '')) && await one(env, 'SELECT 1 AS x FROM tokmap WHERE class = ? LIMIT 1', String(b.class))) ? String(b.class) : null)
+      : await classOf(env, token);
+    if (!cls) return json({ ok: false, error: 'unknown_token' }, 200, REMOTE_H);
+    let at = Number(b.at);
+    if (!Number.isFinite(at) || at > now + 300e3 || at < now - 7 * 86400e3) at = now;          // a queued save keeps its own time
+    if (await one(env, 'SELECT 1 AS x FROM shouts WHERE token = ? AND class = ? AND deleted = 0 AND at > ? AND at < ?', token, cls, at - 3000, at + 3000)) {
+      return json({ ok: false, error: 'too_fast' }, 200, REMOTE_H);                                // one per student per 3 s
+    }
+    await run(env, `INSERT OR IGNORE INTO shouts (id, token, class, day, points, text, at, ts, updated, deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      id, token, cls, seoulDay(at), points, text, at, iso, iso);
+    return json({ ok: true }, 200, REMOTE_H);
+  }
+  if (p === '/t/remote/undo' && req.method === 'POST') {
+    const r = await one(env, 'SELECT * FROM shouts WHERE id = ?', String(b.id || ''));
+    if (!r || r.deleted) return json({ ok: false, error: 'not_found' }, 200, REMOTE_H);
+    if (now - Date.parse(r.ts) > 120e3) return json({ ok: false, error: 'too_late' }, 200, REMOTE_H);   // 2 minutes
+    await run(env, 'UPDATE shouts SET deleted = 1, updated = ? WHERE id = ?', iso, r.id);
+    return json({ ok: true }, 200, REMOTE_H);
+  }
+  return json({ ok: false, error: 'not_found' }, 404, REMOTE_H);
+}
+
 // ---------------------------------------------------------------- 출석 (F2)
 async function putSession(req, env) {
   let b;
@@ -881,6 +960,7 @@ async function route(req, env, url, h) {
   if (p === '/review' && req.method === 'POST') return reviewWrite(req, env, h);
   if (p === '/review/vote' && req.method === 'POST') return reviewVote(req, env, h);
   if (p === '/reviews' && req.method === 'GET') return reviewList(env, url, h);
+  if (p === '/t/remote' || p.startsWith('/t/remote/')) return remoteRoute(req, env, url);
   if (p === '/vreact' && req.method === 'POST') return vreact(req, env, h);
   if (p === '/vreacts' && req.method === 'GET') return vreactList(env, url, h);
   if (p === '/push/unsubscribe' && req.method === 'POST') return pushUnsubscribe(req, env, h);
@@ -916,7 +996,7 @@ async function route(req, env, url, h) {
     return new Response(img, { headers: { ...h, 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=600' } });
   }
   const teacherPaths = ['/submissions', '/photo', '/checkins', '/session', '/moment-put', '/tokmap',
-    '/live/open', '/live/next', '/live/reveal', '/live/close', '/live/state', '/live/results', '/rounds', '/reports', '/tokmap-info', '/watches', '/push/send', '/push/count', '/reviews-sync', '/reviews-pull', '/vreacts-pull'];
+    '/live/open', '/live/next', '/live/reveal', '/live/close', '/live/state', '/live/results', '/rounds', '/reports', '/tokmap-info', '/watches', '/push/send', '/push/count', '/reviews-sync', '/reviews-pull', '/vreacts-pull', '/remote-roster', '/shouts-pull'];
   if (teacherPaths.includes(p)) {
     if (!teacherOk(req, env)) return json({ ok: false, error: 'unauthorized' }, 401, {});
     const since = url.searchParams.get('since') || '';
@@ -943,6 +1023,19 @@ async function route(req, env, url, h) {
     }
     if (p === '/push/send' && req.method === 'POST') return pushSendAll(req, env);
     if (p === '/reviews-sync' && req.method === 'PUT') return reviewSync(req, env);
+    if (p === '/remote-roster' && req.method === 'PUT') {
+      let b;
+      try { b = await req.json(); } catch { return json({ ok: false, error: 'bad_json' }, 400, {}); }
+      if (!/^[A-Za-z0-9_-]{60,200000}$/.test(String(b.blob || ''))) return json({ ok: false, error: 'bad_blob' }, 400, {});
+      await run(env, "INSERT INTO remote (k, blob, updated) VALUES ('roster', ?, ?) ON CONFLICT (k) DO UPDATE SET blob = excluded.blob, updated = excluded.updated",
+        b.blob, new Date().toISOString());
+      return json({ ok: true }, 200, {});
+    }
+    if (p === '/shouts-pull' && req.method === 'GET') {
+      // F19.4: shout-outs from the remote (and their undo), by token; the console decides what may reach a page
+      return json({ now: new Date().toISOString(), items: await all(env, `SELECT id, token, class, day, points, text, ts, updated, deleted FROM shouts
+        WHERE updated > ? ORDER BY updated`, since) }, 200, {});
+    }
     if (p === '/vreacts-pull' && req.method === 'GET') {
       // every reaction (with 어려워요) for the teacher's console: token, video, reaction, time; never a name
       return json({ now: new Date().toISOString(), items: await all(env, 'SELECT token, v, r, ts FROM vreacts WHERE ts > ? ORDER BY ts', since) }, 200, {});
@@ -1036,6 +1129,7 @@ export default {
       env.DB.prepare('DELETE FROM watches WHERE day < ?').bind(keep),
       env.DB.prepare("DELETE FROM reviews WHERE day < ? AND id NOT IN (SELECT review FROM rbest)").bind(addDays(day, -120)),
       env.DB.prepare('DELETE FROM vreacts WHERE ts < ?').bind(addDays(day, -60) + 'T00:00:00.000Z'),
+      env.DB.prepare('DELETE FROM shouts WHERE updated < ?').bind(addDays(day, -30) + 'T00:00:00.000Z'),
     ]);
   },
 };
