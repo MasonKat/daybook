@@ -78,7 +78,7 @@ REST = ["다 했어요", "https://w.example", "네",              # 5 worker
         "https://p.example", "AMP 수학", "usb", "", "네",     # 7 config
         "고1A", "월,수,금", "2026-11-06..2027-02-26", "고1", "18:00", "20:00", "", "피자", "네", "",   # 8 classes
         "roster.csv", "", "네", "네", "가람", "", "7번", "",   # 9 roster (preview, call signs)
-        "y", "n", "", "네",                                  # 10 consent
+        "y", "y", "n", "", "네",                             # 10 consent (+ the test-results box for the yes)
         "네", "Adaptive_Screeners_1S_Nov06_G10", "1학년", "", "20", "2026-11-06 20:00", "2026-11-08 23:59", "네", "아니요",   # 11 rounds
         "네",                                                # 12 publish
         "네"]                                                # 13 deploy (14 doctor asks nothing)
@@ -96,6 +96,7 @@ def test_full_synthetic_night(env):
     assert (cls["name"], cls["start_time"], cls["end_time"], cls["late_min"], cls["grade"]) == ("고1A", "18:00", "20:00", 10, "고1")
     studs = c.execute("SELECT full_name, callsign, consent FROM students ORDER BY id").fetchall()
     assert [tuple(r) for r in studs] == [("한가람", "가람", "yes"), ("윤도담", None, "no"), ("서하늘", "7번", "unknown")]
+    assert [r[0] for r in c.execute("SELECT share_tests FROM students ORDER BY id")] == ["yes", "no", "no"]
     assert c.execute("SELECT COUNT(*) FROM rounds").fetchone()[0] == 1
     assert (env.tmp / "dist" / "index.html").exists() and "/tokmap" in env.sent and env.deployed
     assert c.execute("SELECT COUNT(*) FROM events WHERE type = 'deploy'").fetchone()[0] == 1

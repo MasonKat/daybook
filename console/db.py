@@ -12,7 +12,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 KST = timezone(timedelta(hours=9))  # Asia/Seoul has no DST
 
 SCHEMA = """
@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS students (
     ext_id        TEXT UNIQUE,            -- console only (the teacher's roster ID)
     left_on       TEXT,                   -- F11 퇴원 처리: the date (NULL while enrolled)
     consent       TEXT NOT NULL DEFAULT 'unknown',  -- F17: the parent's slip: yes | no | unknown
-    callsign      TEXT                    -- F19.1: the short spoken name for voice notes (console only; unique per class)
+    callsign      TEXT,                   -- F19.1: the short spoken name for voice notes (console only; unique per class)
+    share_tests   TEXT NOT NULL DEFAULT 'no'        -- F21.1: weekly-test results on the parent page: yes only when both agree
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -356,7 +357,7 @@ BEGIN SELECT RAISE(ABORT, 'events is append-only'); END;
 
 -- The generator reads only this view: no full_name, parent_phone or ext_id.
 CREATE VIEW IF NOT EXISTS students_public AS
-    SELECT id, slug, display_name, class_id, track, student_token, parent_token, active, created_at, consent
+    SELECT id, slug, display_name, class_id, track, student_token, parent_token, active, created_at, consent, share_tests
     FROM students;
 
 CREATE INDEX IF NOT EXISTS ix_sub_day ON submissions(day);
@@ -385,7 +386,8 @@ def migrate(conn: sqlite3.Connection) -> None:
         return
     added = {   # table -> {column: declaration} for columns that arrived after v1 (additive only)
         "sessions": {"start_time": "TEXT", "code": "TEXT", "cancelled": "TEXT"},
-        "students": {"left_on": "TEXT", "consent": "TEXT NOT NULL DEFAULT 'unknown'", "callsign": "TEXT"},
+        "students": {"left_on": "TEXT", "consent": "TEXT NOT NULL DEFAULT 'unknown'", "callsign": "TEXT",
+                     "share_tests": "TEXT NOT NULL DEFAULT 'no'"},
         "shoutouts": {"ref": "TEXT", "hold": "INTEGER NOT NULL DEFAULT 0"},
         "contacts": {"tag": "TEXT"},
         "submissions": {"reflection": "TEXT", "chip": "TEXT", "solved": "INTEGER"},
@@ -400,7 +402,7 @@ def migrate(conn: sqlite3.Connection) -> None:
             if col not in cols:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
     view = _columns(conn, "students_public")
-    if view and "consent" not in view:      # F17: the public view gained consent (not personal data): recreate it
+    if view and ("consent" not in view or "share_tests" not in view):   # F17 / F21.1: new public columns: recreate it
         conn.execute("DROP VIEW students_public")
     conn.executescript(SCHEMA)   # creates any new tables (IF NOT EXISTS)
     if conn.execute("PRAGMA user_version").fetchone()[0] < SCHEMA_VERSION:

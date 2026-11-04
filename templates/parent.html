@@ -17,6 +17,7 @@
       <p class="rline"><b>{{ S.sub_count | fmt(k=w.k) }}</b>{% if w.c %} <span class="muted">({{ S.sub_detail | fmt(c=w.c, d=w.d) }})</span>{% endif %}</p>
     </div>
   </div>
+  {% if me.share_tests %}{# F21.1: research data, shown only when the student AND the parent agreed #}
   <div class="rrow">
     <span class="rk">{{ S.row_tests }}</span>
     <div class="rv">
@@ -51,6 +52,7 @@
       {% if w.focus %}<p class="rline">{% for f in w.focus %}<span class="chip">{{ f }}</span> {% endfor %}</p>{% endif %}
     </div>
   </div>
+  {% endif %}
   {% if show_videos and (w.video_tiles or w.current) %}
   <div class="rrow">
     <span class="rk">{{ S.row_videos }}</span>
@@ -106,7 +108,7 @@
       {% if me.rv_win %}<div class="bubble rvwin"><span class="bl">★ {{ S.rv_parent_win }} · {{ me.rv_win.period }}</span><blockquote>“{{ me.rv_win.text }}”</blockquote></div>{% endif %}
       {% else %}
       <details class="past">
-        <summary class="bubble sum">{{ w.summary }}</summary>
+        <summary class="bubble sum">{{ w.summary if me.share_tests else w.summary_nt }}</summary>
         {{ report(w) }}
       </details>
       {% endif %}

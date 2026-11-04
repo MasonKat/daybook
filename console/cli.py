@@ -319,11 +319,14 @@ def roster_import(obj: Ctx, csv_path, map_path, class_name):
 @click.option("--consent", type=click.Choice(["yes", "no", "unknown"]), default=None,
               help="F17: the parent's consent slip (yes publishes the parent page and allows watch signals / push)")
 @click.option("--callsign", default=None, help='F19.1: the short spoken name for voice notes (가람, 7번); "" clears it')
+@click.option("--share-tests", "share_tests", type=click.Choice(["yes", "no"]), default=None,
+              help="F21.1: weekly-test results on the parent page (yes only when the student AND the parent ticked it)")
 @click.pass_obj
-def roster_edit(obj: Ctx, slug, display, new_slug, track, class_name, active, consent, callsign):
+def roster_edit(obj: Ctx, slug, display, new_slug, track, class_name, active, consent, callsign, share_tests):
     conn = obj.conn
     try:
-        changed = ops.edit_student(conn, slug, display, new_slug, track, class_name, active, consent, callsign=callsign)
+        changed = ops.edit_student(conn, slug, display, new_slug, track, class_name, active, consent, callsign=callsign,
+                                   share_tests=share_tests)
     except ops.OpError as e:
         fail(str(e))
     conn.commit()

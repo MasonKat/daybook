@@ -14,7 +14,7 @@ def test_schema_creates_tables_and_view(conn):
     assert TABLES <= names
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(students)")}
     assert cols == {"id", "slug", "full_name", "display_name", "class_id", "track", "parent_phone", "student_token",
-                    "parent_token", "active", "created_at", "ext_id", "left_on", "consent", "callsign"}
+                    "parent_token", "active", "created_at", "ext_id", "left_on", "consent", "callsign", "share_tests"}
     view_cols = {r["name"] for r in conn.execute("PRAGMA table_info(students_public)")}
     assert view_cols and not (view_cols & {"full_name", "parent_phone", "ext_id", "callsign"})   # F19.1: console only
     sub_cols = [r["name"] for r in conn.execute("PRAGMA table_info(submissions)")]

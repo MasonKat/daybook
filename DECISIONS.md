@@ -420,6 +420,12 @@ The current `practice_mode = manitoba` is only the teacher's personal practice l
 - It refuses the demo database (demo.sqlite, or any database seeded by `demo`) and the demo config, and it never re-initializes a database that has classes or students: it says so and offers a backup first. backup_dir is checked: a fixed drive is a warning (use a BitLocker-encrypted USB drive); where Windows cannot tell, a note.
 - Prompts and output are Korean in the teacher's tone (strings.ko.json "setup"); `--english` switches to English. Every external call (wrangler, the Worker, the Pages deploy) is injectable; the tests run the whole night with everything mocked, a stop at step 5 and the resume, the refusal on an existing database, the demo guard and the backup_dir warning.
 
+## F21.1: weekly-test results are research data, private by default (2026-11-04, after the first live class)
+- The teacher's rule: test results reach a parent only when BOTH the student and the parent agree. `students.share_tests` = no (default) | yes, in `students_public` (a flag, not personal data); set in 연락 현황 (the 테스트 select next to 동의) or `roster edit <slug> --share-tests yes|no`; every change is an event (`share_tests`, with the old value). The setup wizard asks it for each student whose consent is yes.
+- With no, the parent page has no 주간 테스트 row at all: no trend chart, no 확보 효율 / 도전 도달, no focus chips, no insight line; the collapsed past-week summaries leave out the test direction. The weekly 주간 메시지 drops its test line. The parent-facing contact drafts follow the same rule: 좋은 소식 leaves out test facts, and a 연락 필요 (test) call script / 카톡 draft says "최근 진단평가 결과를 바탕으로 공부 방법을 함께 점검해 보고 싶습니다." instead of numbers, while the teacher's own reason line keeps them.
+- The student's own page keeps the student's own results; the export, metrics, the Teacher tab and 상담 자료 (teacher-only) are unchanged.
+- The letter's slip has a second, separate line: "주간 테스트 결과를 학부모 페이지에서 보기: 학생 동의 □ 보호자 동의 □" (both ticks = yes), and the records list says so; the guide explains it. The demo marks 콩 and the late-star student yes (so the taste site and the F13 call-script story still show the feature); everyone else keeps no.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

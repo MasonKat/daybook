@@ -76,6 +76,8 @@ EN = {
     "ro_calls": "Add call signs (호출명) now? (yes/no)", "ro_call": "{display} ({full}) call sign (Enter = skip)", "ro_ok": "{n} active students",
     "ro_none": "no students yet", "ro_missing": "no such file: {path}",
     "co_ask": "{display} ({cls}): consent? y = yes, n = no, Enter = not back yet", "co_write": "consent: yes {y}, no {n}, not back {u}",
+    "co_share": "{display}: did BOTH the student and the parent tick 'test results on the parent page'? y = both, Enter = no",
+    "co_share_write": "test results on the parent page: {n} (default: not shown)",
     "rd_ask": "Add a weekly-test round? (yes/no)", "rd_id": "Round id (e.g. Adaptive_Screeners_1S_Nov06_G10)", "rd_grade": "Grade (e.g. 1학년)",
     "rd_classes": "Classes, comma separated ({names})", "rd_n": "Number of quizzes", "rd_open": "Opens (YYYY-MM-DD HH:MM)", "rd_close": "Closes (YYYY-MM-DD HH:MM)",
     "rd_write": "round {id}: {grade} · {classes} · {n} quizzes · {open} – {close}", "rd_ok": "{n} round(s)",
@@ -451,16 +453,22 @@ class Wizard:
         c = self.db()
         rows = c.execute("""SELECT s.*, k.name AS class_name FROM students s LEFT JOIN classes k ON k.id = s.class_id
                             WHERE s.active = 1 ORDER BY s.class_id, s.id""").fetchall()
-        picks = {}
+        picks, shares = {}, {}
         for s in rows:
             while True:
                 a = self.ask("co_ask", display=s["display_name"], cls=s["class_name"] or "-").lower()
                 if a in ("", "y", "yes", "네", "동의", "n", "no", "아니요", "안 함"):
                     break
             picks[s["slug"]] = "yes" if a in ("y", "yes", "네", "동의") else "no" if a else s["consent"]
+            if picks[s["slug"]] == "yes":           # F21.1: the slip's second box (both the student and the parent ticked)
+                shares[s["slug"]] = "yes" if self.ask("co_share", display=s["display_name"]).lower() in YES | {"y"} else "no"
         vals = list(picks.values())
-        if not self.preview([self.t("co_write", y=vals.count("yes"), n=vals.count("no"), u=len(vals) - vals.count("yes") - vals.count("no"))]):
+        if not self.preview([self.t("co_write", y=vals.count("yes"), n=vals.count("no"), u=len(vals) - vals.count("yes") - vals.count("no")),
+                             self.t("co_share_write", n=list(shares.values()).count("yes"))]):
             raise Stop()
+        for slug, v in shares.items():
+            if v != c.execute("SELECT share_tests FROM students WHERE slug = ?", (slug,)).fetchone()[0]:
+                ops.edit_student(c, slug, share_tests=v)
         for slug, v in picks.items():
             if v != c.execute("SELECT consent FROM students WHERE slug = ?", (slug,)).fetchone()[0]:
                 ops.edit_student(c, slug, consent=v)

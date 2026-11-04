@@ -88,6 +88,7 @@ def test_student_stories_tiles_and_messages(conn, cfg, klass, tmp_path):
 def test_parent_room_keeps_8_weeks_with_earlier_collapsed(conn, cfg, klass, tmp_path):
     cls, studs = klass
     s = studs[0]
+    conn.execute("UPDATE students SET share_tests = 'yes'")          # F21.1: the test row shows only when both agreed
     conn.execute("UPDATE classes SET term = '2026-09-01..2026-12-31' WHERE id = ?", (cls["id"],))
     from console import importers
     from pathlib import Path
@@ -130,6 +131,7 @@ def test_class_band_only_with_5_students_and_no_points(conn, cfg, klass, tmp_pat
     from console import importers
     from pathlib import Path
     cls, studs = klass
+    conn.execute("UPDATE students SET share_tests = 'yes'")          # F21.1
     importers.import_screeners(conn, Path(__file__).resolve().parent.parent / "demo" / "screeners")
     conn.commit()
     assert generate.publish(conn, cfg, tmp_path / "d1", today=TODAY, now=NOW).ok

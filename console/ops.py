@@ -221,7 +221,7 @@ def check_callsign(conn: sqlite3.Connection, s: sqlite3.Row, callsign: str) -> s
 
 def edit_student(conn: sqlite3.Connection, slug: str, display: str | None = None, new_slug: str | None = None,
                  track: str | None = None, class_name: str | None = None, active: bool | None = None,
-                 consent: str | None = None, callsign: str | None = None) -> set[str]:
+                 consent: str | None = None, callsign: str | None = None, share_tests: str | None = None) -> set[str]:
     """Shared by `daybook roster edit` and the Teacher tab. Returns the changed field names."""
     from . import models as M
     s = get_student(conn, slug)
@@ -242,6 +242,10 @@ def edit_student(conn: sqlite3.Connection, slug: str, display: str | None = None
         if consent not in CONSENT:
             raise OpError("consent: yes | no | unknown")
         fields["consent"] = consent
+    if share_tests is not None:                     # F21.1: both the student and the parent ticked the second box
+        if share_tests not in ("yes", "no"):
+            raise OpError("share_tests: yes | no")
+        fields["share_tests"] = share_tests
     if callsign is not None:                        # F19.1: "" clears it
         fields["callsign"] = check_callsign(conn, s, callsign)
     if not fields:
@@ -250,6 +254,8 @@ def edit_student(conn: sqlite3.Connection, slug: str, display: str | None = None
     log_event(conn, "student_update", {"student_id": s["id"], "fields": sorted(fields)})
     if "consent" in fields:                         # F17: every consent change, with its value
         log_event(conn, "consent", {"student_id": s["id"], "consent": fields["consent"], "was": s["consent"]})
+    if "share_tests" in fields:                     # F21.1: every change, with its value
+        log_event(conn, "share_tests", {"student_id": s["id"], "share_tests": fields["share_tests"], "was": s["share_tests"]})
     return set(fields)
 
 

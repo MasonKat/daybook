@@ -23,7 +23,7 @@ def messages(conn: sqlite3.Connection, cfg: Config, cls: sqlite3.Row, day: date)
         if s["id"] not in ids:
             continue
         week = s["week"]
-        t = s["trend"]
+        t = s["trend"] if s["share_tests"] else None     # F21.1: no test results unless the student and the parent agreed
         out.append(tpl.render(
             S=S, name=s["display_name"], week_label=ctx["week_label"],
             n_sub=sum(1 for d in week if d["done"]), n_class=sum(1 for d in week if d["class_day"] and not d["future"]),

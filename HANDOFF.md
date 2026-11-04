@@ -23,6 +23,8 @@ write, checks each step with the doctor, and continues where it stopped (`--from
 8. [콘솔] print the letters: `cards parents <class>` (one A4 page per family, with a tear-off consent slip; no name, link or QR).
    [선생님 탭] as the slips come back: 연락 현황 → 동의 / 동의 안 함 (`roster edit <slug> --consent yes|no`). Until a yes there is
    no parent page, no watch signal and no push for that student; the class routine works either way.
+   The slip's second line (주간 테스트 결과 보기: 학생 동의 □ 보호자 동의 □): only when BOTH are ticked, set 테스트 공개
+   (`roster edit <slug> --share-tests yes`). Default: no test results on the parent page or in the weekly message.
 9. [콘솔] weekly-test rounds: `round add <Friday round id> --grade 1학년 --classes <both 고1 classes> --quizzes <N> --open "2026-11-06 20:00" --close "2026-11-08 23:59"`,
    and the 고2 round for Saturday the same way.
 10. [선생님 탭] 발행 (sends the links, the consent list, the rounds and the 학생 리뷰 wordlist / name hashes / vote moment
@@ -40,7 +42,7 @@ in `daybook.sqlite` (gitignored), and on the deployed pages behind unguessable l
 
 ## 0. State at 11-04 (after F6–F14 and G1–G5): what to do before Friday 11-06
 
-`main` is green from a clean clone: 268 pytest, 58 Worker node tests (incl. the class-day budget with an AMP Live round
+`main` is green from a clean clone: 275 pytest, 58 Worker node tests (incl. the class-day budget with an AMP Live round
 and a weekly-test round), the full Playwright check. Built: P0, design v2, F1–F14, hotfix H1–H6, G1 doctor, G2 backup,
 G3 운영 가이드, G4 안내 cards, G5 taste refresh. Every choice is in `DECISIONS.md`. Console schema v8 (migrates by itself);
 Worker v6. The pilot: two Mon/Wed/Fri 고1 classes from Friday 11-06; the weekly test restarts that day (고2 on Saturday).
