@@ -137,7 +137,8 @@ def test_parent_page_blocks(conn, cfg, klass, tmp_path):
     assert 'class="bar"' in newest and "피자까지" in newest
     assert "이번 주도 잘했어요." in newest
     assert "<a " not in html and "<input" not in html and "<textarea" not in html  # no links out, no chat input
-    assert re.findall(r"<script[^>]*>", html) == ['<script src="/static/app.js" defer>']  # only scroll-to-bottom
+    assert re.findall(r"<script[^>]*>", html) == ['<script type="application/json" id="tour-data">', '<script src="/static/tour.js" defer>',
+                                                  '<script src="/static/app.js" defer>']  # scroll-to-bottom + the F22.2 tutorial
     assert "정답률" not in html
 
 

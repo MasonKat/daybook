@@ -435,6 +435,13 @@ The current `practice_mode = manitoba` is only the teacher's personal practice l
 - Switching to another class is a deliberate act: the board's banner select (and the remote's) asks "지금 시간은 고1 기본 수업이에요. 고2 반으로 바꿀까요?" unless the chosen class is in its own window; the board logs `board_switch`.
 - Every saved row carries its class (태도 via its session, 칭찬 / 반 전체 / 수업 문제 with class_id); Teacher tab → 기록 (반·날짜별) lists them for one class and one day, with that week's 한 줄.
 
+## F22.2: the first-visit tutorial (2026-11-05)
+- Coach marks on the student page, the parent page and the remote: a dimmed overlay spotlights real elements one at a time, with a short Korean caption, an arrow (▲ / ▼ toward the element), 다음 / 건너뛰기 (Esc) and a dot counter; a step without a target shows centred. One script (worker/src/tour_client.js): the Worker serves it to the remote, and every 발행 publishes the same text as /static/tour.js. No external asset; it follows light/dark; with reduced motion the spotlight jumps instead of sliding; it fits 360 px.
+- Student (5): ① 출석 → ② 장면 → ③ 과제 끝 (marked 가장 중요), the story rings (반 목표 opens the rules), 영상 + reactions, 내 기록 (연속, 내 실력 지도), 홈 화면에 추가. Parent (5): 이번 주 카드 (가장 중요), the test graph and its band, 지난 주 카드 (optional), 알림 받기 (optional), 홈 화면에 추가. Remote (4): the class banner, a name, points + 한마디, 취소.
+- Once per device (localStorage; with no storage, sessionStorage = once per session). 나 → "도움말 다시 보기", the parent footer link and the remote's ? replay it. The taste site shows it too.
+- The e2e opens every page with the tutorials marked seen, except a dedicated check that asserts: shown on the first visit, every REQUIRED step's target exists (a later layout change that drops one fails the check), not shown again, replay, skip, 360 px.
+- e2e hygiene found on the way (all date-dependent, now independent of the weekday): the shorts count follows the class's tags; the picked student has no check-in today; the review student pick no longer needs an unseeded student; the remote test accepts the F21.3 switch confirmation; the marks query reads today's set.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

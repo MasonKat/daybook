@@ -157,6 +157,15 @@ async function audit(browser, url, file, label, viewport, colorScheme) {
   const worker = spawn(process.execPath, ['--experimental-sqlite', '--no-warnings', path.join(ROOT, 'worker', 'test', 'dev_server.mjs'), '--port', String(WORKER_PORT), '--origin', PAGES, '--teacher', TEACHER], { stdio: 'ignore' });
   let board;
   const browser = await chromium.launch();
+  // F22.2: every context starts with the first-visit tutorials marked as seen (so they never cover a flow under test);
+  // the tutorial section asks for { tour: true } to see a true first visit
+  const newContext = browser.newContext.bind(browser);
+  browser.newContext = async (opts = {}) => {
+    const { tour, ...rest } = opts;
+    const c = await newContext(rest);
+    if (!tour) await c.addInitScript(() => { try { ['s', 'p', 'r'].forEach((k) => localStorage.setItem(`daybook.tour.${k}.v1`, '1')); } catch (e) { /* none */ } });
+    return c;
+  };
   try {
     await waitFor(WORKER + '/health');
     await waitFor(PAGES + '/go/');
@@ -194,7 +203,8 @@ async function audit(browser, url, file, label, viewport, colorScheme) {
 import json, sqlite3, sys
 c = sqlite3.connect(sys.argv[1]); c.row_factory = sqlite3.Row
 r = c.execute("""SELECT s.student_token, s.parent_token, s.display_name FROM students_public s JOIN classes k ON k.id = s.class_id
-  WHERE k.name = ? AND s.active = 1 AND s.id NOT IN (SELECT student_id FROM submissions WHERE day = ?) ORDER BY s.id LIMIT 1""", (sys.argv[3], sys.argv[2])).fetchone()
+  WHERE k.name = ? AND s.active = 1 AND s.id NOT IN (SELECT student_id FROM submissions WHERE day = ?)
+  AND s.id NOT IN (SELECT c.student_id FROM checkins c JOIN sessions se ON se.id = c.session_id WHERE se.date = ?) ORDER BY s.id LIMIT 1""", (sys.argv[3], sys.argv[2], sys.argv[2])).fetchone()
 print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' }));
     const pick = pickFrom(CLASS_ON), offPick = pickFrom(CLASS_OFF);
     const started = daybook('session', 'start', CLASS_ON, '--at', nowHM);
@@ -418,7 +428,9 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
     check(await page.getAttribute('.story[data-story="videos"]', 'class').then((c) => c.includes('seen')), 'seen state survives a reload (localStorage)');
 
     await page.click('#t-videos');
-    const nShorts = JSON.parse(fs.readFileSync(path.join(ROOT, 'demo', 'videos.demo.json'), 'utf-8')).filter((v) => v.kind === 'short').length;
+    const gradeOf = { '고1A': '고1', '기초B': '기초' };                              // F10 tags: only the shorts this class sees
+    const nShorts = JSON.parse(fs.readFileSync(path.join(ROOT, 'demo', 'videos.demo.json'), 'utf-8')).filter((v) => v.kind === 'short'
+      && ((!v.classes && !v.grades) || (v.classes || []).includes(CLASS_ON) || (v.grades || []).includes(gradeOf[CLASS_ON]))).length;
     const feedInfo = await page.evaluate(() => {
       const f = document.getElementById('feed'), reels = Array.from(f.querySelectorAll('.reel'));
       const m = f.querySelector('.media.short').getBoundingClientRect();
@@ -731,7 +743,7 @@ print(c.execute("SELECT COUNT(*), SUM(correct) FROM effort WHERE source = 'live'
       const two = JSON.parse(execFileSync(PYTHON, ['-c', `
 import json, sqlite3, sys
 c = sqlite3.connect(sys.argv[1]); c.row_factory = sqlite3.Row
-q = "SELECT s.student_token, s.display_name FROM students_public s JOIN classes k ON k.id = s.class_id WHERE k.name = ? AND s.active = 1 AND s.id NOT IN (SELECT student_id FROM reviews) ORDER BY s.id DESC LIMIT 2"
+q = "SELECT s.student_token, s.display_name FROM students_public s JOIN classes k ON k.id = s.class_id WHERE k.name = ? AND s.active = 1 ORDER BY s.id DESC LIMIT 2"
 print(json.dumps([dict(r) for r in c.execute(q, (sys.argv[2],))]))`, env.DAYBOOK_DB, CLASS_ON], { encoding: 'utf-8' }));
       const rc = await browser.newContext({ viewport: { width: 360, height: 740 } });
       const rp = await rc.newPage();
@@ -922,12 +934,14 @@ print(c.execute("SELECT COUNT(*) FROM video_reactions x JOIN students s ON s.id 
     await tpage.setViewportSize({ width: 1100, height: 900 });
     await shot(tpage, 'teacher.png', { fullPage: false });
 
+    let setupRemote = '';
     console.log('\n[6c] F19.4 리모컨: tap who, speak what (the setup QR, save, the 3 s guard, undo, offline replay, the board)');
     {
       await tpage.click('#rm-show');
       await tpage.waitForSelector('#rm-qr svg', { timeout: 5000 }).catch(() => {});
       check(await tpage.isVisible('#rm-qr svg'), 'Teacher tab → 리모컨: the setup QR is shown on screen');
       const setup = await (await fetch(BOARD + '/api/teacher/remote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).json();
+      setupRemote = setup.link.replace('http://127.0.0.1:8788', WORKER);
       check(/\/t\/remote\/#t=.+&k=[A-Za-z0-9_-]{43}$/.test(setup.link) && /encrypted/.test(setup.message), `the setup link carries the token and key in the #fragment; ${setup.message}`);
       const rc = await browser.newContext({ viewport: { width: 360, height: 740 }, colorScheme: 'dark' });
       const rp = await rc.newPage();
@@ -936,6 +950,7 @@ print(c.execute("SELECT COUNT(*) FROM video_reactions x JOIN students s ON s.id 
       rp.on('pageerror', (e) => rerrs.push(String(e)));
       await rp.goto(setup.link.replace('http://127.0.0.1:8788', WORKER), { waitUntil: 'networkidle' });
       await rp.waitForSelector('#grid .who:not(.whole)', { timeout: 8000 }).catch(() => {});
+      rp.on('dialog', (d) => d.accept());                                            // F21.3: a deliberate switch is confirmed
       await rp.selectOption('#cls', { label: CLASS_ON }).catch(() => {});
       await rp.waitForTimeout(300);
       const lay = await rp.evaluate(() => { const b = Array.from(document.querySelectorAll('#grid .who:not(.whole)')).map((x) => x.getBoundingClientRect());
@@ -1006,8 +1021,8 @@ print(c.execute("SELECT COUNT(*), SUM(text = '질문 좋았어'), SUM(text = '�
       const m = execFileSync(PYTHON, ['-c', `
 import sqlite3, sys
 c = sqlite3.connect(sys.argv[1])
-print(c.execute("SELECT m.marks FROM classwork_marks m JOIN students s ON s.id = m.student_id WHERE s.student_token = ?", (sys.argv[2],)).fetchone())`,
-        env.DAYBOOK_DB, pick.student_token], { encoding: 'utf-8' }).trim();
+print(c.execute("SELECT m.marks FROM classwork_marks m JOIN students s ON s.id = m.student_id JOIN classwork_sets x ON x.sid = m.sid WHERE s.student_token = ? AND x.day = ?", (sys.argv[2], sys.argv[3])).fetchone())`,
+        env.DAYBOOK_DB, pick.student_token, today], { encoding: 'utf-8' }).trim();
       check(m === "('oxmooo',)", `daybook pull stored the student's own marks ${m}`);
     }
 
@@ -1124,6 +1139,40 @@ print(c.execute("SELECT m.marks FROM classwork_marks m JOIN students s ON s.id =
       check(terrs.length === 0, `0 console errors in the taste build (${terrs.length})`);
       await tctx.close();
     } finally { tsrv.close(); }
+
+    console.log('\n[9] F22.2 first-visit tutorial: shown once, skippable, replayable, every required target present');
+    {
+      const tour = async (url, label) => {
+        const c = await browser.newContext({ viewport: { width: 360, height: 740 }, tour: true });
+        const p = await c.newPage();
+        await p.goto(url, { waitUntil: 'networkidle' });
+        await p.waitForSelector('.tour-cap', { timeout: 5000 }).catch(() => {});
+        const shown = await p.isVisible('.tour-cap');
+        const n = await p.locator('.tour-dots i').count();
+        const missing = await p.evaluate(() => {
+          const raw = document.getElementById('tour-data') ? JSON.parse(document.getElementById('tour-data').textContent)
+            : (document.getElementById('data') ? JSON.parse(document.getElementById('data').textContent).tour : null);
+          return raw ? raw.steps.filter((s) => !s.optional && s.sel && !window.DaybookTour.find(s.sel)).map((s) => s.sel) : [];
+        });
+        let steps = 0;
+        while (await p.isVisible('.tour-cap') && steps < 8) { await p.click('.tour-next'); steps++; }
+        await p.reload({ waitUntil: 'networkidle' });
+        await p.waitForTimeout(1200);
+        const again = await p.isVisible('.tour-cap');
+        await p.evaluate(() => document.querySelector('#tour-again, #tourb').click());     // 나 → 도움말 다시 보기 (or the remote's ?)
+        await p.waitForSelector('.tour-cap', { timeout: 3000 }).catch(() => {});
+        const replay = await p.isVisible('.tour-cap');
+        await p.click('.tour-skip');
+        const skipped = !(await p.isVisible('.tour-cap'));
+        const sw = await p.evaluate(() => document.documentElement.scrollWidth);
+        check(shown && n >= 4 && missing.length === 0 && steps === n && !again && replay && skipped && sw <= 360,
+          `${label}: shown on the first visit (${n} steps, all required targets found${missing.length ? ' MISSING ' + missing.join(',') : ''}), not again, replay, skip, 360 px`);
+        await c.close();
+      };
+      await tour(`${PAGES}/s/${pick.student_token}/#today`, 'student tutorial');
+      await tour(`${PAGES}/p/${pick.parent_token}/`, 'parent tutorial');
+      await tour(setupRemote, 'remote tutorial');
+    }
 
     console.log('\n[8] F19 mascot size: brand.mascot_px 44 keeps the student header on one line at 360 px');
     {

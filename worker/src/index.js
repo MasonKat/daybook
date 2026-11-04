@@ -2,6 +2,7 @@
 import { send as pushSend } from './webpush.js';
 import { check as reviewCheck, parseList, pieces, readings } from './review_filter.js';
 import { REMOTE_JS, remoteHtml } from './remote_client.js';
+import { TOUR_JS } from './tour_client.js';
 // Bindings: D1 DB (records: submissions, check-ins, sessions, token map, moments, reactions, rate counters),
 //           KV SUBMISSIONS (photos and moment JPEGs only, with TTLs), R2 PHOTOS (only when PHOTO_STORE = "r2").
 // Secret: TEACHER_TOKEN. No KV `list` anywhere: the free plan allows ~1,000 lists a day (see DECISIONS, H1).
@@ -612,7 +613,7 @@ const REMOTE_H = { 'Content-Security-Policy': "default-src 'none'; script-src 's
   + "img-src 'self' data:; manifest-src 'self'; worker-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
   'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff' };
 const REMOTE_SW = `'use strict';
-var C = 'remote-shell-1', SHELL = ['/t/remote/', '/t/remote/remote.js', '/t/remote/manifest.webmanifest'];
+var C = 'remote-shell-2', SHELL = ['/t/remote/', '/t/remote/remote.js', '/t/remote/tour.js', '/t/remote/manifest.webmanifest'];
 self.addEventListener('install', function (e) { e.waitUntil(caches.open(C).then(function (c) { return c.addAll(SHELL); }).then(function () { return self.skipWaiting(); })); });
 self.addEventListener('activate', function (e) { e.waitUntil(self.clients.claim()); });
 self.addEventListener('fetch', function (e) {
@@ -630,6 +631,7 @@ async function remoteRoute(req, env, url) {
   if (p === '/t/remote') return new Response(null, { status: 302, headers: { Location: '/t/remote/' } });       // the fragment survives
   if (p === '/t/remote/') return page(remoteHtml({ taste: false }, '/t/remote/remote.js', '/t/remote/manifest.webmanifest'), 'text/html; charset=utf-8');
   if (p === '/t/remote/remote.js') return page(REMOTE_JS, 'text/javascript; charset=utf-8');
+  if (p === '/t/remote/tour.js') return page(TOUR_JS, 'text/javascript; charset=utf-8');           // F22.2
   if (p === '/t/remote/sw.js') return page(REMOTE_SW, 'text/javascript; charset=utf-8', { 'Service-Worker-Allowed': '/t/remote/' });
   if (p === '/t/remote/icon.svg') return page(REMOTE_ICON, 'image/svg+xml');
   if (p === '/t/remote/manifest.webmanifest') {

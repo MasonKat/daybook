@@ -165,7 +165,7 @@ def test_queued_rows_never_reach_a_page(conn, cw, tmp_path):
     CW.import_photo(conn, cfg, csvp)
     assert generate.publish(conn, cfg, tmp_path / "d", today=TODAY, now=NOW).ok
     html = (tmp_path / "d" / "s" / studs[1]["student_token"] / "index.html").read_text(encoding="utf-8")
-    assert "내 실력 지도" not in html and "역과 대우" not in html
+    assert 'id="skmap"' not in html and "역과 대우" not in html
 
 
 def test_pull_stores_sets_and_marks(conn, cw):

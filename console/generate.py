@@ -642,6 +642,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                    **({"sample": TASTE_REVIEWS, "samplePeriod": RV.period_label(*RV.period(today - timedelta(days=14)))}
                       if taste else {})},
             "S": {k: S[k] for k in JS_STRINGS},
+            "tour": tour_data(S, TOUR_STUDENT),                                # F22.2
         }
         students.append({
             "id": s["id"],
@@ -691,6 +692,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         "week_label": f"{_date_ko(mon)} – {_date_ko(sun)}",
         "updated": now.strftime("%Y-%m-%d %H:%M"),
         "go_js": json.dumps({"s": "/s/"}, separators=(",", ":")),
+        "tour_parent": json_script(tour_data(S, TOUR_PARENT)),                 # F22.2
         "taste": taste,
         "worker": cfg.worker,
         # F15.3: the VAPID public key (not secret) turns on the opt-in box; never in the taste build
@@ -756,6 +758,29 @@ def review_filter_js() -> str:
 TASTE_REMOTE = ["콩", "서준", "지호", "예린", "시우", "하린", "주원", "태오"]     # 콩 + 7 invented names (not the demo roster)
 
 
+def _raw_js(file: str) -> str:
+    src = (ROOT / "worker" / "src" / file).read_text(encoding="utf-8")
+    start = src.index("String.raw`") + len("String.raw`")
+    return src[start: src.index("`;", start)] + "\n"
+
+
+def tour_js() -> str:
+    """F22.2: the coach-mark script, the same text the Worker serves to the remote (worker/src/tour_client.js)."""
+    return _raw_js("tour_client.js")
+
+
+TOUR_STUDENT = [("#steps||#st-checkin||#st-idle||#tab-today", "tour_s1", True, False), ("#stories", "tour_s2", False, False),
+                ("#t-videos", "tour_s3", False, False), ("#t-me", "tour_s4", False, False), (".sbar", "tour_s5", False, False)]
+TOUR_PARENT = [(".msg.newest .report", "tour_p1", True, False), (".msg.newest svg.trend||.msg.newest .rrow", "tour_p2", False, False),
+               ("details.past summary", "tour_p3", False, True), ("#push .push-btn", "tour_p4", False, True), (".room-top", "tour_p5", False, False)]
+
+
+def tour_data(S: dict, steps) -> dict:
+    """[{sel, text, key, optional}] + the button labels. A required step's target must exist (the e2e fails otherwise)."""
+    return {"steps": [{"sel": sel, "text": S[k], "key": key, "optional": opt} for sel, k, key, opt in steps],
+            "L": {"next": S["tour_next"], "skip": S["tour_skip"], "done": S["tour_done"], "key": S["tour_key"]}}
+
+
 def remote_js() -> str:
     """F19.4: the remote's client script, the very text the Worker serves (worker/src/remote_client.js, REMOTE_JS)."""
     src = (ROOT / "worker" / "src" / "remote_client.js").read_text(encoding="utf-8")
@@ -776,7 +801,8 @@ def taste_remote_html(S: dict) -> str:
             f'<title>{S["page_title"]}</title><style>body{{margin:0;background:#0b0f17;color:#f2f4f8}}'
             '.taste-bar{background:#f59e0b;color:#1f1300;text-align:center;font:700 12px/1 sans-serif;padding:6px 8px}</style></head><body>'
             f'<div class="taste-bar" role="note">{S["taste_banner"]}</div>'
-            f'<script type="application/json" id="cfg">{cfg}</script><script src="/static/remote.js" defer></script></body></html>')
+            f'<script type="application/json" id="cfg">{cfg}</script><script src="/static/tour.js" defer></script>'
+            '<script src="/static/remote.js" defer></script></body></html>')
 
 
 def headers_file(cfg: Config) -> str:
@@ -817,8 +843,9 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
     # files, so every publish that changes app.js / app.css also changes sw.js: phones then fetch the new files instead
     # of keeping a cache-first copy forever.
     (out / "static" / "review_filter.js").write_text(review_filter_js(), encoding="utf-8", newline="")   # F18.3
+    (out / "static" / "tour.js").write_text(tour_js(), encoding="utf-8", newline="")                     # F22.2
     shell = hashlib.sha256(b"".join((STATIC / n).read_bytes() for n in ("app.js", "app.css", "sw.js"))
-                           + (out / "static" / "review_filter.js").read_bytes()).hexdigest()[:10]
+                           + (out / "static" / "review_filter.js").read_bytes() + (out / "static" / "tour.js").read_bytes()).hexdigest()[:10]
     (out / "sw.js").write_text((STATIC / "sw.js").read_text(encoding="utf-8").replace("daybook-shell-v1", f"daybook-shell-{shell}"),
                                encoding="utf-8", newline="")
     if any(v["thumb_src"] for v in ctx["videos"]):

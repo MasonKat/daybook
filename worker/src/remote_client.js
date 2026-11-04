@@ -25,7 +25,7 @@ export const REMOTE_JS = String.raw`(function () {
   + '.muted{color:#9aa3b2}';
   var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
   var tb = document.querySelector('.taste-bar');
-  (tb || document.body).insertAdjacentHTML(tb ? 'afterend' : 'afterbegin', '<div class="rbanner" id="rban"></div><header class="top"><b>AMP 리모컨</b><button type="button" class="cwb" id="cwb">수업 문제</button><select id="cls" aria-label="반"></select></header>'
+  (tb || document.body).insertAdjacentHTML(tb ? 'afterend' : 'afterbegin', '<div class="rbanner" id="rban"></div><header class="top"><b>AMP 리모컨</b><button type="button" class="cwb" id="cwb">수업 문제</button><button type="button" class="cwb" id="tourb" aria-label="도움말">?</button><select id="cls" aria-label="반"></select></header>'
     + '<div class="sheet" id="cws" role="dialog" aria-modal="true" aria-label="수업 문제" hidden><div class="box">'
     + '<div class="sh-top"><b>수업 문제 열기</b><button type="button" class="x" id="cws-x" aria-label="닫기">×</button></div>'
     + '<input id="cwl" list="cwlist" maxlength="40" placeholder="세트 이름 (예: 쎈 이차방정식 A)" aria-label="세트 이름"><datalist id="cwlist"></datalist>'
@@ -200,7 +200,15 @@ export const REMOTE_JS = String.raw`(function () {
       chips.appendChild(b);
     });
     render(); loadCounts(); flush();
+    setTimeout(function () { tour(false); }, 500);
   }
+  // F22.2: the first-visit tutorial (once per device; ? replays it)
+  var RSTEPS = [{ sel: '#rban', text: '가장 먼저: 위의 색 띠에서 지금 반이 맞는지 봐요.', key: true },
+    { sel: '#grid .who:not(.whole)', text: '학생 이름을 누르면 칭찬 창이 열려요. 반 전체 칭찬은 맨 위 버튼이에요.' },
+    { sel: null, text: '+1 +2 +3을 고르고, 칭찬은 키보드의 🎤로 말하거나 써서 저장해요.' },
+    { sel: null, text: '잘못 눌렀으면 위에 뜨는 취소를 2분 안에 눌러요.' }];
+  function tour(force) { if (window.DaybookTour) window.DaybookTour.start(RSTEPS, 'daybook.tour.r.v1', { next: '다음', skip: '건너뛰기', done: '시작!', key: '가장 중요' }, force); }
+  $('tourb').onclick = function () { tour(true); };
   // F21.2: open a 수업 문제 set for the chosen class (a label and N; the tags stay on the teacher's laptop)
   $('cwb').onclick = function () {
     var dl = $('cwlist'); dl.innerHTML = '';
@@ -265,5 +273,6 @@ export function remoteHtml(cfg, scriptSrc, manifestHref) {
     + '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="AMP 리모컨">'
     + '<meta name="robots" content="noindex, nofollow">' + (manifestHref ? '<link rel="manifest" href="' + manifestHref + '">' : '')
     + '<title>AMP 학습 기록</title><style>body{margin:0;background:#0b0f17;color:#f2f4f8}</style></head><body>'
-    + '<script type="application/json" id="cfg">' + safe + '</script><script src="' + scriptSrc + '" defer></script></body></html>';
+    + '<script type="application/json" id="cfg">' + safe + '</script><script src="' + scriptSrc.replace('remote.js', 'tour.js') + '" defer></script>'
+    + '<script src="' + scriptSrc + '" defer></script></body></html>';
 }

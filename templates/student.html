@@ -239,6 +239,7 @@
     {% endfor %}
   </div>
   <p class="muted center hint">{{ S.reply_hint }}</p>
+  <p class="center"><button type="button" class="btn ghost" id="tour-again">❓ {{ S.tour_again }}</button></p>
 </section>
 </main>
 
@@ -425,5 +426,6 @@
 </div>
 <script type="application/json" id="data">{{ me.js | safe }}</script>
 <script src="/static/review_filter.js" defer></script>
+<script src="/static/tour.js" defer></script>
 <script src="/static/app.js" defer></script>
 {% endblock %}

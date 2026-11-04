@@ -100,6 +100,16 @@
     var toBottom = function () { window.scrollTo(0, document.documentElement.scrollHeight); };
     toBottom();
     window.addEventListener('load', toBottom);
+    /* F22.2: the first-visit tutorial (once per device; "도움말 다시 보기" in the footer replays it) */
+    function tourStart(force) {
+      var el = document.getElementById('tour-data');
+      if (!window.DaybookTour || !el) return;
+      var t = JSON.parse(el.textContent);
+      window.DaybookTour.start(t.steps, 'daybook.tour.p.v1', t.L, force);
+    }
+    window.addEventListener('load', function () { setTimeout(tourStart, 600); });
+    var ta = document.getElementById('tour-again');
+    if (ta) ta.addEventListener('click', function () { tourStart(true); });
   }
 
   /* ------------------------------------------------------------ student page */
@@ -859,6 +869,14 @@
       }).catch(function () { /* no IndexedDB: nothing queued */ }).then(function () { flushing = false; });
     }
     window.addEventListener('online', flushQueue);
+    /* F22.2: the first-visit tutorial on 오늘 (once per device; 나 → "도움말 다시 보기" replays it) */
+    function tourStart(force) {
+      if (!window.DaybookTour || !D.tour) return;
+      if (force) showTab('today');
+      window.DaybookTour.start(D.tour.steps, 'daybook.tour.s.v1', D.tour.L, force);
+    }
+    window.addEventListener('load', function () { setTimeout(tourStart, 700); });
+    $('tour-again').addEventListener('click', function () { tourStart(true); });
     window.addEventListener('load', function () {
       flushQueue();
       if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js', { scope: '/s/' }).catch(function () {});

@@ -121,7 +121,9 @@
   <button type="button" class="btn ghost push-btn" aria-pressed="false">{{ S.push_on }}</button>
   <p class="muted push-note">{{ hint }}</p>
 </div>{% endif %}
-  <footer class="foot" id="foot">{{ S.updated_at | fmt(ts=updated) }}</footer>
+  <footer class="foot" id="foot">{{ S.updated_at | fmt(ts=updated) }} · <button type="button" class="linkbtn" id="tour-again">{{ S.tour_again }}</button></footer>
 </main>
+<script type="application/json" id="tour-data">{{ tour_parent | safe }}</script>
+<script src="/static/tour.js" defer></script>
 <script src="/static/app.js" defer></script>
 {% endblock %}
