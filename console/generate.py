@@ -710,11 +710,12 @@ def _rank(conn: sqlite3.Connection, cfg: Config, cls, today: date, my_videos: li
     r = vrank.ranks_for(conn, cfg, cls, today, set(by))
     if not r:
         return None
-    rows = [{"n": i + 1, "medal": MEDALS[i] if i < 3 else "", "title": by[x["video_id"]]["title"], "url": by[x["video_id"]]["url"]}
+    rows = [{"n": i + 1, "medal": MEDALS[i] if i < 3 else "", "title": by[x["video_id"]]["title"], "url": by[x["video_id"]]["url"],
+             "entry": (MEDALS[i] + " " if i < 3 else "") + f"{i + 1}위 · " + by[x["video_id"]]["title"]}
             for i, x in enumerate(r["rows"])]
     start, end = period(today) if r["current"] else period(today - timedelta(days=14))
     friends = [] if anon else vrank.top_watchers(conn, cls["id"], start, end)
-    return {"label": r["label"], "rows": rows, "top": rows[:3], "friends": friends}
+    return {"label": r["label"], "rows": rows, "top": rows[:5], "friends": friends}
 
 
 def _shouts(conn: sqlite3.Connection, student_id: int, scrub, wk: list[str]) -> list[dict]:

@@ -998,11 +998,24 @@
     }
     renderWT();
 
-    /* ---- F19.3: the header TOP 3 ticker (🥇 → 🥈 → 🥉 every 3 s; still with reduced motion) and the full list */
+    /* ---- F19.3: the header TOP 5 ticker: one entry at a time, the next every 3 s (fade/slide), looping; paused while a
+       finger or the pointer is on it; with reduced motion it stays on #1 plus "TOP 5 ›". A tap opens the 2-week list. */
     if ($('rk-open')) {
       var rkTop = []; try { rkTop = JSON.parse($('rk-line').getAttribute('data-top') || '[]'); } catch (e) { rkTop = []; }
-      var rkI = 0, MED = ['🥇', '🥈', '🥉'];
-      if (!reduced && rkTop.length > 1) setInterval(function () { rkI = (rkI + 1) % rkTop.length; $('rk-line').textContent = MED[rkI] + ' ' + rkTop[rkI]; }, 3000);
+      var rkI = 0, rkHold = false, rkLine = $('rk-line');
+      if (reduced || rkTop.length < 2) $('rk-more').hidden = false;
+      else setInterval(function () {
+        if (rkHold || document.hidden) return;
+        rkLine.classList.add('out');
+        setTimeout(function () {
+          rkI = (rkI + 1) % rkTop.length;
+          rkLine.textContent = rkTop[rkI]; rkLine.setAttribute('data-i', String(rkI));
+          rkLine.classList.remove('out'); rkLine.classList.add('in');
+          void rkLine.offsetWidth; rkLine.classList.remove('in');
+        }, 350);
+      }, 3000);
+      ['pointerenter', 'touchstart'].forEach(function (ev) { $('rk-open').addEventListener(ev, function () { rkHold = true; }, { passive: true }); });
+      ['pointerleave', 'touchend', 'touchcancel'].forEach(function (ev) { $('rk-open').addEventListener(ev, function () { rkHold = false; }, { passive: true }); });
       $('rk-open').addEventListener('click', function () { $('rk').hidden = false; });
       $('rk-x').addEventListener('click', function () { $('rk').hidden = true; });
     }

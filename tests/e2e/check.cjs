@@ -775,11 +775,42 @@ print(json.dumps([dict(r) for r in c.execute(q, (sys.argv[2],))]))`, env.DAYBOOK
         'a classmate sees the approved review with the writer\'s display name (korea mode)');
       await shot(rp2, 'student-review.png');
       await rp2.click('#rv-x');
-      // F19.3: the header TOP 3 ticker opens the 2-week list (videos only, no counts)
-      check(await rp2.isVisible('#rk-open') && /^TOP 3 · \d+\/\d+–\d+\/\d+$/.test((await rp2.textContent('.rkt-h')).trim()), `the header ticker: ${(await rp2.textContent('#rk-open')).trim()}`);
+      // F19.3: the header TOP 5 ticker opens the 2-week list (videos only, no counts); the date sits in the 오늘 수업 row
+      check(await rp2.isVisible('#rk-open') && /^🥇 1위 · ./.test((await rp2.textContent('#rk-line')).trim())
+        && /^TOP 5 · \d+\/\d+–\d+\/\d+$/.test(await rp2.getAttribute('#rk-open', 'aria-label')), `the header ticker: ${(await rp2.textContent('#rk-line')).trim()}`);
+      const dateRow = await rp2.evaluate(() => { const d = document.getElementById('today-date'), l = document.getElementById('live-open');
+        return { inHead: !!d.closest('.sbar'), inRow: d.parentNode === l.parentNode, text: d.textContent.trim(),
+          sameLine: Math.abs(d.getBoundingClientRect().top + d.offsetHeight / 2 - (l.getBoundingClientRect().top + l.offsetHeight / 2)) < 4 }; });
+      check(!dateRow.inHead && dateRow.inRow && dateRow.sameLine && /^\d+월 \d+일 \(.\)$/.test(dateRow.text), `the date moved to the 오늘 수업 row, beside AMP Live (${dateRow.text})`);
       await rp2.click('#rk-open');
       check((await rp2.locator('#rk .rk-list li').count()) >= 1 && !/\d+명/.test(await rp2.textContent('#rk .rk-list')), `TOP list: ${await rp2.locator('#rk .rk-list li').count()} videos, no counts`);
       await rp2.click('#rk-x');
+      {                                                        // the ticker cycles 1위 → 5위 every 3 s, then loops (a fake clock)
+        const kc = await browser.newContext({ viewport: { width: 360, height: 740 } });
+        const kp = await kc.newPage();
+        await kp.clock.install();
+        await kp.goto(`${PAGES}/s/${two[1].student_token}/#today`, { waitUntil: 'networkidle' });
+        const seen = [(await kp.textContent('#rk-line')).trim()];
+        for (let i = 0; i < 5; i++) { await kp.clock.runFor(3400); seen.push((await kp.textContent('#rk-line')).trim()); }
+        const n = JSON.parse(await kp.getAttribute('#rk-line', 'data-top')).length;
+        const hd = await kp.evaluate(() => ({ sw: document.documentElement.scrollWidth, hsw: document.querySelector('.sbar').scrollWidth - document.querySelector('.sbar').clientWidth }));
+        check(n === 5 && seen.slice(0, 5).map((t) => t.replace(/^\D*/, '').split('위')[0]).join() === '1,2,3,4,5' && seen[5] === seen[0] && hd.sw <= 360 && hd.hsw <= 0,
+          `the ticker shows ${n} entries one at a time and loops (${seen.map((t) => t.split(' · ')[0]).join(' → ')}); no scroll at 360 px`);
+        await kp.dispatchEvent('#rk-open', 'pointerenter');
+        const held = (await kp.textContent('#rk-line')).trim();
+        await kp.clock.runFor(7000);
+        check((await kp.textContent('#rk-line')).trim() === held, 'the ticker pauses while the pointer / a finger is on it');
+        await kc.close();
+        const mc = await browser.newContext({ viewport: { width: 360, height: 740 }, reducedMotion: 'reduce' });
+        const mp = await mc.newPage();
+        await mp.clock.install();
+        await mp.goto(`${PAGES}/s/${two[1].student_token}/#today`, { waitUntil: 'networkidle' });
+        const first = (await mp.textContent('#rk-line')).trim();
+        await mp.clock.runFor(10000);
+        check((await mp.textContent('#rk-line')).trim() === first && /^🥇 1위/.test(first) && await mp.isVisible('#rk-more'),
+          'reduced motion: the ticker stays on 1위 with "TOP 5 ›"');
+        await mc.close();
+      }
       // F19.2: a reaction on a reel goes to the Worker; the next pull brings it to the console
       await rp2.click('#t-videos');
       const fireBtn = rp2.locator('#feed .reel').first().locator('.vrb[data-r="fire"]');

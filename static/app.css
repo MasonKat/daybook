@@ -638,11 +638,16 @@ select.consent.unknown { border-color: var(--adjust); } select.consent.no { bord
 .feed.grid .vrx { display: none; }
 .vrx-n.hard { color: var(--err); }
 
-/* ---------- F19.3 header TOP 3 ticker and the full list */
-.rkt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 0;
-  border: 0; background: none; color: var(--fg); font: 600 12px/1.25 var(--font); cursor: pointer; padding: 0; text-align: right; }
-.rkt-h { color: var(--muted); font-size: 10px; font-weight: 600; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-.rkt-l { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ---------- F19.3 header TOP 5 ticker (one entry at a time) and the full list */
+.rkt { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 6px; overflow: hidden;
+  border: 0; background: none; color: var(--fg); font: 600 13px/1.3 var(--font); cursor: pointer; padding: 0; }
+.rkt-l { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: opacity .35s ease, transform .35s ease; }
+.rkt-l.out { opacity: 0; transform: translateY(-6px); }
+.rkt-l.in { opacity: 0; transform: translateY(6px); transition: none; }
+.rkt-more { flex: none; color: var(--muted); font-size: 12px; }
+.rkt-gap { flex: 1 1 auto; }
+.rhead .rdate { margin-left: auto; color: var(--muted); font-size: 13px; white-space: nowrap; }
+.rhead .rtitle { min-width: 0; }
 .rk-list { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .rk-list li { display: flex; align-items: center; gap: 10px; background: var(--card); border-radius: 12px; padding: 10px 12px; min-width: 0; }
 .rk-n { flex: none; width: 28px; text-align: center; font-size: 18px; font-weight: 700; }

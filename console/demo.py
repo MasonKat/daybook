@@ -232,6 +232,16 @@ def _seed_watches(conn: sqlite3.Connection, today: date, rng: random.Random) -> 
                              (r["id"], v, rx, day.isoformat(), f"{day.isoformat()}T10:00:00.000Z"))
 
 
+    # F19.3: the grade-tagged videos too, so each pool's TOP list has at least 5 (a separate RNG keeps the rest as it was)
+    extra, rx = {"고1": ["AMPdemo0002", "AMPdemo0004"], "기초": ["AMPshort004"]}, random.Random(19)
+    for r in conn.execute("SELECT s.id, c.grade FROM students s JOIN classes c ON c.id = s.class_id ORDER BY s.id").fetchall():
+        for v in extra.get(r["grade"], []):
+            if rx.random() < 0.5:
+                day = today - timedelta(days=rx.randint(0, 9))
+                conn.execute("INSERT OR IGNORE INTO watches (student_id, video_id, day, sec, pct, ts) VALUES (?, ?, ?, ?, ?, ?)",
+                             (r["id"], v, day.isoformat(), rx.randint(60, 900), rx.randint(35, 100), "2026-01-01T00:00:00.000Z"))
+
+
 def M_(hhmm: str) -> int:
     h, m = hhmm.split(":")
     return int(h) * 60 + int(m)

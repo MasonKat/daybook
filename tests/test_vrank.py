@@ -128,7 +128,9 @@ def test_page_ticker_list_and_friends_korea_only(conn, klass, tmp_path):
     assert res.ok and not [f for f in res.findings if f.kind == "other_name"]    # the marked korea-mode list only
     html = (tmp_path / "d" / "s" / studs[0]["student_token"] / "index.html").read_text(encoding="utf-8")
     head = html.split('<header class="sbar">')[1].split("</header>")[0]
-    assert 'id="rk-open"' in head and "TOP 3 · " in head and "🥇 영상1" in head
+    assert 'id="rk-open"' in head and "TOP 5 · " in head and "🥇 1위 · 영상1" in head and "today-date" not in head
+    top = json.loads(head.split('data-top="')[1].split('"')[0].replace("&#34;", '"').replace("&quot;", '"'))
+    assert top == ["🥇 1위 · 영상1", "🥈 2위 · 영상2", "🥉 3위 · 영상3"]                     # fewer than 5: only those
     lst = html.split('id="rk"')[1].split('id="rv"')[0]
     assert lst.count("<li>") == 3 and "명" not in lst.split("rk-friends")[0]    # videos only, no counts
     names = lst.split('class="rk-friends"')[1]

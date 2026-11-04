@@ -16,8 +16,8 @@
   {# F18.4: the mascot slot (the academy's art when brand.mascot is set; a neutral placeholder shape until then) #}
   <span class="mslot" aria-hidden="true" style="--mpx: {{ mascot_px }}px">{% if mascot %}<img class="mascot" src="{{ mascot }}" alt="" width="{{ mascot_px }}" height="{{ mascot_px }}">{% else %}<svg viewBox="0 0 28 28" class="mph"><rect x="2" y="2" width="24" height="24" rx="8"/><circle cx="14" cy="14" r="5.5"/></svg>{% endif %}</span>
   <button type="button" class="rvpill" id="rv-open" aria-label="{{ S.rv_pill }}"><svg viewBox="0 0 24 24" class="rvstar" aria-hidden="true"><defs><linearGradient id="rvg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset=".55" stop-color="#ec4899"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs><path fill="url(#rvg)" d="M12 2.6l2.8 5.8 6.4.9-4.6 4.5 1.1 6.3L12 17.1l-5.7 3 1.1-6.3-4.6-4.5 6.4-.9z"/></svg><span class="rvpill-t">{{ S.rv_pill }}</span><span class="rvdot" id="rv-dot" hidden></span></button>
-  {% if me.rank %}<button type="button" class="rkt" id="rk-open" aria-label="TOP 3 · {{ me.rank.label }}"><span class="rkt-h tnum">TOP 3 · {{ me.rank.label }}</span><span class="rkt-l" id="rk-line" data-top="{{ me.rank.top | map(attribute='title') | list | tojson | forceescape }}">🥇 {{ me.rank.top[0].title }}</span></button>{% endif %}
-  <span class="sdate" id="today-date"{% if me.rank %} hidden{% endif %}>&nbsp;</span>
+  {# F19.3: the rotating TOP 5 ticker (one entry at a time; a tap opens the 2-week list); no ticker without a list #}
+  {% if me.rank %}<button type="button" class="rkt" id="rk-open" aria-label="TOP 5 · {{ me.rank.label }}"><span class="rkt-l" id="rk-line" data-top="{{ me.rank.top | map(attribute='entry') | list | tojson | forceescape }}">{{ me.rank.top[0].entry }}</span><span class="rkt-more" id="rk-more" hidden>TOP 5 ›</span></button>{% else %}<span class="rkt-gap"></span>{% endif %}
   <span class="av ring sm" title="{{ me.display_name }}"><span>{{ me.initial }}</span></span>
 </header>
 
@@ -106,7 +106,7 @@
 </section>
 
 <section id="tab-today" class="panel" role="tabpanel">
-  <div class="rhead"><h1 class="rtitle" id="r-title">{{ S.ritual_study }}</h1><p class="chip set-chip" id="today-set" hidden></p><button type="button" class="chip livebtn" id="live-open">{{ S.live_btn }}</button></div>
+  <div class="rhead"><h1 class="rtitle" id="r-title">{{ S.ritual_study }}</h1><p class="chip set-chip" id="today-set" hidden></p><span class="rdate tnum" id="today-date">&nbsp;</span><button type="button" class="chip livebtn" id="live-open">{{ S.live_btn }}</button></div>
   <div class="card wtcard" id="wt-card" hidden>
     <div class="wt-row"><b id="wt-label">{{ S.wt_title }}</b><span class="muted wt-leg" id="wt-state"></span></div>
     <button type="button" class="btn primary" id="wt-open">{{ S.wt_open }}</button>
