@@ -3,7 +3,7 @@
 **Status (2026-11-04: P0, design v2, F1–F9, hotfix H1–H6, F10 videos per class, F11 members in the Teacher tab, F12 insights, F13 parent-contact desk, F14 weekly-test report):**
 1. P1 complete and tested: schema + `students_public`, `init`, `demo`, `roster add/list/import`, Worker `/submit` + `/submissions`, student 오늘 tab, `pull`, parent page, `publish` + no-PII lint, `import screeners`, deploy steps.
 2. P2 complete: board + attitude buttons, `score`, class reward bar, `note`, `weekly`, Playwright checks. P3: manifest/icons/standalone, `rotate-tokens`, `export pdf` stub, Worker node tests.
-3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 261 pytest + 58 Worker node tests (incl. the class-day budget with a Live round) + the Playwright end-to-end check (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
+3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 268 pytest + 58 Worker node tests (incl. the class-day budget with a Live round) + the Playwright end-to-end check (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
    Design v2: shorts reels + 강의 cards, story rings with content, status-coloured profile tiles, one weekly report per parent message.
 4. Features: taste build (콩, `make deploy-taste`), 출석 with a 4-digit code, 오늘 한 줄, 오늘의 장면 + reactions, 휴강, QR sheet, class band, term report, note drafts,
    the Teacher tab (no terminal on Saturdays), AMP Live (cooperative in-class rounds), the answer-card spike, an offline-capable student page.
@@ -72,6 +72,7 @@ Then follow `HANDOFF.md` (classes, roster import, links).
 
 | when | command | what it does |
 |---|---|---|
+| once, the real setup (F20) | `daybook setup` (`--from <step>`, `--english`) | the Thursday checklist as a guided wizard: Cloudflare steps to click, daybook.json, classes, roster, consent, rounds, 발행, 배포, each with a preview and a doctor check; resumable (setup_state.json) |
 | once | `daybook class add 고1A --term 2026-11-02..2027-02-26 --days 화,금 --reward "피자 파티"` | a class, its weekdays and its reward |
 | once | `daybook roster import roster.csv --map mappings/roster.json --class 고1A` | students from the roster export |
 | once | `daybook roster list 고1A --links` | each student's and parent's link, to send privately |

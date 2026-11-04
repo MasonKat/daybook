@@ -52,6 +52,7 @@ def parse_date(s: str | None) -> date:
 def cli(ctx, db_path, config_path):
     """DAYBOOK console: student ledger + static parent pages."""
     ctx.obj = Ctx(db_path, config_path)
+    ctx.obj.config_path = config_path
 
 
 def utf8_console() -> None:
@@ -1356,6 +1357,26 @@ def remote_link(obj: Ctx, rotate):
     if msg:
         click.echo(msg, err=msg.startswith("warning"))
     click.echo("open it once on your own phone (Teacher tab → 리모컨 shows it as a QR); it holds the teacher token", err=True)
+
+
+# ---------------------------------------------------------------- F20: the guided Thursday setup
+
+@cli.command("setup")
+@click.option("--from", "start", default=None, help="Redo this step, then continue (db, subdomain, d1, token, worker, vapid, "
+              "config, classes, roster, consent, rounds, publish, deploy, doctor)")
+@click.option("--english", is_flag=True, help="English prompts")
+@click.option("--state", "state_path", default="setup_state.json", show_default=True, help="Where the progress is kept (gitignored)")
+@click.pass_obj
+def setup_cmd(obj: Ctx, start, english, state_path):
+    """The HANDOFF Thursday checklist as a guided, resumable wizard (previews before every write; type 그만 to pause)."""
+    from . import setup as SU
+    w = SU.Wizard(obj.db_path, obj.config_path or os.environ.get("DAYBOOK_CONFIG") or "daybook.json", english=english,
+                  state_path=state_path)
+    try:
+        ok = w.run(start)
+    except SU.SetupError as e:
+        fail(str(e))
+    sys.exit(0 if ok else 3)
 
 
 if __name__ == "__main__":

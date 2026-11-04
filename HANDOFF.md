@@ -5,6 +5,9 @@ generated launcher; `scripts\*.ps1` and the e2e already run the module). Mac/Lin
 
 ## Thursday checklist (real setup before Friday 11-06), in this order
 
+**Fastest way (F20):** `.venv\Scripts\python.exe -m console setup` walks these steps one by one in Korean: it previews every
+write, checks each step with the doctor, and continues where it stopped (`--from <step>` redoes one; type 그만 to pause).
+
 [대시보드] = the teacher's Cloudflare dashboard in a browser. [콘솔] = PowerShell in the repo folder
 (`.venv\Scripts\python.exe -m console …` for DAYBOOK, never pip's .exe). [선생님 탭] = the board's Teacher tab.
 
@@ -37,7 +40,7 @@ in `daybook.sqlite` (gitignored), and on the deployed pages behind unguessable l
 
 ## 0. State at 11-04 (after F6–F14 and G1–G5): what to do before Friday 11-06
 
-`main` is green from a clean clone: 261 pytest, 58 Worker node tests (incl. the class-day budget with an AMP Live round
+`main` is green from a clean clone: 268 pytest, 58 Worker node tests (incl. the class-day budget with an AMP Live round
 and a weekly-test round), the full Playwright check. Built: P0, design v2, F1–F14, hotfix H1–H6, G1 doctor, G2 backup,
 G3 운영 가이드, G4 안내 cards, G5 taste refresh. Every choice is in `DECISIONS.md`. Console schema v8 (migrates by itself);
 Worker v6. The pilot: two Mon/Wed/Fri 고1 classes from Friday 11-06; the weekly test restarts that day (고2 on Saturday).
