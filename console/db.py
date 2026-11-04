@@ -12,7 +12,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 KST = timezone(timedelta(hours=9))  # Asia/Seoul has no DST
 
 SCHEMA = """
@@ -48,7 +48,8 @@ CREATE TABLE IF NOT EXISTS students (
     created_at    TEXT NOT NULL,
     ext_id        TEXT UNIQUE,            -- console only (the teacher's roster ID)
     left_on       TEXT,                   -- F11 퇴원 처리: the date (NULL while enrolled)
-    consent       TEXT NOT NULL DEFAULT 'unknown'   -- F17: the parent's slip: yes | no | unknown
+    consent       TEXT NOT NULL DEFAULT 'unknown',  -- F17: the parent's slip: yes | no | unknown
+    callsign      TEXT                    -- F19.1: the short spoken name for voice notes (console only; unique per class)
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -197,6 +198,35 @@ CREATE TABLE IF NOT EXISTS review_wins (
     PRIMARY KEY (round_id, review_id)
 );
 
+CREATE TABLE IF NOT EXISTS shoutouts (        -- F19.1 칭찬 from the teacher's voice notes (saved after the preview)
+    id         INTEGER PRIMARY KEY,
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    class_id   INTEGER REFERENCES classes(id),
+    day        TEXT NOT NULL,
+    ts         TEXT NOT NULL,
+    points     INTEGER NOT NULL DEFAULT 0,     -- the 🎤 count (not 태도 unless voice_points_to_attitude)
+    text       TEXT NOT NULL,
+    private    INTEGER NOT NULL DEFAULT 0,     -- 1 = teacher-only (negative, filtered, or the PII lint)
+    source     TEXT NOT NULL DEFAULT 'voice-import'
+);
+
+CREATE TABLE IF NOT EXISTS concept_notes (    -- F19.1 개념: teacher-only "오늘의 개념 메모"
+    id       INTEGER PRIMARY KEY,
+    class_id INTEGER REFERENCES classes(id),
+    day      TEXT NOT NULL,
+    text     TEXT NOT NULL,
+    ts       TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS moment_drafts (    -- F19.1 장면: text-only drafts; 승인 offers the text to 장면 올리기
+    id       INTEGER PRIMARY KEY,
+    class_id INTEGER REFERENCES classes(id),
+    day      TEXT NOT NULL,
+    text     TEXT NOT NULL,
+    status   TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'approved', 'dropped')),
+    ts       TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS class_bonus (  -- F7: class-wide points (AMP Live: >= 80 % of the class correct)
     id         INTEGER PRIMARY KEY,
     class_id   INTEGER NOT NULL REFERENCES classes(id),
@@ -321,7 +351,7 @@ def migrate(conn: sqlite3.Connection) -> None:
         return
     added = {   # table -> {column: declaration} for columns that arrived after v1 (additive only)
         "sessions": {"start_time": "TEXT", "code": "TEXT", "cancelled": "TEXT"},
-        "students": {"left_on": "TEXT", "consent": "TEXT NOT NULL DEFAULT 'unknown'"},
+        "students": {"left_on": "TEXT", "consent": "TEXT NOT NULL DEFAULT 'unknown'", "callsign": "TEXT"},
         "contacts": {"tag": "TEXT"},
         "submissions": {"reflection": "TEXT", "chip": "TEXT", "solved": "INTEGER"},
         "classes": {"grade": "TEXT", "start_time": "TEXT", "end_time": "TEXT", "self_study_until": "TEXT", "late_min": "INTEGER DEFAULT 10",

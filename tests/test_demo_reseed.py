@@ -29,6 +29,9 @@ def test_reseed_twice_with_every_table_filled(conn):
     conn.execute("INSERT INTO reviews (id, student_id, class_id, day, text, ts) VALUES ('abcdefabcdef', ?, ?, '2026-11-02', '판서 최고', 't')", (sid, cls["id"]))
     conn.execute("INSERT INTO review_rounds (id, class_id, period_from, period_to, open_at, close_at) VALUES ('r1', ?, 'a', 'b', 'c', 'd')", (cls["id"],))
     conn.execute("INSERT INTO review_votes (round_id, student_id, review_id, ts) VALUES ('r1', ?, 'abcdefabcdef', 't')", (sid,))
+    conn.execute("INSERT INTO shoutouts (student_id, class_id, day, ts, points, text) VALUES (?, ?, '2026-11-05', 't', 1, '굿')", (sid, cls["id"]))
+    conn.execute("INSERT INTO concept_notes (class_id, day, text, ts) VALUES (?, '2026-11-05', '개념', 't')", (cls["id"],))
+    conn.execute("INSERT INTO moment_drafts (class_id, day, text, ts) VALUES (?, '2026-11-05', '장면', 't')", (cls["id"],))
     conn.execute("INSERT INTO review_wins (round_id, review_id, votes) VALUES ('r1', 'abcdefabcdef', 1)")
     conn.commit()
     tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")]

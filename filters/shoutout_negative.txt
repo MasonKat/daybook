@@ -1,0 +1,34 @@
+# F19.1: a 칭찬 line containing any of these stays teacher-only (never on a page or the board), in every mode.
+# Spaces are ignored when matching. Extend locally in filters/shoutout_negative.local.txt (gitignored).
+혼나
+혼났
+혼내
+혼낼
+떠들
+떠듦
+늦
+지각
+안했
+안 했
+안해
+못했
+못 했
+못해
+졸았
+졸더
+졸고
+잤
+자고 있
+장난
+딴짓
+핸드폰
+휴대폰
+폰 보
+숙제 안
+까먹
+산만
+대충
+엎드려
+경고
+벌점
+하지 마

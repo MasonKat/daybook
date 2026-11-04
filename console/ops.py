@@ -202,9 +202,26 @@ def cancel_class(conn: sqlite3.Connection, cls: sqlite3.Row, day: date, reason: 
 CONSENT = ("yes", "no", "unknown")
 
 
+def check_callsign(conn: sqlite3.Connection, s: sqlite3.Row, callsign: str) -> str | None:
+    """F19.1: a short spoken name or seat number (가람, 7번); unique per class (by its spoken form); never a token or a
+    full name. Returns the normalized value, or None to clear it."""
+    from . import voice
+    c = " ".join(callsign.split())
+    if not c:
+        return None
+    if len(c) > 10 or re.fullmatch(r"[a-z2-7]{26}", c) or c == s["full_name"] or c == (s["ext_id"] or ""):
+        raise OpError("callsign: up to 10 characters, never a link token, a full name or a student ID")
+    key = voice.spoken(c)
+    for o in conn.execute("SELECT id, callsign FROM students WHERE class_id IS ? AND id != ? AND active = 1 AND callsign IS NOT NULL",
+                          (s["class_id"], s["id"])):
+        if voice.spoken(o["callsign"]) == key:
+            raise OpError(f"callsign {c} is already used in this class")
+    return c
+
+
 def edit_student(conn: sqlite3.Connection, slug: str, display: str | None = None, new_slug: str | None = None,
                  track: str | None = None, class_name: str | None = None, active: bool | None = None,
-                 consent: str | None = None) -> set[str]:
+                 consent: str | None = None, callsign: str | None = None) -> set[str]:
     """Shared by `daybook roster edit` and the Teacher tab. Returns the changed field names."""
     from . import models as M
     s = get_student(conn, slug)
@@ -225,6 +242,8 @@ def edit_student(conn: sqlite3.Connection, slug: str, display: str | None = None
         if consent not in CONSENT:
             raise OpError("consent: yes | no | unknown")
         fields["consent"] = consent
+    if callsign is not None:                        # F19.1: "" clears it
+        fields["callsign"] = check_callsign(conn, s, callsign)
     if not fields:
         raise OpError("nothing to change")
     conn.execute(f"UPDATE students SET {', '.join(k + ' = ?' for k in fields)} WHERE id = ?", (*fields.values(), s["id"]))

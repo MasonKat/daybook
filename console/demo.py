@@ -156,12 +156,25 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
     _seed_contacts(conn, today, rng)
     _seed_watches(conn, today, rng)
     _seed_reviews(conn, today)
+    _seed_voice(conn, today)
     for r in conn.execute("SELECT id FROM students ORDER BY id LIMIT 2").fetchall():        # F16.4: two SLCs this week
         conn.execute("INSERT INTO meetings (student_id, day, kind, ts) VALUES (?, ?, 'slc', ?)",
                      (r["id"], today.isoformat(), "2026-01-01T00:00:00.000Z"))
     conn.execute("UPDATE students SET consent = 'yes'")           # F17: every synthetic parent said yes (콩 too)
     log_event(conn, "demo_seed", {"today": today.isoformat()})
     conn.commit()
+
+
+def _seed_voice(conn: sqlite3.Connection, today: date) -> None:
+    """F19.1: call signs (display names; 새벽 is a seat number, 4번) and the synthetic CLOVA-style transcript in
+    demo/voice/clova_sample.txt imported for 콩's class (the sure lines only, as `voice import --save` does)."""
+    from . import voice as VC
+    from .config import Config
+    conn.execute("UPDATE students SET callsign = display_name WHERE callsign IS NULL")
+    conn.execute("UPDATE students SET callsign = '4번' WHERE display_name = '새벽'")
+    cid = conn.execute("SELECT id FROM classes WHERE name = ?", (KONG["class"],)).fetchone()[0]
+    text = (ROOT / "demo" / "voice" / "clova_sample.txt").read_text(encoding="utf-8")
+    VC.save(conn, Config(), cid, today, VC.preview(conn, cid, text)["rows"])
 
 
 DEMO_REVIEWS = ["판서가 오늘은 피카소급", "분수 대결 명승부", "시발점 문제에서 다 같이 웃음", "프로젝터 꺼져서 다들 놀람",

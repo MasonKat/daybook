@@ -211,6 +211,11 @@
     {% for l in me.lines %}<li data-date="{{ l.date }}"><span class="ld">{{ l.label }}</span>{% if l.chip %}<span class="lchip">{{ l.chip }}</span>{% endif %}{% if l.text %}<span class="lt2">{{ l.text }}</span>{% endif %}</li>{% else %}<li class="muted empty">{{ S.lines_empty }}</li>{% endfor %}
   </ul>
 
+  {% if me.shouts %}
+  <h2 class="sec-h">🎤 {{ S.vc_student_title }} <span class="muted tnum">{{ S.vc_student_total | fmt(n=me.mic) }}</span></h2>
+  <ul class="shoutlist" id="shouts">{% for x in me.shouts %}<li><span class="sd">{{ x.label }}</span>{{ x.text }}</li>{% endfor %}</ul>
+  {% endif %}
+
   <h2 class="sec-h">{{ S.teacher_messages }}</h2>
   <div class="msgs">
     {% for n in me.notes %}

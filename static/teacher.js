@@ -47,9 +47,10 @@
     }).forEach(function (s) {
       var tr = el('tr', { 'data-slug': s.slug, 'class': s.active ? '' : 'off' });
       var name = el('input', { type: 'text', value: s.display_name, maxlength: '20', 'aria-label': s.slug });
+      var call = el('input', { type: 'text', value: s.callsign || '', maxlength: '10', size: '5', placeholder: S.vc.callsign, 'aria-label': S.vc.callsign, 'class': 'callsign' });
       var save = btn(S.save);
-      save.onclick = function () { api('/api/teacher/roster', { slug: s.slug, display_name: name.value }).then(msg); };
-      var td1 = el('td'); td1.appendChild(name); td1.appendChild(save);
+      save.onclick = function () { api('/api/teacher/roster', { slug: s.slug, display_name: name.value, callsign: call.value }).then(msg); };
+      var td1 = el('td'); td1.appendChild(name); td1.appendChild(call); td1.appendChild(save);
       var td2 = el('td', { 'class': 'full' }, s.full_name + (s.ext_id ? ' · ' + s.ext_id : ''));
       var mv = el('select', { 'aria-label': MM.move }); classesAll.forEach(function (c) { mv.appendChild(el('option', { value: c.name }, c.name)); });
       mv.value = s.class_name;
@@ -96,6 +97,7 @@
       classesAll.forEach(function (c) { pick.appendChild(el('option', { value: c.name }, c.name)); });
       pick.value = pv;
       renderRoster();
+      vcClasses(j.board_class);
     });
   }
   $('rs-q').addEventListener('input', renderRoster);
@@ -549,6 +551,91 @@
   });
   $('vv-copy').onclick = function () { copy(vvText, $('vv-copy')); };
   loadVideos(7);
+
+  /* ------------------------------------------------------------ F19.1: 음성 메모 가져오기 (preview first; 저장 stores) */
+  var VC = S.vc, vcRows = [], vcStudents = [];
+  function vcClasses(boardClass) {
+    var sel = $('vc-class'), v = sel.value;
+    sel.innerHTML = ''; classesAll.forEach(function (c) { sel.appendChild(el('option', { value: c.name }, c.name)); });
+    sel.value = v || boardClass || (classesAll[0] || {}).name || '';
+  }
+  function vcRender() {
+    var tb = $('vc-rows'); tb.innerHTML = '';
+    vcRows.forEach(function (r) {
+      var tr = el('tr', { 'class': r.dropped ? 'off' : '' });
+      var keep = el('input', { type: 'checkbox', 'aria-label': '✓' }); keep.checked = !!r.keep; keep.disabled = !!r.dropped;
+      keep.onchange = function () { r.keep = keep.checked; };
+      var t0 = el('td'); t0.appendChild(keep); tr.appendChild(t0);
+      tr.appendChild(el('td', {}, VC.kinds[r.kind] + (r.dropped ? ' · ' + VC.dropped : '')));
+      tr.appendChild(el('td', {}, r.kind === 'praise' ? (r.heard || '') + (r.match === 'fuzzy' ? ' (' + VC.fuzzy + ')' : '') : ''));
+      var td = el('td');
+      if (r.kind === 'praise') {
+        var sel = el('select', { 'aria-label': VC.who });
+        sel.appendChild(el('option', { value: '' }, VC.who));
+        vcStudents.forEach(function (st) { sel.appendChild(el('option', { value: String(st.id) }, st.display_name + (st.callsign ? ' (' + st.callsign + ')' : ''))); });
+        sel.value = r.student_id ? String(r.student_id) : '';
+        sel.onchange = function () { r.student_id = sel.value ? Number(sel.value) : null; r.keep = !!sel.value && !r.dropped; keep.checked = r.keep; };
+        td.appendChild(sel);
+        if (!r.student_id && !r.dropped) (r.candidates || []).forEach(function (c) {      /* 누구?: 2-3 candidates, never guessed */
+          var b = btn(c.display_name); b.className += ' chipbtn';
+          b.onclick = function () { sel.value = String(c.id); sel.onchange(); };
+          td.appendChild(b);
+        });
+      }
+      tr.appendChild(td);
+      var pts = el('input', { type: 'number', min: '0', max: '5', value: String(r.points || 0), 'aria-label': '🎤', 'class': 'pts' });
+      pts.onchange = function () { r.points = Number(pts.value) || 0; };
+      var tp = el('td'); if (r.kind === 'praise') tp.appendChild(pts); tr.appendChild(tp);
+      var tx = el('input', { type: 'text', value: r.text, maxlength: '200', 'aria-label': 'text', 'class': 'vc-line' });
+      tx.onchange = function () { r.text = tx.value; };
+      var tt = el('td'); tt.appendChild(tx);
+      if (r.private) tt.appendChild(el('span', { 'class': 'chip warn' }, VC.private + ' · ' + (VC.why[r.private] || r.private)));
+      tr.appendChild(tt);
+      tb.appendChild(tr);
+    });
+    $('vc-save').disabled = !vcRows.length;
+  }
+  $('vc-file').onchange = function () {
+    var f = $('vc-file').files[0]; if (!f) return;
+    var rd = new FileReader(); rd.onload = function () { $('vc-text').value = String(rd.result || ''); }; rd.readAsText(f, 'utf-8');
+  };
+  $('vc-preview').onclick = function () {
+    api('/api/teacher/voice-preview', { 'class': $('vc-class').value, text: $('vc-text').value }).then(function (j) {
+      if (!j.ok) { $('vc-msg').textContent = j.error || ''; return; }
+      vcRows = j.rows; vcStudents = j.students;
+      $('vc-msg').textContent = !j.callsigns ? VC.nocalls : j.who ? VC.who + ' ' + j.who : '';
+      vcRender();
+    });
+  };
+  $('vc-save').onclick = function () {
+    $('vc-save').disabled = true;
+    api('/api/teacher/voice-save', { 'class': $('vc-class').value, date: $('vc-date').value, rows: vcRows.map(function (r) {
+      return { kind: r.kind, keep: !!r.keep && !r.dropped, student_id: r.student_id, points: r.points, text: r.text };
+    }) }).then(function (j) {
+      $('vc-msg').textContent = j.ok ? fmt(VC.saved, j) : (j.error || '');
+      if (j.ok) { vcRows = []; vcRender(); $('vc-text').value = ''; loadVoice(); }
+    });
+  };
+  function loadVoice() {
+    api('/api/teacher/voice').then(function (j) {
+      var c = $('vc-concepts'); c.innerHTML = '';
+      j.concepts.forEach(function (x) { c.appendChild(el('li', {}, x.day + ' · ' + x.class_name + ' — ' + x.text)); });
+      if (!j.concepts.length) c.appendChild(el('li', { 'class': 'muted' }, VC.none));
+      var d = $('vc-drafts'); d.innerHTML = '';
+      j.drafts.forEach(function (x) {
+        var li = el('li', { 'class': 'wrow' }); li.appendChild(el('span', {}, x.day + ' · ' + x.class_name + ' — ' + x.text));
+        [['approve', VC.approve], ['drop', VC.drop]].forEach(function (a) {
+          var b = btn(a[1]); b.onclick = function () { api('/api/teacher/draft', { id: x.id, action: a[0] }).then(loadVoice); }; li.appendChild(b);
+        });
+        d.appendChild(li);
+      });
+      if (!j.drafts.length) d.appendChild(el('li', { 'class': 'muted' }, VC.none));
+      var r = $('vc-recent'); r.innerHTML = '';
+      j.shoutouts.forEach(function (x) { r.appendChild(el('li', {}, x.day + ' · ' + x.class_name + ' · ' + x.display_name + ' 🎤' + x.points + ' — ' + x.text + (x.private ? ' (' + VC.private + ')' : ''))); });
+      if (!j.shoutouts.length) r.appendChild(el('li', { 'class': 'muted' }, VC.none));
+    });
+  }
+  loadVoice();
 
   /* ------------------------------------------------------------ F18.3: 학생 리뷰 (승인 / 숨김 before anyone sees it) */
   var RVT = S.rv;

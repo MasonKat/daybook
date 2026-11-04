@@ -842,6 +842,21 @@ print(json.dumps([dict(r) for r in c.execute(q, (sys.argv[2],))]))`, env.DAYBOOK
     await tpage.waitForFunction((sl) => !document.querySelector(`#need-rows .need[data-slug="${sl}"]`), topSlug, { timeout: 5000 }).catch(() => {});
     check((await tpage.locator(`#need-rows .need[data-slug="${topSlug}"]`).count()) === 0 && (await tpage.locator(`#status-rows tr[data-slug="${topSlug}"] .dd`).innerText()).startsWith('0'),
       '"통화함" logs the call: the flag clears and 연락 현황 resets to 0 days');
+    // F19.1: 음성 메모 가져오기: paste a CLOVA-style transcript -> preview (nothing stored) -> 저장
+    await tpage.waitForFunction(() => document.getElementById('vc-class').options.length >= 4, null, { timeout: 5000 }).catch(() => {});
+    await tpage.selectOption('#vc-class', '고1A');
+    await tpage.fill('#vc-text', fs.readFileSync(path.join(ROOT, 'demo', 'voice', 'clova_sample.txt'), 'utf-8') + '\n칭찬 보미 1점 숙제 꼼꼼\n');
+    await tpage.click('#vc-preview');
+    await tpage.waitForSelector('#vc-rows tr', { timeout: 5000 }).catch(() => {});
+    const vcN = await tpage.locator('#vc-rows tr').count();
+    check(vcN === 9 && (await tpage.locator('#vc-rows tr.off').count()) === 1 && /선생님만/.test(await tpage.textContent('#vc-rows')),
+      `음성 메모: ${vcN} rows in the preview, one 취소됨, the negative line marked 선생님만`);
+    const whoRow = tpage.locator('#vc-rows tr').last();
+    check((await whoRow.locator('select').inputValue()) === '' && (await whoRow.locator('.chipbtn').count()) >= 2, '누구?: a call sign not in this class offers 2-3 candidate chips and is not guessed');
+    await whoRow.locator('.chipbtn').first().click();
+    await tpage.click('#vc-save');
+    await tpage.waitForFunction(() => /저장했어요/.test(document.getElementById('vc-msg').textContent), null, { timeout: 5000 }).catch(() => {});
+    check(/저장했어요: 칭찬 6 \(선생님만 1\)/.test(await tpage.textContent('#vc-msg')), `저장: ${await tpage.textContent('#vc-msg')}`);
     // F18.3: 학생 리뷰 in the Teacher tab: the queue, this period's vote per class, the winners with vote counts
     await tpage.waitForSelector('#rvt-classes li', { timeout: 5000 }).catch(() => {});
     check((await tpage.locator('#rvt-classes li').count()) === 4 && /베스트|표/.test(await tpage.textContent('#rvt-wins')) && (await tpage.locator('#rvt-pending li button').count()) >= 2,

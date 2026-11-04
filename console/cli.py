@@ -317,11 +317,12 @@ def roster_import(obj: Ctx, csv_path, map_path, class_name):
 @click.option("--active/--inactive", default=None)
 @click.option("--consent", type=click.Choice(["yes", "no", "unknown"]), default=None,
               help="F17: the parent's consent slip (yes publishes the parent page and allows watch signals / push)")
+@click.option("--callsign", default=None, help='F19.1: the short spoken name for voice notes (가람, 7번); "" clears it')
 @click.pass_obj
-def roster_edit(obj: Ctx, slug, display, new_slug, track, class_name, active, consent):
+def roster_edit(obj: Ctx, slug, display, new_slug, track, class_name, active, consent, callsign):
     conn = obj.conn
     try:
-        changed = ops.edit_student(conn, slug, display, new_slug, track, class_name, active, consent)
+        changed = ops.edit_student(conn, slug, display, new_slug, track, class_name, active, consent, callsign=callsign)
     except ops.OpError as e:
         fail(str(e))
     conn.commit()
@@ -1275,6 +1276,57 @@ def review_open_vote(obj: Ctx, class_name):
     msg = RV.sync(obj.conn, obj.cfg)
     if msg:
         click.echo(msg, err=msg.startswith("warning"))
+
+
+# ---------------------------------------------------------------- F19.1: voice notes (a CLOVA Note text export)
+
+@cli.group()
+def voice():
+    """The teacher's voice notes: 칭찬 / 개념 / 장면 / 취소 from a pasted STT transcript."""
+
+
+@voice.command("import")
+@click.argument("source")
+@click.option("--class", "class_name", required=True)
+@click.option("--date", "d", default=None, help="The class day (default today)")
+@click.option("--save", is_flag=True, help="Store the sure lines (누구? lines are never stored); without it: preview only")
+@click.pass_obj
+def voice_import(obj: Ctx, source, class_name, d, save):
+    """SOURCE is a .txt file or - (stdin). Prints the preview; nothing is stored without --save."""
+    from . import voice as VC
+    conn = obj.conn
+    cls = ops.get_class(conn, class_name)
+    try:
+        text = VC.read_input(source)
+    except (OSError, VC.VoiceError) as e:
+        fail(str(e))
+    pv = VC.preview(conn, cls["id"], text)
+    names = {r["id"]: r["display_name"] for r in VC.class_roster(conn, cls["id"])}
+    kinds = {"praise": "칭찬", "concept": "개념", "scene": "장면"}
+    for r in pv["rows"]:
+        head = f"{r['i'] + 1:>2}. {kinds[r['kind']]}"
+        if r["dropped"]:
+            click.echo(f"{head}  (취소됨) {r['text']}")
+            continue
+        if r["kind"] == "praise":
+            if r["student_id"] is None:
+                cands = ", ".join(f"{c['display_name']}({c['callsign']})" for c in r["candidates"])
+                click.echo(f"{head}  누구? \"{r['heard']}\" → {cands or '-'}  | {r['text']}")
+                continue
+            sure = "" if r["match"] == "exact" else f" ≈\"{r['heard']}\""
+            click.echo(f"{head}  {names[r['student_id']]}{sure}  🎤{r['points']}  | {r['text']}"
+                       + (f"  [선생님만: {r['private']}]" if r["private"] else ""))
+        else:
+            click.echo(f"{head}  {r['text']}")
+    if not pv["callsigns"]:
+        click.echo("warning: no call signs in this class yet (roster edit <slug> --callsign …)", err=True)
+    if pv["who"]:
+        click.echo(f"누구? {pv['who']} line(s): not stored; use the Teacher tab to pick the student")
+    if not save:
+        click.echo("preview only: nothing stored (add --save)")
+        return
+    n = VC.save(conn, obj.cfg, cls["id"], parse_date(d), pv["rows"])
+    click.echo(f"saved: 칭찬 {n['praise']} (선생님만 {n['private']}), 개념 {n['concept']}, 장면 초안 {n['scene']}; skipped {n['skipped']}")
 
 
 if __name__ == "__main__":

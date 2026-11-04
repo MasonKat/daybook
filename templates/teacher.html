@@ -72,6 +72,25 @@
     <button type="button" class="btn ghost sm" id="rf-new">{{ S.r_add }}</button> <span class="muted" id="rf-msg"></span></div>
 </section>
 
+<section class="card" id="t-voice">
+  <h2>{{ S.vc_title }}</h2>
+  <p class="muted">{{ S.vc_hint }}</p>
+  <div class="trow pol">
+    <select id="vc-class" aria-label="{{ S.m_class }}"></select>
+    <input type="date" id="vc-date" value="{{ day }}" aria-label="date">
+    <input type="file" id="vc-file" accept=".txt,text/plain" aria-label="{{ S.vc_file }}">
+  </div>
+  <textarea id="vc-text" rows="6" class="vc-text" placeholder="{{ S.vc_ph }}" aria-label="{{ S.vc_title }}"></textarea>
+  <div class="trow"><button type="button" class="btn primary sm" id="vc-preview">{{ S.vc_preview }}</button>
+    <button type="button" class="btn ghost sm" id="vc-save" disabled>{{ S.vc_save }}</button></div>
+  <p class="tmsg" id="vc-msg" aria-live="polite"></p>
+  <div class="tscroll"><table class="ttable vc"><thead><tr><th>✓</th><th>{{ S.vc_col_kind }}</th><th>{{ S.vc_col_heard }}</th>
+    <th>{{ S.vc_col_student }}</th><th>🎤</th><th>{{ S.vc_col_text }}</th></tr></thead><tbody id="vc-rows"></tbody></table></div>
+  <details><summary>{{ S.vc_concepts }}</summary><ul class="tlist" id="vc-concepts"></ul></details>
+  <details><summary>{{ S.vc_drafts }}</summary><ul class="tlist" id="vc-drafts"></ul></details>
+  <details><summary>{{ S.vc_recent }}</summary><ul class="tlist" id="vc-recent"></ul></details>
+</section>
+
 <section class="card" id="t-reviews">
   <h2>{{ S.rv_t_title }} <span class="muted" id="rvt-period"></span></h2>
   <p class="muted">{{ S.rv_t_hint }}</p>
@@ -225,7 +244,7 @@
   <div id="weekly-rows"></div>
 </section>
 </main>
-<script type="application/json" id="data">{{ {"S": {"saved": S.t_saved, "copy": S.t_copy, "copied": S.t_copied, "student": S.t_student_link, "parent": S.t_parent_link, "save": S.t_save, "need": S.board_moment_need, "running": S.t_running, "confirm_deploy": S.t_confirm_deploy, "all": S.m_all, "cw": {"other_student": S.cw_other_student, "phone": S.cw_phone, "raw_id": S.cw_raw_id, "rank": S.cw_rank, "absolute": S.cw_absolute, "comparison": S.cw_comparison, "hedge": S.cw_hedge, "jargon": S.cw_jargon}, "n": {"count": S.n_count, "off": S.n_off}, "rv": {"approve": S.rv_t_approve, "hide": S.rv_t_hide, "none": S.rv_t_none, "hidden_name": S.rv_t_hidden_name, "vote_now": S.rv_t_vote_now, "votes": S.rv_t_votes, "approved_n": S.rv_t_approved_n, "st_none": S.rv_t_st_none, "st_planned": S.rv_t_st_planned, "st_open": S.rv_t_st_open, "st_due": S.rv_t_st_due, "st_closed": S.rv_t_st_closed, "st_novote": S.rv_t_st_novote}, "v": {"students": S.v_students, "avg": S.v_avg, "minutes": S.v_minutes, "views": S.v_views, "hot": S.v_hot, "none": S.v_none, "per_student": S.v_per_student}, "m": {"move": S.m_move, "leave": S.m_leave, "ret": S.m_return, "rotate": S.m_rotate,
+<script type="application/json" id="data">{{ {"S": {"saved": S.t_saved, "copy": S.t_copy, "copied": S.t_copied, "student": S.t_student_link, "parent": S.t_parent_link, "save": S.t_save, "need": S.board_moment_need, "running": S.t_running, "confirm_deploy": S.t_confirm_deploy, "all": S.m_all, "cw": {"other_student": S.cw_other_student, "phone": S.cw_phone, "raw_id": S.cw_raw_id, "rank": S.cw_rank, "absolute": S.cw_absolute, "comparison": S.cw_comparison, "hedge": S.cw_hedge, "jargon": S.cw_jargon}, "n": {"count": S.n_count, "off": S.n_off}, "vc": {"callsign": S.vc_callsign, "who": S.vc_who, "dropped": S.vc_dropped, "private": S.vc_private, "kinds": {"praise": S.vc_k_praise, "concept": S.vc_k_concept, "scene": S.vc_k_scene}, "saved": S.vc_saved, "none": S.rv_t_none, "approve": S.rv_t_approve, "drop": S.vc_drop, "fuzzy": S.vc_fuzzy, "nocalls": S.vc_nocalls, "why": {"negative": S.vc_why_negative, "filtered": S.vc_why_filtered, "pii": S.vc_why_pii}}, "rv": {"approve": S.rv_t_approve, "hide": S.rv_t_hide, "none": S.rv_t_none, "hidden_name": S.rv_t_hidden_name, "vote_now": S.rv_t_vote_now, "votes": S.rv_t_votes, "approved_n": S.rv_t_approved_n, "st_none": S.rv_t_st_none, "st_planned": S.rv_t_st_planned, "st_open": S.rv_t_st_open, "st_due": S.rv_t_st_due, "st_closed": S.rv_t_st_closed, "st_novote": S.rv_t_st_novote}, "v": {"students": S.v_students, "avg": S.v_avg, "minutes": S.v_minutes, "views": S.v_views, "hot": S.v_hot, "none": S.v_none, "per_student": S.v_per_student}, "m": {"move": S.m_move, "leave": S.m_leave, "ret": S.m_return, "rotate": S.m_rotate,
   "rotate_confirm": S.m_rotate_confirm, "intro_p": S.m_intro_p, "intro_s": S.m_intro_s, "left": S.m_left, "new_links": S.m_new_links,
   "counts": S.m_counts, "status": {"new": S.m_status_new, "updated": S.m_status_updated, "unchanged": S.m_status_unchanged, "skipped": S.m_status_skipped}}, "r": {"open": S.r_open_now, "closed": S.r_closed, "upcoming": S.r_upcoming, "edit": S.r_edit,
   "close": S.r_close_now, "export": S.r_export, "confirm_close": S.r_confirm_close, "add": S.r_add, "progress": S.r_progress}, "c": {

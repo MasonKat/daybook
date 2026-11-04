@@ -3,7 +3,7 @@
 **Status (2026-11-04: P0, design v2, F1–F9, hotfix H1–H6, F10 videos per class, F11 members in the Teacher tab, F12 insights, F13 parent-contact desk, F14 weekly-test report):**
 1. P1 complete and tested: schema + `students_public`, `init`, `demo`, `roster add/list/import`, Worker `/submit` + `/submissions`, student 오늘 tab, `pull`, parent page, `publish` + no-PII lint, `import screeners`, deploy steps.
 2. P2 complete: board + attitude buttons, `score`, class reward bar, `note`, `weekly`, Playwright checks. P3: manifest/icons/standalone, `rotate-tokens`, `export pdf` stub, Worker node tests.
-3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 230 pytest + 54 Worker node tests (incl. the class-day budget with a Live round) + the Playwright end-to-end check (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
+3. `make demo` is green from a clean clone (Python 3.12/3.13, Node 22): 240 pytest + 54 Worker node tests (incl. the class-day budget with a Live round) + the Playwright end-to-end check (every page at 360 and 390 px, light and dark). Windows: `scripts\demo.ps1`.
    Design v2: shorts reels + 강의 cards, story rings with content, status-coloured profile tiles, one weekly report per parent message.
 4. Features: taste build (콩, `make deploy-taste`), 출석 with a 4-digit code, 오늘 한 줄, 오늘의 장면 + reactions, 휴강, QR sheet, class band, term report, note drafts,
    the Teacher tab (no terminal on Saturdays), AMP Live (cooperative in-class rounds), the answer-card spike, an offline-capable student page.
@@ -91,6 +91,7 @@ Then follow `HANDOFF.md` (classes, roster import, links).
 | Saturday (F13) | Teacher tab → 연락 필요 / 이번 주 할 일, or `daybook contact needed --script` / `daybook contact plan` | who to call and why (dates, times), a 3-line call script and a formal 카톡 draft; the 100-minute plan with a 4-week rotation; you call, then press 통화함 (or `daybook contact log <slug> --summary "…"`) |
 | last week of the month (F13) | Teacher tab → 이달의 좋은 소식, or `daybook contact goodnews` | positive-only drafts for every parent; edit, send yourself, press 메시지 보냄 |
 | Saturday (F18.3) | Teacher tab → 학생 리뷰, or `daybook review list` / `review approve <id>…` / `review hide <id>…` | students' one-line class reviews wait for 승인 (nothing reaches classmates before it); 발행 plans each class's random 24-hour vote (a class day, 15:00–21:30) and `daybook pull` counts it; `daybook review open-vote <class>` (지금 투표 열기) opens it now. Extra filter words: `filters/review_words.local.txt` (gitignored) |
+| after class (F19.1) | Teacher tab → 음성 메모 가져오기 (paste the CLOVA Note text export), or `daybook voice import memo.txt --class 고1A [--save]` | "칭찬 가람 2점 …", "개념 …", "장면 …", "취소": a preview (누구? lines get candidate chips, nothing stored), then 저장: 🎤 shoutouts (korea mode: the student's "선생님 한마디" and the board's 오늘의 칭찬), teacher-only 개념 메모, 장면 drafts. Call signs: `roster edit <slug> --callsign 7번` |
 | once per class (F13) | `daybook class edit 기초B --start 20:00 --end 22:00 --late-min 30 [--self-study 21:00]` | class hours and the 지각 rule (defaults: 10 min, 3 of the last 6, or an average of 15 min) |
 
 Printable 안내 (G4): `daybook cards students <class>` (cut-out cards) and `daybook cards parents <class>` (A4 letters with

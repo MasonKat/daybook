@@ -422,6 +422,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
 
     from . import practice
     from . import reviews as RV
+    from . import voice as VC
     rv_anon = practice.manitoba(conn, cfg)                                 # F18.3: manitoba mode is always anonymous
     rv_names = {cid: RV.page_name_hashes(conn, cid) for cid in classes}    # classmates' display names, hashed only
     students = []
@@ -644,6 +645,9 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "class_name": cls["name"] if cls else "",
             "student_token": s["student_token"],
             "consent": consent.get(s["id"]) == "yes",            # F17: the parent page, watch signals and push need it
+            # F19.1: korea mode: the student's own positive 칭찬 lines ("선생님 한마디"); manitoba: teacher-only
+            "shouts": [] if rv_anon else _shouts(conn, s["id"], scrub, wk),
+            "mic": 0 if rv_anon else VC.mic_total(conn, s["id"]),
             "rv_win": _rv_win(RV.parent_win(conn, s["id"], today), scrub) if not taste else None,   # F18.3: own win only
             "rv_anon": rv_anon,
             "parent_token": s["parent_token"],
@@ -687,6 +691,18 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         # F15.4: the academy's mascot next to the wordmark (taste build: only with brand.mascot_public)
         "mascot": "/b/mascot.png" if brand.source(cfg) and (not taste or brand.public(cfg)) else "",
     }
+
+
+def _shouts(conn: sqlite3.Connection, student_id: int, scrub, wk: list[str]) -> list[dict]:
+    """The teacher's positive voice-note lines for this student, re-checked at publish (filter, negative list, PII)."""
+    from . import voice as VC
+    out = []
+    for x in VC.shoutouts(conn, student_id, public_only=True, limit=10):
+        if VC.privacy(x["text"], scrub):
+            continue
+        d0 = date.fromisoformat(x["day"])
+        out.append({"label": f"{d0.month}/{d0.day} ({wk[d0.weekday()]})" + (f" · 🎤{x['points']}" if x["points"] else ""), "text": x["text"]})
+    return out
 
 
 def _rv_win(win: dict | None, scrub) -> dict | None:

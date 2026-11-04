@@ -11,7 +11,7 @@ import shutil
 import sqlite3
 import subprocess
 import tempfile
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from . import generate, importers, models as M, ops
@@ -35,7 +35,7 @@ def roster(conn: sqlite3.Connection, cfg: Config, class_id: int | None = None) -
     q += " WHERE s.class_id = ?" if class_id else ""
     return [{"slug": r["slug"], "display_name": r["display_name"], "full_name": r["full_name"], "active": bool(r["active"]),
              "class_name": r["class_name"] or "", "track": r["track"] or "", "ext_id": r["ext_id"] or "",
-             "left_on": r["left_on"] or "",
+             "left_on": r["left_on"] or "", "callsign": r["callsign"] or "",
              "student_link": _link(cfg, "s", r["student_token"]), "parent_link": _link(cfg, "p", r["parent_token"])}
             for r in conn.execute(q + " ORDER BY s.active DESC, s.class_id, s.id", (class_id,) if class_id else ())]
 
@@ -44,9 +44,11 @@ def roster_edit(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
     display = body.get("display_name")
     active = body.get("active")
     consent = body.get("consent")
+    callsign = body.get("callsign")
     changed = ops.edit_student(conn, str(body.get("slug", "")), display if isinstance(display, str) else None,
                                active=active if isinstance(active, bool) else None,
-                               consent=consent if isinstance(consent, str) else None)
+                               consent=consent if isinstance(consent, str) else None,
+                               callsign=callsign if isinstance(callsign, str) else None)
     conn.commit()
     msg = push_tokmap(conn, cfg) if {"active", "consent"} & changed else ""
     return {"ok": True, "changed": sorted(changed), "message": msg}
@@ -575,3 +577,57 @@ def review_open_vote(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
     RV.open_now(conn, cls["id"])
     conn.commit()
     return {"ok": True, "message": RV.sync(conn, cfg)}
+
+
+# ---------------------------------------------------------------- F19.1: 음성 메모 가져오기
+
+def voice_preview(conn: sqlite3.Connection, body: dict) -> dict:
+    from . import voice as VC
+    try:
+        cls = ops.get_class(conn, str(body.get("class", "")))
+    except ops.OpError as e:
+        raise TeacherError(str(e)) from e
+    text = str(body.get("text") or "")
+    if len(text) > 200_000:
+        raise TeacherError("the transcript is too long (200,000 characters at most)")
+    pv = VC.preview(conn, cls["id"], text)
+    return {"ok": True, "class": cls["name"], **pv,
+            "students": [{"id": r["id"], "display_name": r["display_name"], "callsign": r["callsign"] or ""} for r in
+                         conn.execute("SELECT id, display_name, callsign FROM students WHERE class_id = ? AND active = 1 ORDER BY id",
+                                      (cls["id"],))]}
+
+
+def voice_save(conn: sqlite3.Connection, cfg: Config, body: dict, day: date) -> dict:
+    from . import voice as VC
+    try:
+        cls = ops.get_class(conn, str(body.get("class", "")))
+    except ops.OpError as e:
+        raise TeacherError(str(e)) from e
+    d = date.fromisoformat(body["date"]) if body.get("date") else day
+    rows = body.get("rows") if isinstance(body.get("rows"), list) else []
+    return {"ok": True, **VC.save(conn, cfg, cls["id"], d, rows)}
+
+
+def voice_view(conn: sqlite3.Connection, day: date) -> dict:
+    """Teacher-only lists: today's 개념 메모, the 장면 drafts, the latest 칭찬 (with the teacher-only ones marked)."""
+    q = lambda sql, *a: [dict(r) for r in conn.execute(sql, a)]   # noqa: E731
+    return {"ok": True,
+            "concepts": q("""SELECT n.day, c.name AS class_name, n.text FROM concept_notes n LEFT JOIN classes c ON c.id = n.class_id
+                             WHERE n.day >= ? ORDER BY n.day DESC, n.id""", (day - timedelta(days=7)).isoformat()),
+            "drafts": q("""SELECT d.id, d.day, c.name AS class_name, d.text, d.status FROM moment_drafts d LEFT JOIN classes c ON c.id = d.class_id
+                           WHERE d.status = 'draft' ORDER BY d.day DESC, d.id"""),
+            "shoutouts": q("""SELECT s.day, c.name AS class_name, p.display_name, s.points, s.text, s.private FROM shoutouts s
+                              JOIN students p ON p.id = s.student_id LEFT JOIN classes c ON c.id = s.class_id
+                              ORDER BY s.day DESC, s.id DESC LIMIT 30""")}
+
+
+def draft_decide(conn: sqlite3.Connection, body: dict) -> dict:
+    status = {"approve": "approved", "drop": "dropped"}.get(str(body.get("action", "")))
+    r = conn.execute("SELECT * FROM moment_drafts WHERE id = ?", (int(body.get("id") or 0),)).fetchone()
+    if not status or not r:
+        raise TeacherError("draft: id and action approve | drop")
+    conn.execute("UPDATE moment_drafts SET status = ? WHERE id = ?", (status, r["id"]))
+    from .db import log_event
+    log_event(conn, "moment_draft_" + ("approve" if status == "approved" else "drop"), {"id": r["id"]})
+    conn.commit()
+    return {"ok": True}

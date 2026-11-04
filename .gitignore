@@ -29,3 +29,4 @@ backups/
 cards/
 brand/
 filters/review_words.local.txt
+filters/shoutout_negative.local.txt

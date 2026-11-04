@@ -112,8 +112,12 @@ class Board:
                                                     r["reflection"] or "") if x)} for r in rows]
         arrivals = [{"initial": r["display_name"][:1], "time": hm(r["ck"])}
                     for r in sorted((r for r in rows if r["ck"]), key=lambda r: r["ck"])]
+        from . import voice as VC        # F19.1: 오늘의 칭찬 (korea mode, positive lines only) and approved 장면 drafts
+        shouts = VC.today_board(conn, self.class_id, self.day) if show_three else []
+        drafts = [r[0] for r in conn.execute("SELECT text FROM moment_drafts WHERE class_id = ? AND status = 'approved' ORDER BY id DESC LIMIT 5",
+                                             (self.class_id,))]
         return {"cls": cls, "students": students, "reward": reward, "three": three, "show_three": show_three, "arrivals": arrivals,
-                "code": sess["code"] or "", "start": sess["start_time"] or ""}
+                "code": sess["code"] or "", "start": sess["start_time"] or "", "shouts": shouts, "drafts": drafts}
 
     def state_json(self, conn) -> dict:
         st = self.state(conn)
@@ -210,7 +214,7 @@ class Board:
         tpl = generate.env().get_template("board.html")
         from . import brand
         return tpl.render(S=self.S, page="board", mascot=brand.data_uri(self.cfg), cls=st["cls"], students=st["students"], reward=st["reward"],
-                          three=st["three"], show_three=st["show_three"], poll=self.poll, code=st["code"], start=st["start"], arrivals=st["arrivals"],
+                          three=st["three"], show_three=st["show_three"], shouts=st["shouts"], drafts=st["drafts"], poll=self.poll, code=st["code"], start=st["start"], arrivals=st["arrivals"],
                           reactions=self.reactions_text, poll_seconds=self.cfg.board_poll_seconds,
                           js=generate.json_script({"refresh": max(2, min(self.cfg.board_poll_seconds, 10)),
                                                    "need": self.S["board_moment_need"], "rxLabel": self.S["board_reactions"]}))
@@ -305,6 +309,8 @@ def make_handler(board: Board):
                     return self._json(T.push_view(conn, board.cfg))
                 if path == "/api/teacher/videos":             # F15.1/F15.2
                     return self._json(T.videos_view(conn, board.cfg, day, int((q.get("days") or ["7"])[0] or 7)))
+                if path == "/api/teacher/voice":              # F19.1
+                    return self._json(T.voice_view(conn, day))
                 if path == "/api/teacher/reviews":            # F18.3
                     return self._json(T.reviews_view(conn, board.cfg, day))
                 if path == "/api/teacher/rounds":             # F14
@@ -351,6 +357,12 @@ def make_handler(board: Board):
                         return self._json(T.publish(conn, board.cfg, db_path=board.db_path))
                     if self.path == "/api/teacher/practice":             # F16
                         return self._json(T.practice_set(conn, body))
+                    if self.path == "/api/teacher/voice-preview":        # F19.1: nothing is stored
+                        return self._json(T.voice_preview(conn, body))
+                    if self.path == "/api/teacher/voice-save":
+                        return self._json(T.voice_save(conn, board.cfg, body, board.day))
+                    if self.path == "/api/teacher/draft":                # F19.1 장면 초안: 승인 / ✗
+                        return self._json(T.draft_decide(conn, body))
                     if self.path == "/api/teacher/review":               # F18.3: 승인 / 숨김
                         return self._json(T.review_decide(conn, board.cfg, body))
                     if self.path == "/api/teacher/review-vote":          # F18.3: 지금 투표 열기
