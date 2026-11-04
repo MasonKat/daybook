@@ -284,6 +284,7 @@
       var sec = Math.round(W.sec), pct = W.dur > 0 ? Math.min(100, Math.round(100 * W.maxPos / W.dur)) : 0;
       if (sec === W.sentSec && pct === W.sentPct) return;
       W.sentSec = sec; W.sentPct = pct;
+      if (D.watch === false) return;   /* F17: the parent has not consented: nothing is measured or sent */
       if (TASTE || !D.worker) {   /* taste: kept on the phone only */
         try { var m = JSON.parse(LS.get(WKEY_T) || '{}'); m[W.v] = Math.max(m[W.v] || 0, sec); LS.set(WKEY_T, JSON.stringify(m)); } catch (e) { /* ignore */ }
         return;

@@ -18,7 +18,7 @@ from . import models as M
 from .config import Config
 from .db import SCHEMA_VERSION
 
-MIN_WORKER_VERSION = 7        # check-ins, 장면/Live, 푼 문제 수, 주간 테스트 reports, /tokmap-info, /watch
+MIN_WORKER_VERSION = 9        # 출석, 장면/Live, 푼 문제 수, 주간 테스트, /tokmap-info, /watch, push, consent
 OK, WARN, FAIL = "✓", "⚠", "✗"
 REDEPLOY = "redeploy: cd worker && npx wrangler deploy"
 
@@ -125,6 +125,21 @@ def check_today(conn: sqlite3.Connection, now: datetime) -> list[Line]:
     return out
 
 
+def check_consent(conn: sqlite3.Connection) -> list[Line]:
+    """F17: consent slips. unknown / no is a ⚠ (never ✗: the class routine works without it); the parent page,
+    watch signals and push wait for a yes."""
+    rows = conn.execute("""SELECT s.display_name, c.name AS class_name, s.consent FROM students s LEFT JOIN classes c ON c.id = s.class_id
+                           WHERE s.active = 1 ORDER BY s.class_id, s.id""").fetchall()
+    pending = [r for r in rows if r["consent"] != "yes"]
+    if not rows:
+        return [Line(OK, "consent", "no students")]
+    if not pending:
+        return [Line(OK, "consent", f"all {len(rows)} parents said yes")]
+    names = ", ".join(f"{r['class_name']} {r['display_name']} ({r['consent']})" for r in pending[:12]) + (" …" if len(pending) > 12 else "")
+    return [Line(WARN, "consent", f"{len(pending)} of {len(rows)} not yes: {names}",
+                 "record the slips: roster edit <slug> --consent yes|no (or 연락 현황); no parent page until yes")]
+
+
 def check_history(conn: sqlite3.Connection, cfg: Config, db_path: str | Path, now: datetime) -> list[Line]:
     out = []
     pub = conn.execute("SELECT ts FROM events WHERE type = 'publish' ORDER BY id DESC LIMIT 1").fetchone()
@@ -169,7 +184,7 @@ def run(conn: sqlite3.Connection, cfg: Config, db_path: str | Path, dist: str | 
         fetch: Callable[[str], bytes] | None = None, now: datetime | None = None) -> list[Line]:
     now = now or M.kst_now()
     return (check_config(cfg) + check_db(conn) + check_worker(conn, cfg, fetch) + check_today(conn, now)
-            + check_history(conn, cfg, db_path, now) + check_dist(conn, dist))
+            + check_consent(conn) + check_history(conn, cfg, db_path, now) + check_dist(conn, dist))
 
 
 def ok(lines: list[Line]) -> bool:

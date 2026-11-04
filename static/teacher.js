@@ -346,6 +346,10 @@
     }
     var td = el('td');
     td.appendChild(sel('channel', C.channel)); td.appendChild(sel('style', C.style));
+    var cs = el('select', { 'aria-label': 'consent', 'class': 'consent ' + x.consent });     /* F17: the parent's slip */
+    ['yes', 'no', 'unknown'].forEach(function (k) { var o = el('option', { value: k }, C.consent[k]); if (x.consent === k) o.selected = true; cs.appendChild(o); });
+    cs.onchange = function () { api('/api/teacher/roster', { slug: x.slug, consent: cs.value }).then(function (j) { $('status-msg').textContent = j.ok ? S.saved + (j.message ? ' · ' + j.message : '') : (j.error || ''); cs.className = 'consent ' + cs.value; }); };
+    td.appendChild(cs);
     td.appendChild(sel('greeting', { '어머님': '어머님', '아버님': '아버님', '보호자님': '보호자님' }));
     tr.appendChild(td);
     var td2 = el('td');

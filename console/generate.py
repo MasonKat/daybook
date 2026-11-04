@@ -404,6 +404,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
     pop_pin = cfg.extra.get("popular_pin", True) is not False
 
     students = []
+    consent = {r[0]: r[1] for r in conn.execute("SELECT id, consent FROM students_public")}   # F17 (not personal data)
     only = " AND slug = ?" if taste else ""
     for s in conn.execute("SELECT * FROM students_public WHERE active = 1" + only + " ORDER BY id",
                           (TASTE_SLUG,) if taste else ()):
@@ -601,6 +602,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "cancelled": sorted(x.isoformat() for x in cancelled if x >= today - timedelta(days=30)),
             "checkinTime": _fmt_time(checkins[today.isoformat()]["ts"]) if today.isoformat() in checkins else "",
             "taste": taste,
+            "watch": consent.get(s["id"]) == "yes",          # F17: no consent, no watch signal
             "S": {k: S[k] for k in JS_STRINGS},
         }
         students.append({
@@ -609,6 +611,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "initial": s["display_name"][:1],
             "class_name": cls["name"] if cls else "",
             "student_token": s["student_token"],
+            "consent": consent.get(s["id"]) == "yes",            # F17: the parent page, watch signals and push need it
             "parent_token": s["parent_token"],
             "week": week,
             "streak": streak,
@@ -723,6 +726,8 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
                        "purpose": "any"} for n in (192, 512)],
         }
         (sd / "manifest.webmanifest").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
+        if not s["consent"]:                     # F17: no parent page until the parent has said yes on the slip
+            continue
         pd = out / "p" / (TASTE_PATH if taste else s["parent_token"])
         pd.mkdir(parents=True)
         (pd / "index.html").write_text(pt.render(ctx, me=s, page="parent"), encoding="utf-8")

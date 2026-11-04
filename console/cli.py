@@ -315,13 +315,18 @@ def roster_import(obj: Ctx, csv_path, map_path, class_name):
 @click.option("--track", default=None)
 @click.option("--class", "class_name", default=None)
 @click.option("--active/--inactive", default=None)
+@click.option("--consent", type=click.Choice(["yes", "no", "unknown"]), default=None,
+              help="F17: the parent's consent slip (yes publishes the parent page and allows watch signals / push)")
 @click.pass_obj
-def roster_edit(obj: Ctx, slug, display, new_slug, track, class_name, active):
+def roster_edit(obj: Ctx, slug, display, new_slug, track, class_name, active, consent):
     conn = obj.conn
-    changed = ops.edit_student(conn, slug, display, new_slug, track, class_name, active)
+    try:
+        changed = ops.edit_student(conn, slug, display, new_slug, track, class_name, active, consent)
+    except ops.OpError as e:
+        fail(str(e))
     conn.commit()
     click.echo("ok")
-    if {"active", "class_id"} & changed:
+    if {"active", "class_id", "consent"} & changed:
         _send_links(obj, conn)
 
 
@@ -1092,7 +1097,7 @@ def cards(obj: Ctx, kind, class_name, out_dir):
     """G4: printable 안내 cards (students: cut-out cards; parents: an A4 letter each). Never a link or a QR on paper."""
     from . import cards as C
     try:
-        path = C.write(obj.conn, kind, class_name, out_dir)
+        path = C.write(obj.conn, kind, class_name, out_dir, str(obj.cfg.extra.get("academy") or ""))
     except (ops.OpError, ValueError) as e:
         fail(str(e))
     click.echo(f"{path}  (open it in a browser and print, A4)")

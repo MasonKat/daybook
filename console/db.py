@@ -47,7 +47,8 @@ CREATE TABLE IF NOT EXISTS students (
     active        INTEGER NOT NULL DEFAULT 1,
     created_at    TEXT NOT NULL,
     ext_id        TEXT UNIQUE,            -- console only (the teacher's roster ID)
-    left_on       TEXT                    -- F11 퇴원 처리: the date (NULL while enrolled)
+    left_on       TEXT,                   -- F11 퇴원 처리: the date (NULL while enrolled)
+    consent       TEXT NOT NULL DEFAULT 'unknown'   -- F17: the parent's slip: yes | no | unknown
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -254,7 +255,7 @@ BEGIN SELECT RAISE(ABORT, 'events is append-only'); END;
 
 -- The generator reads only this view: no full_name, parent_phone or ext_id.
 CREATE VIEW IF NOT EXISTS students_public AS
-    SELECT id, slug, display_name, class_id, track, student_token, parent_token, active, created_at
+    SELECT id, slug, display_name, class_id, track, student_token, parent_token, active, created_at, consent
     FROM students;
 
 CREATE INDEX IF NOT EXISTS ix_sub_day ON submissions(day);
@@ -283,7 +284,7 @@ def migrate(conn: sqlite3.Connection) -> None:
         return
     added = {   # table -> {column: declaration} for columns that arrived after v1 (additive only)
         "sessions": {"start_time": "TEXT", "code": "TEXT", "cancelled": "TEXT"},
-        "students": {"left_on": "TEXT"},
+        "students": {"left_on": "TEXT", "consent": "TEXT NOT NULL DEFAULT 'unknown'"},
         "contacts": {"tag": "TEXT"},
         "submissions": {"reflection": "TEXT", "chip": "TEXT", "solved": "INTEGER"},
         "classes": {"grade": "TEXT", "start_time": "TEXT", "end_time": "TEXT", "self_study_until": "TEXT", "late_min": "INTEGER DEFAULT 10",
@@ -296,6 +297,9 @@ def migrate(conn: sqlite3.Connection) -> None:
         for col, decl in new_cols.items():
             if col not in cols:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+    view = _columns(conn, "students_public")
+    if view and "consent" not in view:      # F17: the public view gained consent (not personal data): recreate it
+        conn.execute("DROP VIEW students_public")
     conn.executescript(SCHEMA)   # creates any new tables (IF NOT EXISTS)
     if conn.execute("PRAGMA user_version").fetchone()[0] < SCHEMA_VERSION:
         conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")

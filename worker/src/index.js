@@ -13,8 +13,8 @@ const CHIPS = new Set(['ok', 'confused', 'rewatch']);
 const RID_RE = /^[a-f0-9]{16}$/;
 // G1: bumped with every feature the console relies on (doctor warns when the deployed Worker is older):
 // 1 base, 2 출석, 3 장면 + Live, 4 푼 문제 수, 5 주간 테스트 reports, 6 /health version + /tokmap-info, 7 /watch,
-// 8 Web Push
-export const WORKER_VERSION = 8;
+// 8 Web Push, 9 consent (no watch / push without the parent's yes)
+export const WORKER_VERSION = 9;
 const PUSH_KINDS = ['video', 'message', 'report', 'test'];
 const DEFAULT_KINDS = { s: 'video,message,report,test', p: 'report' };
 const VID_RE = /^[A-Za-z0-9_-]{6,20}$/;
@@ -66,6 +66,8 @@ export const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS pushsubs (endpoint TEXT PRIMARY KEY, token TEXT NOT NULL, role TEXT NOT NULL, class TEXT NOT NULL,
      p256dh TEXT NOT NULL, auth TEXT NOT NULL, kinds TEXT NOT NULL, created TEXT NOT NULL, sent_day TEXT, sent_n INTEGER NOT NULL DEFAULT 0)`,
   'CREATE INDEX IF NOT EXISTS pushsubs_class ON pushsubs (class)',
+  // F17: student links whose parents have not consented (yet): no watch signal is stored, no push subscription accepted
+  'CREATE TABLE IF NOT EXISTS noconsent (token TEXT PRIMARY KEY)',
 ];
 const ready = new WeakMap();   // per database binding: create the tables once (no-op afterwards)
 function init(env) {
@@ -272,6 +274,7 @@ async function watch(req, env, h) {
   if ((await peek(env, rl)) >= num(env.WATCHES_PER_HOUR, 60)) return json({ ok: false, error: 'rate_limited' }, 200, h);
   const cls = await classOf(env, token);
   if (!cls) return json({ ok: false, error: 'unknown_token' }, 200, h);
+  if (await one(env, 'SELECT 1 AS x FROM noconsent WHERE token = ?', token)) return json({ ok: false, error: 'no_consent' }, 200, h);
   await bump(env, rl, day);
   // the largest value wins: a second viewing the same day never adds up, a short one never lowers it
   await run(env, `INSERT INTO watches (token, v, day, class, sec, pct, ts, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -292,6 +295,7 @@ async function pushSubscribe(req, env, h) {
   if (!ok) return json({ ok: false, error: 'bad_subscription' }, 200, h);
   const row = await one(env, `SELECT class FROM ${role === 's' ? 'tokmap' : 'ptokmap'} WHERE token = ?`, token);
   if (!row) return json({ ok: false, error: 'unknown_token' }, 200, h);
+  if (role === 's' && await one(env, 'SELECT 1 AS x FROM noconsent WHERE token = ?', token)) return json({ ok: false, error: 'no_consent' }, 200, h);
   const now = new Date().toISOString();
   await run(env, `INSERT INTO pushsubs (endpoint, token, role, class, p256dh, auth, kinds, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (endpoint) DO UPDATE SET token = excluded.token, role = excluded.role, class = excluded.class,
@@ -362,7 +366,7 @@ async function putSession(req, env) {
   const { class: cls, date, code, open_from: from, open_until: until, start } = b || {};
   if (!CLASS_RE.test(cls || '') || !DAY_RE.test(date || '') || !CODE_RE.test(code || '') ||
       Number.isNaN(Date.parse(from)) || Number.isNaN(Date.parse(until))) return json({ ok: false, error: 'bad_session' }, 400, {});
-  if (b.tokmap && typeof b.tokmap === 'object') await replaceTokmap(env, b.tokmap, b.parents);
+  if (b.tokmap && typeof b.tokmap === 'object') await replaceTokmap(env, b.tokmap, b.parents, b.no_consent);
   await run(env, `INSERT INTO sessions (class, date, code, open_from, open_until, start) VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT (class, date) DO UPDATE SET code = excluded.code, open_from = excluded.open_from,
       open_until = excluded.open_until, start = excluded.start`,
@@ -370,7 +374,7 @@ async function putSession(req, env) {
   return json({ ok: true }, 200, {});
 }
 
-async function replaceTokmap(env, map, parents) {
+async function replaceTokmap(env, map, parents, noConsent) {
   const rows = Object.entries(map).filter(([t, c]) => TOKEN_RE.test(t) && CLASS_RE.test(String(c)));
   const stmts = [env.DB.prepare('DELETE FROM tokmap')];
   for (const [t, c] of rows) stmts.push(env.DB.prepare('INSERT INTO tokmap (token, class) VALUES (?, ?)').bind(t, String(c)));
@@ -379,6 +383,12 @@ async function replaceTokmap(env, map, parents) {
     for (const [t, c] of Object.entries(parents).filter(([t, c]) => TOKEN_RE.test(t) && CLASS_RE.test(String(c)))) {
       stmts.push(env.DB.prepare('INSERT INTO ptokmap (token, class) VALUES (?, ?)').bind(t, String(c)));
     }
+  }
+  if (Array.isArray(noConsent)) {                          // F17: replaced as a whole with every token-map push
+    stmts.push(env.DB.prepare('DELETE FROM noconsent'));
+    for (const t of noConsent.filter((x) => TOKEN_RE.test(String(x)))) stmts.push(env.DB.prepare('INSERT INTO noconsent (token) VALUES (?)').bind(String(t)));
+    stmts.push(env.DB.prepare('DELETE FROM watches WHERE token IN (SELECT token FROM noconsent)'));
+    stmts.push(env.DB.prepare("DELETE FROM pushsubs WHERE role = 's' AND token IN (SELECT token FROM noconsent)"));
   }
   // a retired or rotated link stops getting pushes; a moved student's subscription follows the new class
   stmts.push(env.DB.prepare("DELETE FROM pushsubs WHERE role = 's' AND token NOT IN (SELECT token FROM tokmap)"));
@@ -722,7 +732,7 @@ async function route(req, env, url, h) {
       let b;
       try { b = await req.json(); } catch { return json({ ok: false, error: 'bad_json' }, 400, {}); }
       if (!b || typeof b.tokmap !== 'object') return json({ ok: false, error: 'bad_tokmap' }, 400, {});
-      return json({ ok: true, n: await replaceTokmap(env, b.tokmap, b.parents) }, 200, {});
+      return json({ ok: true, n: await replaceTokmap(env, b.tokmap, b.parents, b.no_consent) }, 200, {});
     }
     return json({ ok: false, error: 'method' }, 405, {});
   }

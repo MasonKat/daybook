@@ -45,11 +45,12 @@ def http_put_json(cfg: Config, path: str, payload: dict, method: str = "PUT") ->
 def push_tokmap(conn: sqlite3.Connection, cfg: Config) -> str:
     """H3: send the token -> class-key map so the Worker accepts exactly the current students' links.
     Returns a one-line status for the CLI (never raises: publishing must not depend on the network)."""
-    from .ops import parent_tokmap, tokmap
+    from .ops import no_consent_tokens, parent_tokmap, tokmap
     if not cfg.worker or not cfg.teacher_token:
         return ""
     try:
-        r = http_put_json(cfg, "/tokmap", {"tokmap": tokmap(conn), "parents": parent_tokmap(conn)})
+        r = http_put_json(cfg, "/tokmap", {"tokmap": tokmap(conn), "parents": parent_tokmap(conn),
+                                           "no_consent": no_consent_tokens(conn)})
         msg = f"Worker: {r.get('n', '?')} student links accepted"
     except PullError as e:
         return f"warning: student links not sent to the Worker ({e}); uploads from new links wait until it is"
@@ -150,9 +151,12 @@ def apply_items(conn: sqlite3.Connection, items: list[dict]) -> PullReport:
 def apply_watches(conn: sqlite3.Connection, items: list[dict]) -> int:
     """F15.1: watch signals -> watches (one row per student, video and day; the larger value wins)."""
     tokens = _token_map(conn)
+    consented = {r[0] for r in conn.execute("SELECT id FROM students WHERE consent = 'yes'")}   # F17
     n = 0
     for it in items:
         sid = tokens.get(it.get("token", ""))
+        if sid not in consented:
+            continue
         try:
             v, day, sec, pct = str(it["v"]), str(it["day"]), int(it["sec"]), int(it["pct"])
         except (KeyError, TypeError, ValueError):

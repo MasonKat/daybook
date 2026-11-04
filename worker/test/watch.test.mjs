@@ -36,3 +36,21 @@ test('F15.1: validation, unknown tokens, CORS and the rate limit', async () => {
   await call(lim, w()); await call(lim, w());
   assert.equal((await call(lim, w())).body.error, 'rate_limited');
 });
+
+test('F17: no parental consent: no watch row is stored, existing ones are deleted, push subscribe is refused', async () => {
+  const env = await ready();
+  assert.equal((await call(env, w())).body.ok, true);
+  const tm = await call(env, new Request('https://w.example/tokmap', { method: 'PUT', headers: { 'X-Teacher-Token': 'teacher-secret-0123456789', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tokmap: ALL, no_consent: [TOK] }) }));
+  assert.equal(tm.body.ok, true);
+  assert.equal(rows(env).length, 0);                                              // deleted with the consent change
+  assert.equal((await call(env, w())).body.error, 'no_consent');
+  assert.equal(rows(env).length, 0);
+  const fd = new FormData();
+  for (const [k, v] of Object.entries({ t: TOK, role: 's', endpoint: 'https://push.example.com/x',
+    p256dh: 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4', auth: 'BTBZMqHH6r4Tts7J_aSIgg' })) fd.append(k, v);
+  assert.equal((await call(env, new Request('https://w.example/push/subscribe', { method: 'POST', body: fd, headers: { Origin: ORIGIN } }))).body.error, 'no_consent');
+  await call(env, new Request('https://w.example/tokmap', { method: 'PUT', headers: { 'X-Teacher-Token': 'teacher-secret-0123456789', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tokmap: ALL, no_consent: [] }) }));
+  assert.equal((await call(env, w())).body.ok, true);                            // yes on the slip: stored again
+});

@@ -158,6 +158,7 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
     for r in conn.execute("SELECT id FROM students ORDER BY id LIMIT 2").fetchall():        # F16.4: two SLCs this week
         conn.execute("INSERT INTO meetings (student_id, day, kind, ts) VALUES (?, ?, 'slc', ?)",
                      (r["id"], today.isoformat(), "2026-01-01T00:00:00.000Z"))
+    conn.execute("UPDATE students SET consent = 'yes'")           # F17: every synthetic parent said yes (콩 too)
     log_event(conn, "demo_seed", {"today": today.isoformat()})
     conn.commit()
 

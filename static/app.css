@@ -538,3 +538,6 @@ tr.rc.skipped td:nth-child(2) { color: var(--err); }
 /* F16.3: comment warnings (never block) */
 .cwarn { flex-basis: 100%; grid-column: 1 / -1; font-size: 12px; color: var(--adjust); margin: 2px 0 6px; }
 .cwarn:empty { display: none; }
+
+/* F17: consent state in 연락 현황 */
+select.consent.unknown { border-color: var(--adjust); } select.consent.no { border-color: var(--err); }

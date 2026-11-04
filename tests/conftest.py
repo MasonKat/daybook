@@ -35,5 +35,7 @@ def klass(conn):
                  ("고1A", "2026-10-01..2026-12-31", M.mask_from_days("화,금"), "피자"))
     cls = conn.execute("SELECT * FROM classes WHERE name='고1A'").fetchone()
     studs = [add_student(conn, cls["id"], n, ext_id=e) for n, e in (("한가람", "S901"), ("윤도담", "S902"), ("서하늘", "S903"))]
+    conn.execute("UPDATE students SET consent = 'yes'")       # F17: the parents of the fixture class said yes
     conn.commit()
+    studs = [conn.execute("SELECT * FROM students WHERE id = ?", (s["id"],)).fetchone() for s in studs]
     return cls, studs

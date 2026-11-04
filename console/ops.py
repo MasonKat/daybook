@@ -143,7 +143,7 @@ def session_payload(conn: sqlite3.Connection, sess: sqlite3.Row) -> dict:
     """PUT /session body: the session (class key, code, window) + the token -> class-key map of all active students."""
     day = date.fromisoformat(sess["date"])
     t_from, t_until = session_window(day, sess["start_time"])
-    return {"tokmap": tokmap(conn), "parents": parent_tokmap(conn), "class": class_key(sess["class_id"]), "date": sess["date"], "code": sess["code"], "start": sess["start_time"],
+    return {"tokmap": tokmap(conn), "parents": parent_tokmap(conn), "no_consent": no_consent_tokens(conn), "class": class_key(sess["class_id"]), "date": sess["date"], "code": sess["code"], "start": sess["start_time"],
             "open_from": t_from.isoformat(), "open_until": t_until.isoformat()}
 
 
@@ -154,9 +154,17 @@ def tokmap(conn: sqlite3.Connection) -> dict[str, str]:
 
 
 def parent_tokmap(conn: sqlite3.Connection) -> dict[str, str]:
-    """F15.3: parent token -> class key, only so a parent page can opt in to push (a parent link never uploads)."""
+    """F15.3: parent token -> class key, only so a parent page can opt in to push (a parent link never uploads).
+    F17: only parents who said yes on the consent slip."""
     return {r["parent_token"]: class_key(r["class_id"]) for r in conn.execute(
-        "SELECT parent_token, class_id FROM students_public WHERE active = 1 AND class_id IS NOT NULL")}
+        "SELECT parent_token, class_id FROM students WHERE active = 1 AND class_id IS NOT NULL AND consent = 'yes'")}
+
+
+def no_consent_tokens(conn: sqlite3.Connection) -> list[str]:
+    """F17: student links whose parents have not said yes (unknown or no): the Worker stores no watch signal and
+    accepts no push subscription for them; the student's own 출석 / 과제 routine still works."""
+    return [r[0] for r in conn.execute(
+        "SELECT student_token FROM students WHERE active = 1 AND class_id IS NOT NULL AND consent != 'yes' ORDER BY id")]
 
 
 def board_window(day: date, start: str | None, until: str | None = None) -> tuple[datetime, datetime] | None:
@@ -191,8 +199,12 @@ def cancel_class(conn: sqlite3.Connection, cls: sqlite3.Row, day: date, reason: 
               {"class_id": cls["id"], "date": day.isoformat(), "reason": reason})
 
 
+CONSENT = ("yes", "no", "unknown")
+
+
 def edit_student(conn: sqlite3.Connection, slug: str, display: str | None = None, new_slug: str | None = None,
-                 track: str | None = None, class_name: str | None = None, active: bool | None = None) -> set[str]:
+                 track: str | None = None, class_name: str | None = None, active: bool | None = None,
+                 consent: str | None = None) -> set[str]:
     """Shared by `daybook roster edit` and the Teacher tab. Returns the changed field names."""
     from . import models as M
     s = get_student(conn, slug)
@@ -209,10 +221,16 @@ def edit_student(conn: sqlite3.Connection, slug: str, display: str | None = None
         fields["class_id"] = get_class(conn, class_name)["id"]
     if active is not None:
         fields["active"] = 1 if active else 0
+    if consent is not None:
+        if consent not in CONSENT:
+            raise OpError("consent: yes | no | unknown")
+        fields["consent"] = consent
     if not fields:
         raise OpError("nothing to change")
     conn.execute(f"UPDATE students SET {', '.join(k + ' = ?' for k in fields)} WHERE id = ?", (*fields.values(), s["id"]))
     log_event(conn, "student_update", {"student_id": s["id"], "fields": sorted(fields)})
+    if "consent" in fields:                         # F17: every consent change, with its value
+        log_event(conn, "consent", {"student_id": s["id"], "consent": fields["consent"], "was": s["consent"]})
     return set(fields)
 
 

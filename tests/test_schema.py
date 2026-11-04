@@ -14,7 +14,7 @@ def test_schema_creates_tables_and_view(conn):
     assert TABLES <= names
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(students)")}
     assert cols == {"id", "slug", "full_name", "display_name", "class_id", "track", "parent_phone", "student_token",
-                    "parent_token", "active", "created_at", "ext_id", "left_on"}
+                    "parent_token", "active", "created_at", "ext_id", "left_on", "consent"}
     view_cols = {r["name"] for r in conn.execute("PRAGMA table_info(students_public)")}
     assert view_cols and not (view_cols & {"full_name", "parent_phone", "ext_id"})
     sub_cols = [r["name"] for r in conn.execute("PRAGMA table_info(submissions)")]
@@ -77,3 +77,14 @@ def test_migrates_a_v1_database_without_losing_data(tmp_path):
     assert conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 1
     assert conn.execute("SELECT name FROM sqlite_master WHERE name = 'checkins'").fetchone()
     assert conn.execute("PRAGMA user_version").fetchone()[0] == dbmod.SCHEMA_VERSION
+
+
+def test_f17_an_older_view_is_recreated_with_consent(tmp_path):
+    p = tmp_path / "v.sqlite"
+    conn = dbmod.connect(p)
+    dbmod.init(conn)
+    conn.executescript("""DROP VIEW students_public;
+        CREATE VIEW students_public AS SELECT id, slug, display_name, class_id, track, student_token, parent_token, active, created_at FROM students;""")
+    conn.commit()
+    dbmod.migrate(conn)
+    assert "consent" in {r["name"] for r in conn.execute("PRAGMA table_info(students_public)")}
