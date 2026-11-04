@@ -330,7 +330,7 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
       wp.on('console', (m) => { if (m.type() === 'error') werrs.push(m.text()); });
       await wp.goto(`${PAGES}/s/${pick.student_token}/#today`, { waitUntil: 'networkidle' });
       await wp.waitForSelector('#wt-card:not([hidden])', { timeout: 5000 }).catch(() => {});
-      check(await wp.isVisible('#wt-card') && /주간 테스트/.test(await wp.textContent('#wt-label')) && /까지 입력해요/.test(await wp.textContent('#wt-state')),
+      check(await wp.isVisible('#wt-card') && /주간 테스트/.test(await wp.textContent('#wt-label')) && /까지 입력/.test(await wp.textContent('#wt-state')),
         `the open round shows as a card ("${await wp.textContent('#wt-label')}" · ${await wp.textContent('#wt-state')})`);
       check(!(await wp.content()).includes(RID), 'the round id is not on the page');
       await wp.click('#wt-open');
@@ -722,13 +722,13 @@ print(json.dumps([r[0] for r in c.execute("SELECT s.student_token FROM students_
     await shot(phones[0].p, 'live-phone.png');
     await proj.click('#lv-reveal');
     await phones[0].p.waitForFunction(() => document.getElementById('lv-status').textContent.includes('정답'), null, { timeout: 6000 }).catch(() => {});
-    await phones[1].p.waitForFunction(() => document.getElementById('lv-status').textContent.includes('아쉬워요'), null, { timeout: 6000 }).catch(() => {});
+    await phones[1].p.waitForFunction(() => /아쉬|아깝/.test(document.getElementById('lv-status').textContent), null, { timeout: 6000 }).catch(() => {});
     check((await phones[0].p.textContent('#lv-mine')) === '✓' && (await phones[1].p.textContent('#lv-mine')) === '', 'after reveal each phone sees only its own ✓');
     check(/반 정답 1\//.test(await proj.textContent('#lv-count')) && !/[가-힣]{2}\s*✓/.test(await proj.textContent('#lv-room')), 'projector: class count only, no names, no ranking');
     await shot(proj, 'live-projector.png');
     await proj.click('#lv-close');
     await phones[0].p.waitForFunction(() => document.getElementById('lv-status').textContent.includes('끝'), null, { timeout: 6000 }).catch(() => {});
-    check((await phones[0].p.textContent('#lv-status')).includes('끝났어요'), 'closing the room ends Live on the phones');
+    check(/끝났/.test(await phones[0].p.textContent('#lv-status')), 'closing the room ends Live on the phones');
     check(phones.every((ph) => ph.errs2.length === 0) && perr.length === 0, `0 console errors on the projector and the phones ${[...perr, ...phones.flatMap((ph) => ph.errs2)].slice(0, 2).join(' | ')}`);
     for (const ph of phones) await ph.c.close();
     console.log('      ' + daybook('pull').trim());
@@ -774,7 +774,7 @@ print(json.dumps([dict(r) for r in c.execute(q, (sys.argv[2],))]))`, env.DAYBOOK
       await rp.fill('#rv-text', '두 번째 리뷰');
       await rp.click('#rv-send');
       await rp.waitForFunction(() => document.getElementById('rv-err').textContent.length > 0, null, { timeout: 3000 }).catch(() => {});
-      check(/하루에 하나/.test(await rp.textContent('#rv-err')), 'one a day');
+      check(/하루에? 하나/.test(await rp.textContent('#rv-err')), 'one a day');
       const pulled = daybook('pull');
       check(/학생 리뷰: new 1 /.test(pulled), `daybook pull: ${pulled.trim().split('\n').pop()}`);
       const id = (daybook('review', 'list').match(/^([a-f0-9]{12})\s.*피카소급/m) || [])[1];
@@ -1076,8 +1076,8 @@ print(c.execute("SELECT m.marks FROM classwork_marks m JOIN students s ON s.id =
       for (const k of '0000') await tp.click(`#keys button[data-k="${k}"]`);
       await tp.waitForSelector('#lv-choices:not([hidden]) button:not([disabled])', { timeout: 6000 });
       await tp.click('#lv-choices button[data-a="3"]');
-      await tp.waitForFunction(() => /정답|아쉬워요/.test(document.getElementById('lv-status').textContent), null, { timeout: 12000 }).catch(() => {});
-      check(/정답|아쉬워요/.test(await tp.textContent('#lv-status')) && /반 정답 \d\/8/.test(await tp.textContent('#lv-class')), `taste: the 8-student practice room plays itself (${await tp.textContent('#lv-class')})`);
+      await tp.waitForFunction(() => /정답|아쉬|아깝/.test(document.getElementById('lv-status').textContent), null, { timeout: 12000 }).catch(() => {});
+      check(/정답|아쉬|아깝/.test(await tp.textContent('#lv-status')) && /반 정답 \d\/8/.test(await tp.textContent('#lv-class')), `taste: the 8-student practice room plays itself (${await tp.textContent('#lv-class')})`);
       await tp.click('#lv-x');
       check(await tp.isVisible('#wt-card'), 'taste: a practice 주간 테스트 round is open for 콩');
       await tp.click('#wt-open');

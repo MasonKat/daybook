@@ -168,7 +168,7 @@ def test_parents_see_only_their_own_childs_win(conn, klass, tmp_path):
     conn.commit()
     assert generate.publish(conn, Config(), tmp_path / "d", today=TODAY).ok
     page = lambda s: (tmp_path / "d" / "p" / s["parent_token"] / "index.html").read_text(encoding="utf-8")   # noqa: E731
-    assert "베스트 리뷰에 뽑혔어요" in page(studs[0]) and "리뷰 1번 웃김" in page(studs[0])
+    assert "베스트 리뷰에 뽑혔" in page(studs[0]) and "리뷰 1번 웃김" in page(studs[0])          # F22.3: the ending varies
     for s in studs[1:]:
         assert "베스트 리뷰" not in page(s) and "리뷰 1번" not in page(s)
     conn.execute("UPDATE students SET consent = 'unknown' WHERE id = ?", (studs[0]["id"],))

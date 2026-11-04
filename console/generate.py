@@ -22,6 +22,7 @@ from . import watch as W
 from . import vrank
 from . import brand
 from . import prefs as PF
+from . import copy as CP
 from . import models as M
 from .config import ROOT, Config, strings
 from .db import log_event, now_utc_iso
@@ -621,6 +622,9 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             wm += timedelta(weeks=1)
 
         today_sub = subs.get(today.isoformat())
+        # F22.3: this page's varied endings (stable for the day; the parent's are warm-formal only)
+        S_me = CP.overlay(S, s["student_token"], today.isoformat())
+        S_p = CP.overlay(S, s["parent_token"], today.isoformat(), "parent")
         js = {
             "worker": cfg.worker,
             "pub": today.isoformat(),
@@ -651,8 +655,8 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                    "names": rv_names.get(s["class_id"], []),
                    **({"sample": TASTE_REVIEWS, "samplePeriod": RV.period_label(*RV.period(today - timedelta(days=14)))}
                       if taste else {})},
-            "S": {k: S[k] for k in JS_STRINGS},
-            "tour": tour_data(S, TOUR_STUDENT),                                # F22.2
+            "S": {k: S_me[k] for k in JS_STRINGS},
+            "tour": tour_data(S_me, TOUR_STUDENT),                             # F22.2
             # F22.4: the saved settings, the known ids, the class window (the routine is pinned first inside it)
             "prefs": pf, "sections": PF.SECTIONS, "colors": PF.COLORS, "mascot": has_mascot,
             "win": list(ops.class_window(cls)) if cls and ops.class_window(cls) else None,
@@ -673,6 +677,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "rv_anon": rv_anon,
             "rules": _rules(conn, cfg, cls, rw, today) if cls and rw else None,     # F22.1: the rule sheet
             "avatar": avatar,                                                # F22.4 (own page + parent page only)
+            "S": S_me, "S_p": S_p, "tour_parent": json_script(tour_data(S_p, TOUR_PARENT)),   # F22.3
             "order": {"today": PF.ordered("today", pf.get("today")), "profile": PF.ordered("profile", pf.get("profile"))},
             "skills": CW.skill_map(conn, cfg, s["id"], cw_tags),           # F21.2: 내 실력 지도 (own page; parent: share_classwork)
             "share_classwork": s["share_classwork"] == "yes",
@@ -911,7 +916,7 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
     for s in ctx["students"]:
         sd = out / "s" / (TASTE_PATH if taste else s["student_token"])
         sd.mkdir(parents=True)
-        (sd / "index.html").write_text(st.render(ctx, me=s, page="student"), encoding="utf-8")
+        (sd / "index.html").write_text(st.render(ctx, me=s, page="student", S=s["S"]), encoding="utf-8")
         av = s.get("avatar") or {}
         if av.get("data"):                       # F22.4: an approved own picture: this page and the parent page only
             (sd / av["img"]).write_bytes(av["data"])
@@ -927,7 +932,7 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
             continue
         pd = out / "p" / (TASTE_PATH if taste else s["parent_token"])
         pd.mkdir(parents=True)
-        (pd / "index.html").write_text(pt.render(ctx, me=s, page="parent"), encoding="utf-8")
+        (pd / "index.html").write_text(pt.render(ctx, me=s, page="parent", S=s["S_p"], tour_parent=s["tour_parent"]), encoding="utf-8")
         if av.get("data"):
             (pd / av["img"]).write_bytes(av["data"])
     if taste:

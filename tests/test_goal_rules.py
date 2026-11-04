@@ -4,7 +4,7 @@ from datetime import date, datetime, time
 
 import pytest
 
-from console import board as boardmod, generate, models as M, ops
+from console import board as boardmod, copy as CP, generate, models as M, ops
 from console.config import Config
 from console.db import KST
 from console.importers import add_student
@@ -77,7 +77,7 @@ def test_rule_sheet_renders_for_students_and_on_the_board(conn, tmp_path, monkey
     html = (tmp_path / "d" / "s" / tok / "index.html").read_text(encoding="utf-8")
     sheet = html.split('class="rules"')[1].split('</details>')[0]
     assert "치킨 데이" in sheet and "출석 + 과제" in sheet and M.DEFAULT_RUBRIC["3"] in sheet          # a custom 1점, default 2·3점
-    assert "AMP Live 반 정답 80% 이상 → +5" in sheet and "점수는 깎이지 않아요" in sheet
+    assert "AMP Live 반 정답 80% 이상 → +5" in sheet and CP.picks(tok, TODAY.isoformat())["gr_never"] in sheet   # F22.3 varied
     for s in conn.execute("SELECT display_name FROM students"):
         assert s[0] not in sheet                                # never a name
     db = conn.execute("PRAGMA database_list").fetchone()["file"]
