@@ -442,10 +442,14 @@ The current `practice_mode = manitoba` is only the teacher's personal practice l
 - The e2e opens every page with the tutorials marked seen, except a dedicated check that asserts: shown on the first visit, every REQUIRED step's target exists (a later layout change that drops one fails the check), not shown again, replay, skip, 360 px.
 - e2e hygiene found on the way (all date-dependent, now independent of the weekday): the shorts count follows the class's tags; the picked student has no check-in today; the review student pick no longer needs an unseeded student; the remote test accepts the F21.3 switch confirmation; the marks query reads today's set.
 
+## F22.1: per-class goal rules and the rule sheet (2026-11-05)
+- Per class (Teacher tab → 반 수정, or `class edit`): `goal_coef` (`--coef`, it already overrode the default), up to 3 milestones each with its own reward label (`--milestones "33:간식,66:자유석 하루,100:치킨 데이"`), `cycle` term | month (`--cycle month`: the total and the goal restart on the 1st; each month's goal is frozen in goal_cycles at its first publish; past months stay as history with their total and the milestones they reached; this replaces the deferred "several reward cycles"), and the rubric (`--rubric "…|…|…"`, default below).
+- The default rubric: 1점 출석하고 과제 사진을 올렸어요 · 2점 1점 + 수업 중 질문·발표·풀이 설명을 1번 이상 했어요 · 3점 2점 + 오늘 문제를 끝까지 풀었거나, 오답을 스스로 고쳤거나, 친구를 도와줬어요.
+- The rule sheet: in the student's 반 목표 story (tap the ring) and behind "규칙 보기" on the board: the reward ladder (a bar per milestone with its label, ✓ when reached), "점수는 이렇게 모여요" (the class's rubric), the bonuses (AMP Live 80 % → +live_bonus, 반 전체 칭찬 → +1~3), past months for a month cycle, and "점수는 깎이지 않아요. 지각·결석은 0점일 뿐이에요." It never shows a name, so manitoba mode keeps it as is. The term total still counts everything (it never decreases). Demo: 고1A has three labelled milestones; 기초B runs month cycles with last month as history.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).
-- deferred: several reward cycles per term (the class total counts the whole term).
 - deferred: a real-device install test on iPhone Safari and Android Chrome (manifest, icons, apple meta tags and standalone mode are in place; only Chromium was tested here).
 - deferred: the Cloudflare deploy itself (needs the teacher's account: README "Teacher deploy steps").
 - deferred: the `effort` table is created empty (P2 data source not defined yet).

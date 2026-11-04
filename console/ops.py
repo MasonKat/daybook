@@ -445,3 +445,41 @@ def set_class_look(conn: sqlite3.Connection, cls, color: str | None = None, labe
         conn.execute(f"UPDATE classes SET {', '.join(k + ' = ?' for k in fields)} WHERE id = ?", (*fields.values(), cls["id"]))
         log_event(conn, "class_look", {"class_id": cls["id"], **fields})
     return fields
+
+
+# ---------------------------------------------------------------- F22.1: per-class goal rules
+
+def parse_milestones(text: str) -> list[dict]:
+    """"33:간식, 66:자유석 하루, 100:치킨 데이" -> up to 3 milestones (percent 1-100, a short label each)."""
+    out = []
+    for part in [p for p in (text or "").split(",") if p.strip()]:
+        pct, _, label = part.partition(":")
+        try:
+            n = int(pct.strip().rstrip("%"))
+        except ValueError as e:
+            raise OpError("milestones: 33:간식, 66:자유석 하루, 100:치킨 데이") from e
+        if not 1 <= n <= 100 or len(label.strip()) > 20:
+            raise OpError("milestones: a percent 1-100 and a label of up to 20 characters")
+        out.append({"pct": n, "label": label.strip()})
+    if len(out) > 3:
+        raise OpError("up to 3 milestones")
+    return sorted(out, key=lambda m: m["pct"])
+
+
+def set_goal_rules(conn: sqlite3.Connection, cls, milestones: str | None = None, cycle: str | None = None,
+                   rubric: list[str] | None = None) -> dict:
+    import json as _json
+    fields = {}
+    if milestones is not None:
+        fields["milestones"] = _json.dumps(parse_milestones(milestones), ensure_ascii=False) if milestones.strip() else None
+    if cycle is not None:
+        if cycle not in ("term", "month"):
+            raise OpError("cycle: term | month")
+        fields["cycle"] = cycle
+    if rubric is not None:
+        r = [(x or "").strip()[:80] for x in rubric][:3]
+        fields["rubric"] = _json.dumps({str(i + 1): t for i, t in enumerate(r) if t}, ensure_ascii=False) if any(r) else None
+    if fields:
+        conn.execute(f"UPDATE classes SET {', '.join(k + ' = ?' for k in fields)} WHERE id = ?", (*fields.values(), cls["id"]))
+        log_event(conn, "class_goal_rules", {"class_id": cls["id"], "fields": sorted(fields)})
+    return fields

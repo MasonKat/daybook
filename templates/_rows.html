@@ -28,3 +28,20 @@
 </div>
 {% endfor %}
 {% endmacro %}
+
+{# F22.1: the 반 목표 rule sheet (student story, board dialog): the ladder, the rubric, the bonuses; never names #}
+{% macro rules_sheet(g) %}
+<div class="rules">
+  <p class="gr-h">{{ S.gr_month if g.cycle == 'month' else S.gr_term }} · <span class="tnum">{{ S.gr_now | fmt(n=g.total) }}</span></p>
+  <ol class="gr-ladder">{% for m in g.ladder %}<li class="{{ 'on' if m.reached }}"><span class="gr-p tnum">{{ m.pct }}%</span>
+    <span class="gr-bar"><i style="width: {{ [100, (100 * g.total / m.points) if m.points else 0] | min | round(1) }}%"></i></span>
+    <span class="gr-l">{{ m.label or (S.gr_pts | fmt(n=m.points)) }}{% if m.reached %} ✓{% endif %}</span></li>{% endfor %}</ol>
+  <p class="gr-h">{{ S.gr_rubric }}</p>
+  <ul class="gr-rub">{% for k in ("1", "2", "3") %}<li><b>{{ S.gr_pts | fmt(n=k) }}</b> {{ g.rubric[k] }}</li>{% endfor %}</ul>
+  <p class="gr-h">{{ S.gr_bonus }}</p>
+  <ul class="gr-rub"><li>{{ S.gr_live | fmt(n=g.live) }}</li><li>{{ S.gr_shout }}</li></ul>
+  {% if g.history %}<p class="gr-h">{{ S.gr_history }}</p>
+  <ul class="gr-rub">{% for h in g.history %}<li class="tnum">{{ S.gr_hist_row | fmt(m=h.start[5:7] | int, t=h.total, g=h.goal, r=(' · ' ~ h.reached | join(', ')) if h.reached else '') }}</li>{% endfor %}</ul>{% endif %}
+  <p class="gr-never">{{ S.gr_never }}</p>
+</div>
+{% endmacro %}

@@ -178,13 +178,17 @@ def class_add(obj: Ctx, name, term, days, reward_label, goal, coef, grade, start
 @click.option("--late-avg-min", type=int, default=None, help="... or an average lateness >= N min (default 15)")
 @click.option("--color", default=None, help="F21.3: the banner colour, #rrggbb ('' = the palette)")
 @click.option("--label", default=None, help='F21.3: a short label, e.g. "고1 기본 월수금 20시"')
+@click.option("--milestones", default=None, help='F22.1: up to 3, e.g. "33:간식,66:자유석 하루,100:치킨 데이" ("" = default)')
+@click.option("--cycle", type=click.Choice(["term", "month"]), default=None, help="F22.1: month = restart on the 1st (past months kept)")
+@click.option("--rubric", default=None, help='F22.1: the 1 | 2 | 3 point rules, separated by "|" ("" = default)')
 @click.pass_obj
-def class_edit(obj: Ctx, name, term, days, reward_label, goal, coef, grade, color, label, **policy):
+def class_edit(obj: Ctx, name, term, days, reward_label, goal, coef, grade, color, label, milestones, cycle, rubric, **policy):
     conn = obj.conn
     cls = ops.get_class(conn, name)
     try:
         pol = ops.class_policy(conn, cls, policy)
         pol.update(ops.set_class_look(conn, cls, color, label))
+        pol.update(ops.set_goal_rules(conn, cls, milestones, cycle, rubric.split("|") if rubric is not None else None))
     except ops.OpError as e:
         fail(str(e))
     fields = {}

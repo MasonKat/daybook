@@ -158,6 +158,7 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
     _seed_reviews(conn, today)
     _seed_voice(conn, today)
     _seed_classwork(conn, today)
+    _seed_goal_rules(conn, today)
     for r in conn.execute("SELECT id FROM students ORDER BY id LIMIT 2").fetchall():        # F16.4: two SLCs this week
         conn.execute("INSERT INTO meetings (student_id, day, kind, ts) VALUES (?, ?, 'slc', ?)",
                      (r["id"], today.isoformat(), "2026-01-01T00:00:00.000Z"))
@@ -194,6 +195,19 @@ def _seed_classwork(conn: sqlite3.Connection, today: date) -> None:
             conn.execute("INSERT INTO classwork_marks (sid, student_id, marks, updated) VALUES (?, ?, ?, ?)",
                          (sid, st, marks, f"{day.isoformat()}T11:05:00.000Z"))
     conn.execute("UPDATE students SET share_classwork = 'yes' WHERE slug = ? OR ext_id = ?", (KONG["slug"], LATE_STAR))
+
+
+def _seed_goal_rules(conn: sqlite3.Connection, today: date) -> None:
+    """F22.1: 고1A has three labelled milestones; 기초B runs month cycles (last month's goal kept as history)."""
+    import json as _json
+    conn.execute("UPDATE classes SET milestones = ? WHERE name = '고1A'", (_json.dumps(
+        [{"pct": 33, "label": "간식"}, {"pct": 66, "label": "자유석 하루"}, {"pct": 100, "label": "치킨 데이"}], ensure_ascii=False),))
+    cid = conn.execute("SELECT id FROM classes WHERE name = '기초B'").fetchone()
+    if cid:
+        conn.execute("UPDATE classes SET cycle = 'month', milestones = ? WHERE id = ?", (_json.dumps(
+            [{"pct": 50, "label": "간식"}, {"pct": 100, "label": "보드게임 데이"}], ensure_ascii=False), cid[0]))
+        last = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+        conn.execute("INSERT OR IGNORE INTO goal_cycles (class_id, start, goal) VALUES (?, ?, 60)", (cid[0], last.isoformat()))
 
 
 DEMO_REVIEWS = ["판서가 오늘은 피카소급", "분수 대결 명승부", "시발점 문제에서 다 같이 웃음", "프로젝터 꺼져서 다들 놀람",

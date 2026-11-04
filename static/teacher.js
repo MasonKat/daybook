@@ -123,12 +123,15 @@
     var c = classesAll.filter(function (x) { return x.name === $('cf-pick').value; })[0] || {};
     $('cf-name').value = c.name || ''; $('cf-grade').value = c.grade || ''; $('cf-days').value = c.days || '';
     $('cf-term').value = c.term || ''; $('cf-reward').value = c.reward_label || ''; $('cf-goal').value = c.goal || 0; $('cf-start').value = c.start_time || '';
+    $('cf-label').value = c.label || ''; $('cf-color').value = c.color || '#2563eb'; $('cf-cycle').value = c.cycle || 'term'; $('cf-ms').value = c.milestones || '';
+    var rb = c.rubric || ['', '', '']; $('cf-r1').value = rb[0]; $('cf-r2').value = rb[1]; $('cf-r3').value = rb[2];
   };
   $('cf-save').onclick = function () {
     var pick = $('cf-pick').value;
     api('/api/teacher/class', { create: !pick, name: pick || $('cf-name').value, new_name: pick ? $('cf-name').value : null,
       grade: $('cf-grade').value, days: $('cf-days').value, term: $('cf-term').value, reward_label: $('cf-reward').value,
-      goal: $('cf-goal').value, start_time: $('cf-start').value }).then(function (j) {
+      goal: $('cf-goal').value, start_time: $('cf-start').value, label: $('cf-label').value, color: pick || $('cf-color').value !== '#2563eb' ? $('cf-color').value : '',
+      cycle: $('cf-cycle').value, milestones: $('cf-ms').value, rubric: [$('cf-r1').value, $('cf-r2').value, $('cf-r3').value] }).then(function (j) {
       $('cf-msg').textContent = j.ok ? S.saved + ' · ' + j.name : (j.error || '');
       if (j.ok) { $('cf-pick').value = j.name; loadRoster(); loadRounds && loadRounds(); }
     });

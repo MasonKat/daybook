@@ -247,7 +247,8 @@ class Board:
         with self.conn() as conn:
             classes = [ops.banner(c) for c in conn.execute("SELECT * FROM classes ORDER BY id")]
         return tpl.render(S=self.S, page="board", mascot=brand.data_uri(self.cfg), mascot_px=brand.mascot_px(self.cfg), cls=st["cls"],
-                          banner=ops.banner(st["cls"]), classes=classes, students=st["students"], reward=st["reward"],
+                          banner=ops.banner(st["cls"]), classes=classes,
+                          rules=generate._rules(conn, self.cfg, st["cls"], st["reward"], self.day), students=st["students"], reward=st["reward"],
                           three=st["three"], show_three=st["show_three"], shouts=st["shouts"], drafts=st["drafts"], poll=self.poll,
                           cw_sets=__import__("console.classwork", fromlist=["x"]).set_names(self.cfg),
                           cw_today=[self.S["cw_board_state"].format(label=x["label"], n=x["n"], k=x["k"], t=len(st["students"])) for x in st["cw_today"]], code=st["code"], start=st["start"], arrivals=st["arrivals"],

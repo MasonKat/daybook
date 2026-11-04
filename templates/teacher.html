@@ -234,6 +234,13 @@
     <label>{{ S.m_reward }} <input type="text" id="cf-reward" maxlength="30"></label>
     <label>{{ S.m_goal }} <input type="number" id="cf-goal" min="0"></label>
     <label>{{ S.m_start }} <input type="time" id="cf-start"></label>
+    <label>{{ S.cf_label }} <input type="text" id="cf-label" maxlength="24"></label>
+    <label>{{ S.cf_color }} <input type="color" id="cf-color" value="#2563eb"></label>
+    <label>{{ S.cf_cycle }} <select id="cf-cycle"><option value="term">{{ S.cf_cycle_term }}</option><option value="month">{{ S.cf_cycle_month }}</option></select></label>
+    <label class="wide">{{ S.cf_ms }} <input type="text" id="cf-ms" maxlength="80" placeholder="33:간식, 66:자유석 하루, 100:치킨 데이"></label>
+    <label class="wide">1점 <input type="text" id="cf-r1" maxlength="80"></label>
+    <label class="wide">2점 <input type="text" id="cf-r2" maxlength="80"></label>
+    <label class="wide">3점 <input type="text" id="cf-r3" maxlength="80"></label>
     <button type="button" class="btn primary sm" id="cf-save">{{ S.t_save }}</button>
   </div>
   <p class="tmsg" id="cf-msg" aria-live="polite"></p>

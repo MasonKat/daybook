@@ -12,7 +12,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 KST = timezone(timedelta(hours=9))  # Asia/Seoul has no DST
 
 SCHEMA = """
@@ -33,7 +33,17 @@ CREATE TABLE IF NOT EXISTS classes (
     late_count         INTEGER DEFAULT 3,    -- ... on >= late_count of the last 6 class days
     late_avg_min       INTEGER DEFAULT 15,   -- ... or an average lateness >= late_avg_min
     color              TEXT,                 -- F21.3: the class's banner colour (#rrggbb; NULL = from the palette)
-    label              TEXT                  -- F21.3: a short label, e.g. "고1 기본 월수금 20시"
+    label              TEXT,                 -- F21.3: a short label, e.g. "고1 기본 월수금 20시"
+    milestones         TEXT,                 -- F22.1: JSON [{"pct": 33, "label": "간식"}, …] (up to 3; NULL = milestone_fracs)
+    cycle              TEXT NOT NULL DEFAULT 'term',   -- F22.1: term | month (the total and the goal restart on the 1st)
+    rubric             TEXT                  -- F22.1: JSON {"1": …, "2": …, "3": …} (NULL = the default rubric)
+);
+
+CREATE TABLE IF NOT EXISTS goal_cycles (      -- F22.1: a month cycle's goal, frozen at its first publish; past ones = history
+    class_id INTEGER NOT NULL REFERENCES classes(id),
+    start    TEXT NOT NULL,                   -- the 1st of the month
+    goal     INTEGER NOT NULL,
+    PRIMARY KEY (class_id, start)
 );
 
 CREATE TABLE IF NOT EXISTS students (
@@ -431,7 +441,7 @@ def migrate(conn: sqlite3.Connection) -> None:
         "shoutouts": {"ref": "TEXT", "hold": "INTEGER NOT NULL DEFAULT 0"},
         "contacts": {"tag": "TEXT"},
         "submissions": {"reflection": "TEXT", "chip": "TEXT", "solved": "INTEGER"},
-        "classes": {"color": "TEXT", "label": "TEXT",
+        "classes": {"color": "TEXT", "label": "TEXT", "milestones": "TEXT", "cycle": "TEXT NOT NULL DEFAULT 'term'", "rubric": "TEXT",
                     "grade": "TEXT", "start_time": "TEXT", "end_time": "TEXT", "self_study_until": "TEXT", "late_min": "INTEGER DEFAULT 10",
                     "late_count": "INTEGER DEFAULT 3", "late_avg_min": "INTEGER DEFAULT 15"},
     }

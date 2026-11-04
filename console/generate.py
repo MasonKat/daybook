@@ -656,6 +656,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "mic": 0 if rv_anon else VC.mic_total(conn, s["id"]),
             "rv_win": _rv_win(RV.parent_win(conn, s["id"], today), scrub) if not taste else None,   # F18.3: own win only
             "rv_anon": rv_anon,
+            "rules": _rules(conn, cfg, cls, rw, today) if cls and rw else None,     # F22.1: the rule sheet
             "skills": CW.skill_map(conn, cfg, s["id"], cw_tags),           # F21.2: 내 실력 지도 (own page; parent: share_classwork)
             "share_classwork": s["share_classwork"] == "yes",
             "rank": rank,
@@ -703,6 +704,12 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         "mascot": "/b/mascot.png" if brand.source(cfg) and (not taste or brand.public(cfg)) else "",
         "mascot_px": brand.mascot_px(cfg),                                   # F19 add-on: 28-44, default 36
     }
+
+
+def _rules(conn, cfg, cls, rw, today) -> dict:
+    """F22.1: what the 반 목표 sheet shows: the ladder, the class's rubric, the bonuses and (month cycles) the history."""
+    return {"ladder": rw.ladder or [], "total": rw.total, "cycle": rw.cycle, "rubric": M.rubric_of(cls),
+            "live": int(cfg.extra.get("live_bonus", 5)), "history": M.cycle_history(conn, cls, today) if rw.cycle == "month" else []}
 
 
 MEDALS = ("🥇", "🥈", "🥉")

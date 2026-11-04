@@ -6,6 +6,7 @@ teacher can do the Saturday routine without a terminal. The HTTP layer is in boa
 from __future__ import annotations
 
 import base64
+import json
 import re
 import shutil
 import sqlite3
@@ -337,7 +338,10 @@ def classes_view(conn: sqlite3.Connection) -> list[dict]:
         out.append({"name": c["name"], "grade": c["grade"] or "", "term": c["term"] or "",
                     "days": ",".join(M.WEEKDAYS_KO[i] for i in M.mask_days(c["weekday_mask"])),
                     "reward_label": c["reward_label"] or "", "goal": c["reward_goal_points"] or 0,
-                    "start_time": c["start_time"] or "", "students": M.active_count(conn, c["id"])})
+                    "start_time": c["start_time"] or "", "students": M.active_count(conn, c["id"]),
+                    "color": c["color"] or "", "label": c["label"] or "", "cycle": c["cycle"] or "term",           # F21.3 / F22.1
+                    "milestones": ", ".join(f"{m['pct']}:{m['label']}" for m in json.loads(c["milestones"] or "[]")),
+                    "rubric": [M.rubric_of(c)[k] for k in ("1", "2", "3")]})
     return out
 
 
@@ -417,6 +421,10 @@ def class_save(conn: sqlite3.Connection, body: dict) -> dict:
     cls = ops.save_class(conn, str(body.get("name", "")), create=bool(body.get("create")), new_name=opt("new_name"),
                          term=opt("term") or None, days=opt("days") or None, reward_label=opt("reward_label"),
                          goal=int(goal) if goal not in (None, "") else None, grade=opt("grade"), start_time=opt("start_time"))
+    if any(k in body for k in ("milestones", "cycle", "rubric", "color", "label")):   # F22.1 / F21.3
+        ops.set_goal_rules(conn, cls, opt("milestones"), opt("cycle") or None,
+                           list(body["rubric"]) if isinstance(body.get("rubric"), list) else None)
+        ops.set_class_look(conn, cls, opt("color"), opt("label"))
     conn.commit()
     return {"ok": True, "name": cls["name"]}
 

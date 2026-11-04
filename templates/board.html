@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_rows.html" import rules_sheet with context %}
 {% block body %}
 <header class="top">
   <span class="brand">{% if mascot %}<img class="mascot" src="{{ mascot }}" alt="" width="{{ mascot_px }}" height="{{ mascot_px }}" style="--mpx: {{ mascot_px }}px">{% endif %}{{ S.board_title }} · {{ cls.name }}</span>
@@ -24,6 +25,7 @@
     {% for m in reward.milestone_pcts() %}<span class="ms" style="left: {{ '%.1f' % m }}%"></span>{% endfor %}
   </div>
   <p class="muted" id="b-togo">{{ S.reward_to_go | fmt(label=reward.label, n=reward.to_go) }}</p>
+  {% if rules %}<details class="gr-open"><summary>{{ S.gr_open }}</summary>{{ rules_sheet(rules) }}</details>{% endif %}
 </section>
 <ul class="roster" id="roster">
   {% for s in students %}
