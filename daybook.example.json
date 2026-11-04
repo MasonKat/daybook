@@ -6,5 +6,6 @@
   "videos_path": "videos.json",
   "board_poll_seconds": 60,
   "backup_dir": "E:/daybook-backups",
-  "backup_keep": 30
+  "backup_keep": 30,
+  "academy": ""
 }

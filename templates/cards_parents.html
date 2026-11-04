@@ -5,33 +5,57 @@
 <meta name="robots" content="noindex">
 <title>{{ P.letter_title }} · {{ cls.name }}</title>
 <style>
-@page { size: A4; margin: 22mm 20mm; }
-body { font: 11pt/1.75 -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; color: #111; margin: 0; }
+@page { size: A4; margin: 14mm 16mm 12mm; }
+body { font: 10pt/1.55 -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; color: #111; margin: 0; }
 .letter { page-break-after: always; break-after: page; }
 .letter:last-child { page-break-after: auto; break-after: auto; }
-h1 { font-size: 17pt; margin: 0 0 6mm; }
-h2 { font-size: 12pt; margin: 6mm 0 2mm; }
-ul { margin: 0; padding-left: 6mm; }
+h1 { font-size: 15pt; margin: 0 0 3mm; }
+.academy { color: #374151; font-weight: 600; min-height: 1em; }
+h2 { font-size: 10.5pt; margin: 3mm 0 1mm; }
+p { margin: 1.2mm 0; }
+ul { margin: 0; padding-left: 5mm; columns: 2; column-gap: 8mm; } li { margin: 0.4mm 0; break-inside: avoid; }
 .ph { background: #fef3c7; padding: 1mm 2mm; border-radius: 1mm; }
-.sign { margin-top: 10mm; }
+.cut { margin: 5mm 0 3mm; border-top: 1.5px dashed #6b7280; text-align: center; height: 0; }
+.cut span { position: relative; top: -0.8em; background: #fff; padding: 0 3mm; color: #6b7280; font-size: 8.5pt; }
+.slip { border: 1px solid #9ca3af; border-radius: 2mm; padding: 3mm 5mm; }
+.slip h3 { margin: 0 0 2mm; font-size: 11pt; }
+.slip .row { display: flex; gap: 8mm; align-items: baseline; margin: 2.5mm 0; flex-wrap: wrap; }
+.blank { display: inline-block; min-width: 38mm; border-bottom: 1px solid #111; }
+.box { font-size: 12pt; }
+.note { color: #4b5563; font-size: 8.5pt; }
 @media screen { body { max-width: 180mm; margin: 10mm auto; } .letter { border-bottom: 1px dashed #ccc; padding-bottom: 10mm; margin-bottom: 10mm; } }
 </style>
 </head>
 <body>
 {% for s in students %}
 <section class="letter">
+  <p class="academy">{{ academy }}</p>
   <h1>{{ P.letter_title }}</h1>
   <p>{{ P.letter_greeting }}</p>
-  <p>{{ P.letter_intro | fmt(name=s.display_name) }}</p>
+  <p>{{ P.letter_intro }}</p>
   <p class="ph">{{ P.letter_academy }}</p>
-  <h2>{{ P.letter_shows_h }}</h2>
-  <ul>{% for x in P.letter_shows %}<li>{{ x }}</li>{% endfor %}</ul>
+  <h2>{{ P.letter_records_h }}</h2>
+  <ul>{% for x in P.letter_records %}<li>{{ x }}</li>{% endfor %}</ul>
   <h2>{{ P.letter_never_h }}</h2>
   <ul>{% for x in P.letter_never %}<li>{{ x }}</li>{% endfor %}</ul>
+  <h2>{{ P.letter_where_h }}</h2>
+  <p>{{ P.letter_where }}</p>
+  <h2>{{ P.letter_push_h }}</h2>
+  <p>{{ P.letter_push }}</p>
+  <h2>{{ P.letter_stop_h }}</h2>
+  <p>{{ P.letter_stop }}</p>
   <p>{{ P.letter_rhythm }}</p>
   <p><b>{{ P.letter_link }}</b></p>
-  <p class="ph">{{ P.letter_privacy }}</p>
-  <p class="sign">{{ P.letter_closing }}</p>
+  <p>{{ P.letter_closing }}</p>
+  <div class="cut"><span>{{ P.letter_cut }}</span></div>
+  <div class="slip">
+    <h3>{% if academy %}{{ academy }} · {% endif %}{{ P.letter_slip_title }}</h3>
+    <div class="row"><span>{{ P.letter_slip_student }} <span class="blank">&nbsp;</span></span>
+      <span><span class="box">□</span> {{ P.letter_slip_yes }}</span> <span><span class="box">□</span> {{ P.letter_slip_no }}</span></div>
+    <div class="row"><span>{{ P.letter_slip_sign }} <span class="blank">&nbsp;</span></span>
+      <span>{{ P.letter_slip_date }} <span class="blank" style="min-width: 30mm">&nbsp;</span></span></div>
+    <p class="note">{{ P.letter_slip_note }}</p>
+  </div>
 </section>
 {% endfor %}
 </body>

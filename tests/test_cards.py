@@ -27,8 +27,15 @@ def test_no_card_carries_a_token_a_link_a_qr_or_private_data(conn, tmp_path):
                 assert "잃어버리면 선생님께 (새 링크 발급)" in html and "홈 화면에 추가" in html
             else:
                 assert html.count('<section class="letter">') == n
-                assert "{원장·학원 문구}" in html and "{개인정보 안내 문구}" in html and "토요일" in html
-                assert "등수나 순위" in html and "카카오톡 1:1" in html
+                assert "{원장·학원 문구}" in html and "토요일" in html and "등수나 순위" in html and "카카오톡 1:1" in html
+                # F17: what is recorded, where it is kept, push, how to stop, and a tear-off consent slip
+                for must in ("출석 시각", "과제만 찍고, 얼굴은 찍지 않습니다", "학습 영상 시청 여부", "Cloudflare(암호화 저장)",
+                             "판매하거나 다른 곳에 제공하지 않습니다", "직접 켜실 때만", "밤 10시부터 아침 8시까지", "하루 한 번까지",
+                             "링크를 바로 바꾸고", "기록을 삭제합니다", "자르는 선", "학생 이름", "□ 동의함", "□ 동의하지 않음",
+                             "보호자 서명", "날짜"):
+                    assert must.replace("□ ", "") in html.replace('<span class="box">□</span> ', ""), must
+                names = [r[0] for r in conn.execute("SELECT display_name FROM students")]
+                assert not any(nm in html for nm in names)                    # no name on the printed letter
 
 
 def test_cli_cards(conn, klass, tmp_path, monkeypatch):
@@ -38,5 +45,11 @@ def test_cli_cards(conn, klass, tmp_path, monkeypatch):
     assert r.exit_code == 0 and (tmp_path / "cards" / "고1A-students.html").exists()
     assert "가람" in (tmp_path / "cards" / "고1A-students.html").read_text(encoding="utf-8")
     r = CliRunner().invoke(cli, ["--db", db, "cards", "parents", "고1A"])
-    assert r.exit_code == 0 and "도담 학생의 공부 기록" in (tmp_path / "cards" / "고1A-parents.html").read_text(encoding="utf-8")
+    html = (tmp_path / "cards" / "고1A-parents.html").read_text(encoding="utf-8")
+    assert r.exit_code == 0 and "도담" not in html and '<p class="academy"></p>' in html      # no academy set: blank
+    (tmp_path / "daybook.json").write_text('{"academy": "AMP 수학학원"}', encoding="utf-8")
+    monkeypatch.setenv("DAYBOOK_CONFIG", str(tmp_path / "daybook.json"))
+    CliRunner().invoke(cli, ["--db", db, "cards", "parents", "고1A"])
+    html = (tmp_path / "cards" / "고1A-parents.html").read_text(encoding="utf-8")
+    assert '<p class="academy">AMP 수학학원</p>' in html and "AMP 수학학원 · DAYBOOK 학습 기록 동의서" in html
     assert CliRunner().invoke(cli, ["--db", db, "cards", "students", "없는반"]).exit_code != 0

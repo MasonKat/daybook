@@ -255,8 +255,9 @@ def test_parent_drafts_are_formal_without_emoji_or_playful_endings():
             assert not EMOJI.search(text), key
             assert not PLAYFUL.search(text), key
             assert "!" not in text, key
-        if isinstance(val, list) or key.endswith(("_h", "_title")):
-            continue                                                 # headings and list items are noun phrases
+        if isinstance(val, list) or key.endswith(("_h", "_title")) or key == "letter_cut" or \
+                (key.startswith("letter_slip_") and key != "letter_slip_note"):
+            continue                                                 # headings, list items, slip labels: noun phrases
         text = val
         if not key.startswith(("reason_", "why_", "coverage", "_")):
             assert text.rstrip().endswith(("다.", "요.", "다", "요", ")")) or "{" in text[-12:], key
