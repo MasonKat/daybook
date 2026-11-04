@@ -101,7 +101,10 @@ def roster(conn: sqlite3.Connection, cfg: Config) -> dict:
                  for r in conn.execute("""SELECT student_token, display_name, callsign FROM students
                                           WHERE class_id = ? AND active = 1 ORDER BY id""", (c["id"],))]
         days = [i for i in range(7) if c["weekday_mask"] and c["weekday_mask"] & (1 << i)]
-        out.append({"key": class_key(c["id"]), "name": c["name"], "days": days, "start": c["start_time"] or "", "students": studs})
+        from .ops import banner
+        b = banner(c)                                # F21.3: the class's colour, label and hours for the remote's banner
+        out.append({"key": class_key(c["id"]), "name": c["name"], "days": days, "start": c["start_time"] or "", "end": c["end_time"] or "",
+                    "color": b["color"], "label": b["label"], "students": studs})
     from . import classwork as CW              # F21.2: the set names (and their quiz counts) for 수업 문제; never a tag
     tags = CW.load_tags(cfg)
     sets = [{"label": k, "n": max(tags[k]) if tags[k] else 0} for k in CW.set_names(cfg)]

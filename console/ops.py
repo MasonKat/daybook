@@ -374,3 +374,74 @@ def set_left(conn: sqlite3.Connection, slug: str, left_on: str | None) -> sqlite
     conn.execute("UPDATE students SET active = ?, left_on = ? WHERE id = ?", (0 if left_on else 1, left_on, s["id"]))
     log_event(conn, "student_leave" if left_on else "student_return", {"student_id": s["id"], "date": left_on})
     return get_student(conn, slug)
+
+
+# ---------------------------------------------------------------- F21.3: the class lever (colour, label, today's class)
+
+PALETTE = ("#2563eb", "#16a34a", "#d97706", "#7c3aed", "#db2777", "#0891b2", "#4b5563")
+COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+WINDOW_BEFORE, WINDOW_AFTER = 30, 60          # minutes: the same window as 출석 (30 before the start, 60 after the end)
+
+
+def class_color(cls) -> str:
+    return cls["color"] if cls["color"] and COLOR_RE.match(cls["color"]) else PALETTE[(cls["id"] - 1) % len(PALETTE)]
+
+
+def class_window(cls) -> tuple[int, int] | None:
+    """Minutes of the day (KST) when this class is "now": 30 min before the start to 60 min after the end (start + 2 h)."""
+    if not cls["start_time"]:
+        return None
+    h, m = map(int, cls["start_time"].split(":"))
+    start = h * 60 + m
+    if cls["end_time"]:
+        eh, em = map(int, cls["end_time"].split(":"))
+        end = eh * 60 + em
+    else:
+        end = start + 120
+    return start - WINDOW_BEFORE, end + WINDOW_AFTER
+
+
+def banner(cls) -> dict:
+    from . import models as M
+    days = "·".join(M.WEEKDAYS_KO[i] for i in M.mask_days(cls["weekday_mask"])) if cls["weekday_mask"] else ""
+    win = f"{cls['start_time']}–{cls['end_time']}" if cls["start_time"] and cls["end_time"] else (cls["start_time"] or "")
+    return {"name": cls["name"], "label": (cls["label"] or cls["name"]).strip(), "color": class_color(cls), "days": days, "window": win}
+
+
+def in_window(cls, now: datetime) -> bool:
+    w = class_window(cls)
+    if not w or not cls["weekday_mask"] or not cls["weekday_mask"] & (1 << now.weekday()):
+        return False
+    t = now.hour * 60 + now.minute
+    return w[0] <= t <= w[1]
+
+
+def class_now(conn: sqlite3.Connection, now: datetime) -> sqlite3.Row | None:
+    """Today's class from the timetable: the one in its window now; else today's class whose start is nearest; else None."""
+    today = [c for c in conn.execute("SELECT * FROM classes ORDER BY id") if c["weekday_mask"] and c["weekday_mask"] & (1 << now.weekday())]
+    live = [c for c in today if in_window(c, now)]
+    pool = live or today
+    if not pool:
+        return None
+    t = now.hour * 60 + now.minute
+
+    def dist(c):
+        w = class_window(c)
+        return abs((w[0] + WINDOW_BEFORE) - t) if w else 9999
+    return sorted(pool, key=dist)[0]
+
+
+def set_class_look(conn: sqlite3.Connection, cls, color: str | None = None, label: str | None = None) -> dict:
+    fields = {}
+    if color is not None:
+        if color and not COLOR_RE.match(color):
+            raise OpError("color: #rrggbb, e.g. #16a34a")
+        fields["color"] = color or None
+    if label is not None:
+        if len(label.strip()) > 24:
+            raise OpError("label: up to 24 characters, e.g. 고1 기본 월수금 20시")
+        fields["label"] = label.strip() or None
+    if fields:
+        conn.execute(f"UPDATE classes SET {', '.join(k + ' = ?' for k in fields)} WHERE id = ?", (*fields.values(), cls["id"]))
+        log_event(conn, "class_look", {"class_id": cls["id"], **fields})
+    return fields

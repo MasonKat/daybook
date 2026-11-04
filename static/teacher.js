@@ -662,6 +662,22 @@
   }
   loadVoice();
 
+  /* ------------------------------------------------------------ F21.3: 기록 by class and day (every row carries its class) */
+  function loadHistory() {
+    api('/api/teacher/history?class=' + encodeURIComponent($('hi-class').value) + '&day=' + $('hi-day').value).then(function (j) {
+      var ul = $('hi-rows'), H = S.hi; ul.innerHTML = '';
+      if (!j.ok) { ul.appendChild(el('li', { 'class': 'muted' }, j.error || '')); return; }
+      j.attitude.forEach(function (x) { ul.appendChild(el('li', {}, H.att + ' · ' + x.display_name + ' ' + x.points)); });
+      j.shouts.forEach(function (x) { ul.appendChild(el('li', {}, H.shout + ' · ' + x.display_name + ' 🎤' + x.points + ' — ' + x.text + (x.source === 'remote' ? ' 📱' : ''))); });
+      j.classwork.forEach(function (x) { ul.appendChild(el('li', {}, H.cw + ' · ' + x.label + ' · ' + x.n + ' · ' + x.k)); });
+      j.notes.forEach(function (x) { ul.appendChild(el('li', {}, H.note + ' · ' + x.display_name + ' — ' + x.text)); });
+      if (!ul.children.length) ul.appendChild(el('li', { 'class': 'muted' }, H.none));
+    });
+  }
+  $('hi-load').onclick = loadHistory;
+  $('hi-class').onchange = loadHistory;
+  loadHistory();
+
   /* ------------------------------------------------------------ F21.2 / F21.4 / F21.5: 수업 문제, 실력 지도, 서술형, 사진 확인 */
   var SK = S.sk, MK = { o: '○', x: '✕', m: '–', p: '△' };
   function skClasses(boardClass) {

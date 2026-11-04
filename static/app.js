@@ -1409,6 +1409,14 @@
       else if (b.classList.contains('subfor')) post('/api/submit-for', { student_id: id }).then(apply);
       else if (b.classList.contains('ckfor')) post('/api/checkin-for', { student_id: id }).then(apply);
     });
+    if ($('cb-switch')) $('cb-switch').addEventListener('change', function () {   /* F21.3: a deliberate switch, confirmed off-time */
+      var sel = $('cb-switch'), to = sel.value;
+      post('/api/switch', { 'class': to }).then(function (j) {
+        if (j.ok) return location.reload();
+        if (j.confirm && window.confirm(j.confirm)) return post('/api/switch', { 'class': to, confirm: true }).then(function () { location.reload(); });
+        sel.value = D.cls;
+      });
+    });
     if ($('cw-go')) $('cw-go').addEventListener('click', function () {     /* F21.2: open a 수업 문제 set for this class */
       var cname = (document.querySelector('.top .brand') || {}).textContent || '';
       post('/api/teacher/classwork-open', { 'class': D.cls || cname.split(' · ').pop().trim(), label: $('cw-label').value, n: $('cw-n').value })

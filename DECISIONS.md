@@ -429,6 +429,12 @@ The current `practice_mode = manitoba` is only the teacher's personal practice l
 - **F21.4 서술형:** Teacher tab → 서술형: class, day, label, an optional max score, tags from the tag file; the class list appears and the teacher taps ○ / △ / ✕ (or types the score: full = ○, 0 = ✕, between = △ "부분") with an optional note. One row per student × quiz, editable; every change an event. It feeds the same map and the same share_classwork rule.
 - **F21.5 photo grading (for the local vision model, built later):** `classwork import <results.csv>` with date, class, student (slug), set, quiz, read_answer, mark (○/✕/–), confidence, source=photo. At or above `classwork_auto_min` (0.9) a mark is stored; below it, or when it differs from the student's own mark, it waits in Teacher tab → 사진 확인 필요 (the local photo as a thumbnail, the read answer, ○ / ✕ / –) and counts nowhere until the teacher picks. Per quiz the teacher's mark wins, then the student's self-mark, then an accepted photo mark; a difference between photo and self is flagged in the queue. Only marks and the read answer travel in the file; never a key or quiz text.
 
+## F21.3: the class lever (2026-11-05)
+- Each class has a colour and a short label (`class edit --color "#16a34a" --label "고1 기본 월수금 20시"`; no colour = a fixed palette by class). The board, the Teacher tab and the remote show a full-width banner in that colour with the label, the weekdays and the hours, so the four classes cannot be mixed up.
+- Today's class comes from the timetable: the class whose window (30 min before the start to 60 min after the end; start + 2 h without an end) holds now, else today's class with the nearest start. `daybook board` without a class picks it; the remote picks it too.
+- Switching to another class is a deliberate act: the board's banner select (and the remote's) asks "지금 시간은 고1 기본 수업이에요. 고2 반으로 바꿀까요?" unless the chosen class is in its own window; the board logs `board_switch`.
+- Every saved row carries its class (태도 via its session, 칭찬 / 반 전체 / 수업 문제 with class_id); Teacher tab → 기록 (반·날짜별) lists them for one class and one day, with that week's 한 줄.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

@@ -26,26 +26,50 @@ from .pull import PullError, http_fetch, pull
 
 
 class Board:
-    def __init__(self, db_path: str, cfg: Config, class_name: str, day: date, poll: bool):
-        self.db_path, self.cfg, self.class_name, self.day = db_path, cfg, class_name, day
+    def __init__(self, db_path: str, cfg: Config, class_name: str | None, day: date, poll: bool, now=None):
+        self.db_path, self.cfg, self.day = db_path, cfg, day
         self.poll = poll and bool(cfg.worker and cfg.teacher_token)
         self.lock = threading.Lock()
         self.S = strings()
         with self.conn() as conn:
             dbmod.migrate(conn)
+            if class_name:
+                cls = ops.get_class(conn, class_name)
+            else:                                             # F21.3: today's class from the timetable
+                cls = ops.class_now(conn, now or M.kst_now()) or conn.execute("SELECT * FROM classes ORDER BY id").fetchone()
+                if cls is None:
+                    raise ops.OpError("no class yet (class add …)")
+            self._bind(conn, cls)
+
+    def _bind(self, conn, cls) -> None:
+        self.class_name, self.class_id = cls["name"], cls["id"]
+        sess = ops.start_session(conn, cls, self.day)         # keeps an existing code / start time
+        self.session_id = sess["id"]
+        conn.commit()
+        self.sent = False
+        if self.cfg.worker and self.cfg.teacher_token:
+            from .pull import http_put_json
+            try:
+                http_put_json(self.cfg, "/session", ops.session_payload(conn, sess))
+                self.sent = True
+            except PullError as e:
+                print(f"board: 출석 code not sent to the Worker ({e})")
+
+    def switch(self, class_name: str, confirm: bool = False, now=None) -> dict:
+        """F21.3: switching to another class needs a deliberate confirmation when it is not that class's time now."""
+        now = now or M.kst_now()
+        with self.lock, self.conn() as conn:
             cls = ops.get_class(conn, class_name)
-            self.class_id = cls["id"]
-            sess = ops.start_session(conn, cls, day)          # keeps an existing code / start time
-            self.session_id = sess["id"]
+            if cls["id"] == self.class_id:
+                return {"ok": True, "class": cls["name"]}
+            cur = ops.class_now(conn, now)
+            if not confirm and not ops.in_window(cls, now):
+                cur_name = (ops.banner(cur)["label"] if cur else self.S["cl_none_now"])
+                return {"ok": False, "confirm": self.S["cl_switch_confirm"].format(now=cur_name, to=ops.banner(cls)["label"])}
+            self._bind(conn, cls)
+            dbmod.log_event(conn, "board_switch", {"class_id": cls["id"], "confirmed": bool(confirm)})
             conn.commit()
-            self.sent = False
-            if cfg.worker and cfg.teacher_token:
-                from .pull import http_put_json
-                try:
-                    http_put_json(cfg, "/session", ops.session_payload(conn, sess))
-                    self.sent = True
-                except PullError as e:
-                    print(f"board: 출석 code not sent to the Worker ({e})")
+            return {"ok": True, "class": cls["name"]}
 
     def conn(self) -> sqlite3.Connection:
         return dbmod.connect(self.db_path)
@@ -209,7 +233,10 @@ class Board:
         with self.conn() as conn:
             cls = conn.execute("SELECT * FROM classes WHERE id = ?", (self.class_id,)).fetchone()
         tpl = generate.env().get_template("teacher.html")
+        with self.conn() as conn:
+            classes = [ops.banner(c) for c in conn.execute("SELECT * FROM classes ORDER BY id")]
         return tpl.render(S=self.S, page="teacher", cls=cls, day=self.day.isoformat(), week=M.iso_week(self.day),
+                          banner=ops.banner(cls), classes=classes,
                           pages=bool(self.cfg.pages), worker=bool(self.cfg.worker))
 
     def page(self) -> str:
@@ -217,7 +244,10 @@ class Board:
             st = self.state(conn)
         tpl = generate.env().get_template("board.html")
         from . import brand
-        return tpl.render(S=self.S, page="board", mascot=brand.data_uri(self.cfg), mascot_px=brand.mascot_px(self.cfg), cls=st["cls"], students=st["students"], reward=st["reward"],
+        with self.conn() as conn:
+            classes = [ops.banner(c) for c in conn.execute("SELECT * FROM classes ORDER BY id")]
+        return tpl.render(S=self.S, page="board", mascot=brand.data_uri(self.cfg), mascot_px=brand.mascot_px(self.cfg), cls=st["cls"],
+                          banner=ops.banner(st["cls"]), classes=classes, students=st["students"], reward=st["reward"],
                           three=st["three"], show_three=st["show_three"], shouts=st["shouts"], drafts=st["drafts"], poll=self.poll,
                           cw_sets=__import__("console.classwork", fromlist=["x"]).set_names(self.cfg),
                           cw_today=[self.S["cw_board_state"].format(label=x["label"], n=x["n"], k=x["k"], t=len(st["students"])) for x in st["cw_today"]], code=st["code"], start=st["start"], arrivals=st["arrivals"],
@@ -315,6 +345,11 @@ def make_handler(board: Board):
                     return self._json(T.push_view(conn, board.cfg))
                 if path == "/api/teacher/videos":             # F15.1/F15.2
                     return self._json(T.videos_view(conn, board.cfg, day, int((q.get("days") or ["7"])[0] or 7)))
+                if path == "/api/teacher/history":            # F21.3: by class and day
+                    try:
+                        return self._json(T.history(conn, (q.get("class") or [""])[0], (q.get("day") or [day.isoformat()])[0]))
+                    except (T.TeacherError, ValueError) as e:
+                        return self._json({"ok": False, "error": str(e)}, 404)
                 if path == "/api/teacher/classwork":          # F21.2 / F21.5
                     try:
                         return self._json(T.classwork_view(conn, board.cfg, (q.get("class") or [""])[0], day))
@@ -542,6 +577,11 @@ def make_handler(board: Board):
                             return self._json(board.live_call(self.path[len("/api/live/"):], body))
                     except (L.LiveError, PullError, MomentError) as e:
                         return self._json({"ok": False, "error": str(e)}, 400)
+                if self.path == "/api/switch":                     # F21.3: another class, confirmed outside its time
+                    try:
+                        return self._json(board.switch(str(body.get("class", "")), bool(body.get("confirm"))))
+                    except ops.OpError as e:
+                        return self._json({"ok": False, "error": str(e)}, 400)
                 if self.path == "/api/moment":
                     from .moments import MomentError
                     with board.lock, board.conn() as conn:
@@ -577,14 +617,14 @@ def make_handler(board: Board):
     return H
 
 
-def serve(db_path: str, cfg: Config, class_name: str, port: int = 8787, poll: bool = True,
+def serve(db_path: str, cfg: Config, class_name: str | None, port: int = 8787, poll: bool = True,
           day: date | None = None, host: str = "127.0.0.1") -> None:
     board = Board(db_path, cfg, class_name, day or M.kst_today(), poll)
     httpd = ThreadingHTTPServer((host, port), make_handler(board))
     stop = threading.Event()
     if board.poll:
         threading.Thread(target=board.poll_loop, args=(stop,), daemon=True).start()
-    print(f"board for {class_name} on http://{host}:{port}/  (poll {'on' if board.poll else 'off'}; Ctrl+C to stop)")
+    print(f"board for {board.class_name} on http://{host}:{port}/  (poll {'on' if board.poll else 'off'}; Ctrl+C to stop)")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

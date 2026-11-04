@@ -728,3 +728,22 @@ def classwork_decide(conn: sqlite3.Connection, body: dict) -> dict:
     except CW.ClassworkError as e:
         raise TeacherError(str(e)) from e
     return {"ok": True}
+
+
+# ---------------------------------------------------------------- F21.3: the history, by class and day
+
+def history(conn: sqlite3.Connection, class_name: str, day: str) -> dict:
+    """What was saved for one class on one day: 태도 scores, 칭찬 (voice, remote, 반 전체), 수업 문제, and that week's 한 줄."""
+    cls = _cls(conn, class_name)
+    d = date.fromisoformat(day)
+    q = lambda sql, *a: [dict(r) for r in conn.execute(sql, a)]   # noqa: E731
+    return {"ok": True, "class": cls["name"], "day": day,
+            "attitude": q("""SELECT s.display_name, a.points FROM attitude a JOIN sessions se ON se.id = a.session_id
+                             JOIN students s ON s.id = a.student_id WHERE se.class_id = ? AND se.date = ? ORDER BY s.id""", cls["id"], day),
+            "shouts": q("""SELECT s.display_name, x.points, x.text, x.source, x.private FROM shoutouts x JOIN students s ON s.id = x.student_id
+                           WHERE x.class_id = ? AND x.day = ? ORDER BY x.id""", cls["id"], day)
+                      + q("SELECT '반 전체' AS display_name, points, text, source, private FROM class_shouts WHERE class_id = ? AND day = ?", cls["id"], day),
+            "classwork": q("""SELECT x.label, x.n, (SELECT COUNT(*) FROM classwork_marks m WHERE m.sid = x.sid) AS k FROM classwork_sets x
+                              WHERE x.class_id = ? AND x.day = ? ORDER BY x.ts""", cls["id"], day),
+            "notes": q("""SELECT s.display_name, n.text FROM notes n JOIN students s ON s.id = n.student_id
+                          WHERE s.class_id = ? AND n.week = ? ORDER BY s.id""", cls["id"], M.iso_week(d))}

@@ -5,12 +5,12 @@ export const REMOTE_JS = String.raw`(function () {
   'use strict';
   var CSS = 'body{margin:0;background:#0b0f17;color:#f2f4f8;font:16px/1.4 -apple-system,system-ui,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;'
   + 'overflow-wrap:anywhere;-webkit-text-size-adjust:100%}*{box-sizing:border-box}[hidden]{display:none!important}'
-  + '.top{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:calc(10px + env(safe-area-inset-top)) 16px 8px}'
+  + '.top{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 16px 8px}'
   + '.top select{min-height:40px;max-width:60%;border-radius:10px;border:1px solid #2a3240;background:#161c27;color:#f2f4f8;font-family:inherit;font-weight:600;font-size:16px;padding:0 8px}'
   + '.note,.net{margin:4px 16px;color:#9aa3b2;font-size:13px}.net:empty,.note:empty{display:none}'
   + '.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:8px 16px calc(24px + env(safe-area-inset-bottom))}'
   + '.who{position:relative;min-height:64px;border:0;border-radius:16px;background:#1a2230;color:#f2f4f8;font-family:inherit;font-weight:700;font-size:20px;padding:8px;'
-  + 'display:flex;align-items:center;justify-content:center;cursor:pointer;min-width:0}.who:active{background:#2563eb}.cwb{border:0;border-radius:10px;background:#1f2a3c;color:#dbe4ff;min-height:40px;padding:0 10px;font-family:inherit;font-weight:700;font-size:14px}#cwl,#cwn{width:100%;min-height:48px;margin:8px 0;border-radius:12px;border:1px solid #2a3240;background:#0b0f17;color:#f2f4f8;font-family:inherit;font-size:16px;padding:0 10px}.who.whole{grid-column:1/-1;min-height:56px;background:#2b2150}'
+  + 'display:flex;align-items:center;justify-content:center;cursor:pointer;min-width:0}.who:active{background:#2563eb}.rbanner{padding:calc(8px + env(safe-area-inset-top)) 16px 8px;font-weight:800;font-size:16px;color:#fff}.cwb{border:0;border-radius:10px;background:#1f2a3c;color:#dbe4ff;min-height:40px;padding:0 10px;font-family:inherit;font-weight:700;font-size:14px}#cwl,#cwn{width:100%;min-height:48px;margin:8px 0;border-radius:12px;border:1px solid #2a3240;background:#0b0f17;color:#f2f4f8;font-family:inherit;font-size:16px;padding:0 10px}.who.whole{grid-column:1/-1;min-height:56px;background:#2b2150}'
   + '.who .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.who .badge{position:absolute;top:6px;right:8px;font-size:12px;font-weight:600;color:#c7d2fe}'
   + '.sheet{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;z-index:5}'
   + '.box{width:100%;background:#121826;border-radius:20px 20px 0 0;padding:14px 16px calc(16px + env(safe-area-inset-bottom))}'
@@ -25,7 +25,7 @@ export const REMOTE_JS = String.raw`(function () {
   + '.muted{color:#9aa3b2}';
   var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
   var tb = document.querySelector('.taste-bar');
-  (tb || document.body).insertAdjacentHTML(tb ? 'afterend' : 'afterbegin', '<header class="top"><b>AMP 리모컨</b><button type="button" class="cwb" id="cwb">수업 문제</button><select id="cls" aria-label="반"></select></header>'
+  (tb || document.body).insertAdjacentHTML(tb ? 'afterend' : 'afterbegin', '<div class="rbanner" id="rban"></div><header class="top"><b>AMP 리모컨</b><button type="button" class="cwb" id="cwb">수업 문제</button><select id="cls" aria-label="반"></select></header>'
     + '<div class="sheet" id="cws" role="dialog" aria-modal="true" aria-label="수업 문제" hidden><div class="box">'
     + '<div class="sh-top"><b>수업 문제 열기</b><button type="button" class="x" id="cws-x" aria-label="닫기">×</button></div>'
     + '<input id="cwl" list="cwlist" maxlength="40" placeholder="세트 이름 (예: 쎈 이차방정식 A)" aria-label="세트 이름"><datalist id="cwlist"></datalist>'
@@ -115,6 +115,9 @@ export const REMOTE_JS = String.raw`(function () {
     });
     sel.value = CUR;
     var c = R.classes.filter(function (x) { return x.key === CUR; })[0] || { students: [] };
+    var bn = $('rban'), WDS = '월화수목금토일';                     // F21.3: which class this is, in its own colour
+    bn.style.background = c.color || '#2563eb';
+    bn.textContent = (c.label || c.name || '') + ' · ' + (c.days || []).map(function (d) { return WDS[d]; }).join('') + (c.start ? ' · ' + c.start + (c.end ? '–' + c.end : '') : '');
     var g = $('grid'); g.innerHTML = '';
     if (!c.students.length) g.appendChild(el('p', 'muted', S.none));
     else {                                                     // 반 전체: a class shout-out (the class goal, no one student)
@@ -212,7 +215,20 @@ export const REMOTE_JS = String.raw`(function () {
     if (TASTE) { $('cws').hidden = true; toast(body.label + ' · ' + body.n); return; }
     api('/t/remote/classwork', body).then(function (j) { $('cws').hidden = true; toast(j.ok ? body.label + ' · ' + body.n : S.bad); }, function () { toast(S.offline); });
   };
-  $('cls').onchange = function () { CUR = $('cls').value; COUNTS = {}; render(); loadCounts(); };
+  function inWindow(c) {                                         // F21.3: the class's time today (30 min before to 60 after)
+    var now = kst(), wd = (now.getUTCDay() + 6) % 7, t = now.getUTCHours() * 60 + now.getUTCMinutes();
+    if ((c.days || []).indexOf(wd) < 0 || !c.start) return false;
+    var p = c.start.split(':'), s0 = Number(p[0]) * 60 + Number(p[1]), e = c.end ? c.end.split(':') : null;
+    var e0 = e ? Number(e[0]) * 60 + Number(e[1]) : s0 + 120;
+    return t >= s0 - 30 && t <= e0 + 60;
+  }
+  $('cls').onchange = function () {
+    var to = R.classes.filter(function (x) { return x.key === $('cls').value; })[0], cur = R.classes.filter(function (x) { return x.key === CUR; })[0];
+    if (to && !inWindow(to) && !TASTE && !window.confirm('지금 시간은 ' + (cur ? (cur.label || cur.name) : '다른') + ' 수업이에요. ' + (to.label || to.name) + ' 반으로 바꿀까요?')) {
+      $('cls').value = CUR; return;
+    }
+    CUR = $('cls').value; COUNTS = {}; render(); loadCounts();
+  };
   $('pts').onclick = function (e) {
     var b = e.target.closest('button'); if (!b) return;
     PTS = Number(b.getAttribute('data-p'));

@@ -12,7 +12,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 KST = timezone(timedelta(hours=9))  # Asia/Seoul has no DST
 
 SCHEMA = """
@@ -31,7 +31,9 @@ CREATE TABLE IF NOT EXISTS classes (
     self_study_until   TEXT,              -- F13.5: e.g. 21:00 after a 17:30-20:00 class
     late_min           INTEGER DEFAULT 10,   -- F13.2 policy: late = check-in later than start + late_min
     late_count         INTEGER DEFAULT 3,    -- ... on >= late_count of the last 6 class days
-    late_avg_min       INTEGER DEFAULT 15    -- ... or an average lateness >= late_avg_min
+    late_avg_min       INTEGER DEFAULT 15,   -- ... or an average lateness >= late_avg_min
+    color              TEXT,                 -- F21.3: the class's banner colour (#rrggbb; NULL = from the palette)
+    label              TEXT                  -- F21.3: a short label, e.g. "고1 기본 월수금 20시"
 );
 
 CREATE TABLE IF NOT EXISTS students (
@@ -429,7 +431,8 @@ def migrate(conn: sqlite3.Connection) -> None:
         "shoutouts": {"ref": "TEXT", "hold": "INTEGER NOT NULL DEFAULT 0"},
         "contacts": {"tag": "TEXT"},
         "submissions": {"reflection": "TEXT", "chip": "TEXT", "solved": "INTEGER"},
-        "classes": {"grade": "TEXT", "start_time": "TEXT", "end_time": "TEXT", "self_study_until": "TEXT", "late_min": "INTEGER DEFAULT 10",
+        "classes": {"color": "TEXT", "label": "TEXT",
+                    "grade": "TEXT", "start_time": "TEXT", "end_time": "TEXT", "self_study_until": "TEXT", "late_min": "INTEGER DEFAULT 10",
                     "late_count": "INTEGER DEFAULT 3", "late_avg_min": "INTEGER DEFAULT 15"},
     }
     for table, new_cols in added.items():

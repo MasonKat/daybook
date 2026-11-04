@@ -7,6 +7,10 @@
   <button type="button" class="who tlink tv" id="tv-toggle" aria-pressed="false" data-s="{{ {"need": S.c_need, "notice": S.c_notice, "none": S.board_flags_none, "hint": S.board_flags_hint, "three": S.board_three} | tojson | forceescape }}">{{ S.board_teacher_view }}</button>
   <span class="who" id="b-poll">{{ S.board_poll_on | fmt(n=poll_seconds) if poll else S.board_poll_off }}</span>
 </header>
+<div class="cbanner" id="cbanner" style="--cb: {{ banner.color }}">
+  <b class="cb-l">{{ banner.label }}</b><span class="cb-m">{{ banner.days }}{% if banner.window %} · {{ banner.window }}{% endif %}</span>
+  <select id="cb-switch" aria-label="{{ S.cl_switch }}">{% for c in classes %}<option value="{{ c.name }}"{% if c.name == cls.name %} selected{% endif %}>{{ c.label }}</option>{% endfor %}</select>
+</div>
 <main class="board">
 <section class="card tvflags" id="tv-flags" hidden></section>
 <section class="codebox">

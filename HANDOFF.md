@@ -17,7 +17,9 @@ write, checks each step with the doctor, and continues where it stopped (`--from
 4. [콘솔] `npx wrangler deploy` (Worker v13: 학생 리뷰 with its hourly vote cron, 영상 반응, the teacher remote, 수업 문제; also creates the AMP Live Durable Object). Note the `https://….workers.dev` URL.
 5. [콘솔] copy `daybook.example.json` to `daybook.json`: `worker_url` (step 4), `pages_url`, `teacher_token` (step 3),
    `backup_dir` (a folder on the BitLocker-encrypted USB drive), `academy` (the academy name for the printed letter).
-6. [선생님 탭 / 콘솔] classes with hours and the 지각 rule: 반 만들기, then 반 규칙 · 수업 시간
+6. [선생님 탭 / 콘솔] classes with hours, the 지각 rule, and (F21.3) a colour and a short label per class
+   (`class edit 고1A --color "#2563eb" --label "고1 기본 월수금 20시"`); `board` without a class then opens today's class itself.
+   Classes with hours and the 지각 rule: 반 만들기, then 반 규칙 · 수업 시간
    (`class add 고1A --term 2026-11-06..2027-02-26 --days 월,수,금 --grade 고1 --start 18:00`, `class edit 고1A --end 20:00 --late-min 10`).
 7. [선생님 탭] 명단 · 반 관리 → 가져오기 미리보기 with the roster CSV → 이대로 가져오기.
 8. [콘솔] print the letters: `cards parents <class>` (one A4 page per family, with a tear-off consent slip; no name, link or QR).
@@ -43,7 +45,7 @@ in `daybook.sqlite` (gitignored), and on the deployed pages behind unguessable l
 
 ## 0. State at 11-04 (after F6–F14 and G1–G5): what to do before Friday 11-06
 
-`main` is green from a clean clone: 278 pytest, 59 Worker node tests (incl. the class-day budget with an AMP Live round
+`main` is green from a clean clone: 283 pytest, 59 Worker node tests (incl. the class-day budget with an AMP Live round
 and a weekly-test round), the full Playwright check. Built: P0, design v2, F1–F14, hotfix H1–H6, G1 doctor, G2 backup,
 G3 운영 가이드, G4 안내 cards, G5 taste refresh. Every choice is in `DECISIONS.md`. Console schema v8 (migrates by itself);
 Worker v6. The pilot: two Mon/Wed/Fri 고1 classes from Friday 11-06; the weekly test restarts that day (고2 on Saturday).

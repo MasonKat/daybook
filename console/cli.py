@@ -176,12 +176,15 @@ def class_add(obj: Ctx, name, term, days, reward_label, goal, coef, grade, start
 @click.option("--late-min", type=int, default=None, help="F13 연락 필요: late = 출석 later than start + N min (default 10)")
 @click.option("--late-count", type=int, default=None, help="... on >= N of the last 6 class days (default 3)")
 @click.option("--late-avg-min", type=int, default=None, help="... or an average lateness >= N min (default 15)")
+@click.option("--color", default=None, help="F21.3: the banner colour, #rrggbb ('' = the palette)")
+@click.option("--label", default=None, help='F21.3: a short label, e.g. "고1 기본 월수금 20시"')
 @click.pass_obj
-def class_edit(obj: Ctx, name, term, days, reward_label, goal, coef, grade, **policy):
+def class_edit(obj: Ctx, name, term, days, reward_label, goal, coef, grade, color, label, **policy):
     conn = obj.conn
     cls = ops.get_class(conn, name)
     try:
         pol = ops.class_policy(conn, cls, policy)
+        pol.update(ops.set_class_look(conn, cls, color, label))
     except ops.OpError as e:
         fail(str(e))
     fields = {}
@@ -554,16 +557,19 @@ def checkin_cmd(obj: Ctx, slug, d):
 
 
 @cli.command()
-@click.argument("class_name")
+@click.argument("class_name", required=False)
 @click.option("--port", default=8787, show_default=True)
 @click.option("--no-poll", is_flag=True, help="Do not poll the Worker")
 @click.option("--date", "d", default=None, help="Board date (default today)")
 @click.pass_obj
 def board(obj: Ctx, class_name, port, no_poll, d):
-    """Serve the classroom board on 127.0.0.1."""
+    """Serve the classroom board on 127.0.0.1 (F21.3: without a class, today's class from the timetable)."""
     from . import board as boardmod
-    cls = ops.get_class(obj.conn, class_name)
-    boardmod.serve(obj.db_path, obj.cfg, cls["name"], port, poll=not no_poll, day=parse_date(d))
+    name = ops.get_class(obj.conn, class_name)["name"] if class_name else None
+    try:
+        boardmod.serve(obj.db_path, obj.cfg, name, port, poll=not no_poll, day=parse_date(d))
+    except ops.OpError as e:
+        fail(str(e))
 
 
 @cli.command()

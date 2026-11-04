@@ -4,6 +4,9 @@
   <span class="brand">{{ S.t_title }} · {{ cls.name }}</span>
   <a class="who tlink" href="/">{{ S.t_back }}</a>
 </header>
+<div class="cbanner" id="cbanner" style="--cb: {{ banner.color }}">
+  <b class="cb-l">{{ banner.label }}</b><span class="cb-m">{{ banner.days }}{% if banner.window %} · {{ banner.window }}{% endif %}</span>
+</div>
 <main class="teacher">
 <nav class="tnav">
   <a href="#t-doctor">{{ S.g_doctor }}</a><a href="#t-need">{{ S.c_need }}</a><a href="#t-plan">{{ S.c_plan }}</a><a href="#t-status">{{ S.c_status }}</a>
@@ -12,6 +15,12 @@
   <a href="#t-moments">{{ S.t_moments }}</a><a href="#t-publish">{{ S.t_publish }}</a><a href="#t-weekly">{{ S.t_weekly }}</a>
 </nav>
 
+<section class="card" id="t-history">
+  <h2>{{ S.hist_title }}</h2>
+  <div class="trow pol"><select id="hi-class" aria-label="{{ S.m_class }}">{% for c in classes %}<option value="{{ c.name }}"{% if c.name == cls.name %} selected{% endif %}>{{ c.label }}</option>{% endfor %}</select>
+    <input type="date" id="hi-day" value="{{ day }}" aria-label="date"><button type="button" class="btn ghost sm" id="hi-load">{{ S.hist_load }}</button></div>
+  <ul class="tlist" id="hi-rows"></ul>
+</section>
 <section class="card" id="t-practice">
   <label class="gate"><input type="checkbox" id="pm-toggle"> <b>{{ S.pm_title }}</b></label>
   <p class="muted" id="pm-help-k">{{ S.pm_help_korea }}</p>
@@ -284,7 +293,7 @@
   <div id="weekly-rows"></div>
 </section>
 </main>
-<script type="application/json" id="data">{{ {"S": {"saved": S.t_saved, "copy": S.t_copy, "copied": S.t_copied, "student": S.t_student_link, "parent": S.t_parent_link, "save": S.t_save, "need": S.board_moment_need, "running": S.t_running, "confirm_deploy": S.t_confirm_deploy, "all": S.m_all, "cw": {"other_student": S.cw_other_student, "phone": S.cw_phone, "raw_id": S.cw_raw_id, "rank": S.cw_rank, "absolute": S.cw_absolute, "comparison": S.cw_comparison, "hedge": S.cw_hedge, "jargon": S.cw_jargon}, "n": {"count": S.n_count, "off": S.n_off}, "sk": {"strong": S.sk_strong, "work": S.sk_work, "few": S.sk_few, "today": S.cw_today, "none": S.pq_none, "read": S.pq_read, "self": S.pq_self, "photo": S.pq_photo, "flag": S.pq_flag, "saved": S.es_saved, "note": S.es_note, "state": S.cw_board_state}, "vc": {"class": S.vc_class, "hold": S.vc_hold, "show": S.vc_show, "hide": S.vc_hide, "rm_need": S.rm_need, "callsign": S.vc_callsign, "who": S.vc_who, "dropped": S.vc_dropped, "private": S.vc_private, "kinds": {"praise": S.vc_k_praise, "concept": S.vc_k_concept, "scene": S.vc_k_scene}, "saved": S.vc_saved, "none": S.rv_t_none, "approve": S.rv_t_approve, "drop": S.vc_drop, "fuzzy": S.vc_fuzzy, "nocalls": S.vc_nocalls, "why": {"negative": S.vc_why_negative, "filtered": S.vc_why_filtered, "pii": S.vc_why_pii}}, "rv": {"approve": S.rv_t_approve, "hide": S.rv_t_hide, "none": S.rv_t_none, "hidden_name": S.rv_t_hidden_name, "vote_now": S.rv_t_vote_now, "votes": S.rv_t_votes, "approved_n": S.rv_t_approved_n, "st_none": S.rv_t_st_none, "st_planned": S.rv_t_st_planned, "st_open": S.rv_t_st_open, "st_due": S.rv_t_st_due, "st_closed": S.rv_t_st_closed, "st_novote": S.rv_t_st_novote}, "v": {"students": S.v_students, "avg": S.v_avg, "minutes": S.v_minutes, "views": S.v_views, "hot": S.v_hot, "none": S.v_none, "per_student": S.v_per_student}, "m": {"move": S.m_move, "leave": S.m_leave, "ret": S.m_return, "rotate": S.m_rotate,
+<script type="application/json" id="data">{{ {"S": {"saved": S.t_saved, "copy": S.t_copy, "copied": S.t_copied, "student": S.t_student_link, "parent": S.t_parent_link, "save": S.t_save, "need": S.board_moment_need, "running": S.t_running, "confirm_deploy": S.t_confirm_deploy, "all": S.m_all, "cw": {"other_student": S.cw_other_student, "phone": S.cw_phone, "raw_id": S.cw_raw_id, "rank": S.cw_rank, "absolute": S.cw_absolute, "comparison": S.cw_comparison, "hedge": S.cw_hedge, "jargon": S.cw_jargon}, "n": {"count": S.n_count, "off": S.n_off}, "hi": {"att": S.hist_att, "shout": S.hist_shout, "cw": S.hist_cw, "note": S.hist_note, "none": S.hist_none}, "sk": {"strong": S.sk_strong, "work": S.sk_work, "few": S.sk_few, "today": S.cw_today, "none": S.pq_none, "read": S.pq_read, "self": S.pq_self, "photo": S.pq_photo, "flag": S.pq_flag, "saved": S.es_saved, "note": S.es_note, "state": S.cw_board_state}, "vc": {"class": S.vc_class, "hold": S.vc_hold, "show": S.vc_show, "hide": S.vc_hide, "rm_need": S.rm_need, "callsign": S.vc_callsign, "who": S.vc_who, "dropped": S.vc_dropped, "private": S.vc_private, "kinds": {"praise": S.vc_k_praise, "concept": S.vc_k_concept, "scene": S.vc_k_scene}, "saved": S.vc_saved, "none": S.rv_t_none, "approve": S.rv_t_approve, "drop": S.vc_drop, "fuzzy": S.vc_fuzzy, "nocalls": S.vc_nocalls, "why": {"negative": S.vc_why_negative, "filtered": S.vc_why_filtered, "pii": S.vc_why_pii}}, "rv": {"approve": S.rv_t_approve, "hide": S.rv_t_hide, "none": S.rv_t_none, "hidden_name": S.rv_t_hidden_name, "vote_now": S.rv_t_vote_now, "votes": S.rv_t_votes, "approved_n": S.rv_t_approved_n, "st_none": S.rv_t_st_none, "st_planned": S.rv_t_st_planned, "st_open": S.rv_t_st_open, "st_due": S.rv_t_st_due, "st_closed": S.rv_t_st_closed, "st_novote": S.rv_t_st_novote}, "v": {"students": S.v_students, "avg": S.v_avg, "minutes": S.v_minutes, "views": S.v_views, "hot": S.v_hot, "none": S.v_none, "per_student": S.v_per_student}, "m": {"move": S.m_move, "leave": S.m_leave, "ret": S.m_return, "rotate": S.m_rotate,
   "rotate_confirm": S.m_rotate_confirm, "intro_p": S.m_intro_p, "intro_s": S.m_intro_s, "left": S.m_left, "new_links": S.m_new_links,
   "counts": S.m_counts, "status": {"new": S.m_status_new, "updated": S.m_status_updated, "unchanged": S.m_status_unchanged, "skipped": S.m_status_skipped}}, "r": {"open": S.r_open_now, "closed": S.r_closed, "upcoming": S.r_upcoming, "edit": S.r_edit,
   "close": S.r_close_now, "export": S.r_export, "confirm_close": S.r_confirm_close, "add": S.r_add, "progress": S.r_progress}, "c": {

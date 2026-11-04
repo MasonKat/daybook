@@ -774,5 +774,15 @@
   "pq_photo": "사진 {m} ({c}%)",
   "pq_flag": "학생 표시와 다름",
   "sk_p": "부분 {n}",
-  "cw_today": "오늘 연 수업 문제"
+  "cw_today": "오늘 연 수업 문제",
+  "cl_switch_confirm": "지금 시간은 {now} 수업이에요. {to} 반으로 바꿀까요?",
+  "cl_none_now": "수업 없는",
+  "cl_switch": "반 바꾸기",
+  "hist_title": "기록 (반·날짜별)",
+  "hist_load": "보기",
+  "hist_none": "이 날 기록이 없어요",
+  "hist_att": "태도",
+  "hist_shout": "칭찬",
+  "hist_cw": "수업 문제",
+  "hist_note": "한 줄"
 }
