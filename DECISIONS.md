@@ -460,6 +460,25 @@ The current `practice_mode = manitoba` is only the teacher's personal practice l
 - **Parents** (6 keys: the tutorial captions, the 베스트 리뷰 line) get warm-formal 존댓말 only: ~요 / ~습니다 / ~죠, never 유 or 쥬. Teacher-facing text, the board (incl. its 규칙 보기) and the safety text (consent letter, privacy lines, every error message) stay plain and fixed.
 - Tests: ≥ 3 variants and ≥ 2 ending families per key, placeholders kept, same student + day = same text, another day can differ, no adjacent same family on any listed screen, parent lines never 유/쥬, every variant passes the F18 word filter and the comment/PII lint, and published pages carry the day's picks.
 
+## F22.5: themes, the background slot and attendance-only unlocks (2026-11-05)
+- ⚙ 설정 → 테마: presets only (no custom CSS, no free colours): 기본 plus 7 palettes (보라 AMP, 바다빛, 숲속, 노을빛, 모노, 벚꽃잎, 별밤), each with
+  the accent (buttons), the ring gradient and the card tint for light AND dark; 밝기 자동 / 밝게 / 어둡게; 글자 크기 보통 / 크게 (zoom on the
+  scrolling content only, so the header still fits 360 px). `console/themes.py` generates `/static/themes.css`, linked by student pages only:
+  the parent page keeps the academy's default look.
+- **AA:** every palette × mode keeps ≥ 4.5:1 for text on cards, muted text on cards, text on the page and button text on the accent
+  (the lowest is 5.02); `tests/test_themes.py` computes the ratios. Text over a background picture sits on a scrim (white 84 % / ink 80 %),
+  ≥ 9.5:1 even over a pure black or white pixel.
+- **Names:** the presets avoid words that are also given names (하늘, 바다, 노을): a page carrying one trips the publish lint
+  ("another student's name"); the first draft's 밤하늘 did exactly that with a demo student called 하늘.
+- **Background slot:** daybook.json `brand.backgrounds` = `[{"id", "file", "label", "streak"?}]`, local files in brand/backgrounds/
+  (≤ 120 KB; larger ones are skipped), published to /b/bg/; the picture sits behind the header and the story rings under the scrim.
+  An empty list shows "곧 나와유". The teacher can add approved student artwork later.
+- **Unlocks (motivation, attendance only):** 노을빛 at 연속 7일, 별밤 at 21일, 벚꽃잎 when the class reaches its first 반 목표 step; a background
+  may carry its own `streak`. Never a test score or the skill map (`themes.earned(streak, goal_steps, …)` takes nothing else). Once open,
+  always open (`unlocks` table, written at 발행; a broken streak never takes a theme away). Locked items show 🔒 and "연속 7일이면 열려유".
+  The Worker validates ids only (it cannot know locks); a locked or unknown choice renders as the default look.
+- Stored with the F22.4 settings JSON (`theme`, `mode`, `size`, `bg`), so it applies on every device. The taste site opens every theme.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

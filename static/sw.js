@@ -2,7 +2,7 @@
    Static files: cache first. Requests to the Worker (another origin) are never touched. */
 'use strict';
 var CACHE = 'daybook-shell-v1';
-var STATIC = ['/static/app.css', '/static/app.js', '/static/icon-192.png'];
+var STATIC = ['/static/app.css', '/static/themes.css', '/static/app.js', '/static/icon-192.png'];
 
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(STATIC); }).then(function () { return self.skipWaiting(); }));

@@ -872,5 +872,19 @@
   "sec_lines": "내 한 줄",
   "sec_skills": "내 실력 지도",
   "sec_shouts": "칭찬 모음",
-  "sec_notes": "선생님 메시지"
+  "sec_notes": "선생님 메시지",
+  "set_theme": "테마",
+  "set_theme_default": "기본",
+  "set_mode": "밝기",
+  "set_mode_auto": "자동",
+  "set_mode_light": "밝게",
+  "set_mode_dark": "어둡게",
+  "set_size": "글자 크기",
+  "set_size_md": "보통",
+  "set_size_lg": "크게",
+  "set_bg": "배경",
+  "set_bg_none": "없음",
+  "set_bg_soon": "곧 나와유",
+  "lock_streak": "연속 {n}일이면 열려유",
+  "lock_goal": "반 목표 첫 단계에 닿으면 열려유"
 }

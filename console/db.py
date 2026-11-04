@@ -12,7 +12,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 KST = timezone(timedelta(hours=9))  # Asia/Seoul has no DST
 
 SCHEMA = """
@@ -43,6 +43,12 @@ CREATE TABLE IF NOT EXISTS student_prefs (    -- F22.4 ⚙ 설정: the student's
     student_id INTEGER PRIMARY KEY REFERENCES students(id),
     prefs      TEXT NOT NULL,                 -- JSON, validated by console/prefs.py (reorder only, never hide)
     updated    TEXT
+);
+CREATE TABLE IF NOT EXISTS unlocks (          -- F22.5: themes / backgrounds opened by attendance (once open, always open)
+    student_id INTEGER NOT NULL REFERENCES students(id),
+    item       TEXT NOT NULL,                 -- a theme id, or bg:<id>
+    ts         TEXT NOT NULL,
+    PRIMARY KEY (student_id, item)
 );
 CREATE TABLE IF NOT EXISTS avatar_uploads (   -- F22.4: an own picture, pre-moderated (shown only once approved)
     id         INTEGER PRIMARY KEY,

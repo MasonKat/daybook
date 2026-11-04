@@ -23,6 +23,7 @@ from . import vrank
 from . import brand
 from . import prefs as PF
 from . import copy as CP
+from . import themes as TH
 from . import models as M
 from .config import ROOT, Config, strings
 from .db import log_event, now_utc_iso
@@ -31,7 +32,7 @@ TEMPLATES = ROOT / "templates"
 STATIC = ROOT / "static"
 
 SVG_W, SVG_H = 320, 150
-JS_STRINGS = ("set_up_pending", "set_up_approved", "set_up_rejected", "set_up_limit", "set_up_err", "set_up_taste", "set_saved", "set_err",
+JS_STRINGS = ("set_theme_default", "set_bg_none", "set_up_pending", "set_up_approved", "set_up_rejected", "set_up_limit", "set_up_err", "set_up_taste", "set_saved", "set_err",
               "set_move_up", "set_move_down", "wt_todo", "wt_done", "wt_queued", "wt_err", "wt_closed", "wt_hard_max", "wt_edit", "wt_open", "wt_title", "done_title", "streak_label", "class_plus", "reward_to_go", "uploading", "upload_error",
               "upload_rate", "upload_offline", "replaced", "no_worker", "today_set", "set_default", "weekdays", "story_streak",
               "recorded_at", "recorded", "ritual_class", "ritual_study", "study_cta", "end_cta", "ck_done", "ck_bad",
@@ -431,6 +432,8 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
     from . import voice as VC
     rv_anon = practice.manitoba(conn, cfg)                                 # F18.3: manitoba mode is always anonymous
     has_mascot = bool(brand.source(cfg) and (not taste or brand.public(cfg)))   # F22.4: the mascot is one avatar choice
+    th_locks = TH.locks(cfg.extra)                                          # F22.5: attendance-only unlocks
+    th_bgs = _backgrounds(cfg)
     from . import ops
     rv_names = {cid: RV.page_name_hashes(conn, cid) for cid in classes}    # classmates' display names, hashed only
     from . import classwork as CW
@@ -547,6 +550,10 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         r_order = PF.ordered("rings", pf.get("rings"))
         stories.sort(key=lambda x: r_order.index(x["key"]) if x["key"] in r_order else len(r_order))
         avatar = _avatar(conn, s["id"], pf, has_mascot, S)
+        # F22.5: what attendance has opened (연속 days, the class's 반 목표 steps; never a score), then the effective look
+        goal_steps = sum(1 for x in (rw.ladder or []) if x.get("reached")) if rw else 0
+        unlocked = set(th_locks) if taste else TH.remember(conn, s["id"], TH.earned(streak, goal_steps, th_locks), now.isoformat())
+        look = TH.effective(pf, unlocked, {b["id"] for b in th_bgs}, th_locks, taste)
 
         # parent room: one report message per week (last PARENT_WEEKS weeks), newest open, earlier ones one line
         room = []
@@ -661,6 +668,13 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "prefs": pf, "sections": PF.SECTIONS, "colors": PF.COLORS, "mascot": has_mascot,
             "win": list(ops.class_window(cls)) if cls and ops.class_window(cls) else None,
             "avImg": avatar["img"] if avatar else "",
+            "look": look,
+            "themes": [{"id": k, "name": t["name"], "grad": "linear-gradient(135deg, {}, {}, {})".format(*t["grad"]),
+                        "lock": "" if taste or k not in th_locks or k in unlocked else _lock_text(th_locks[k], S_me)}
+                       for k, t in TH.THEMES.items()],
+            "bgs": [{"id": b["id"], "label": b.get("label") or b["id"], "src": b["src"],
+                     "lock": "" if taste or ("bg:" + b["id"]) not in th_locks or ("bg:" + b["id"]) in unlocked
+                     else _lock_text(th_locks["bg:" + b["id"]], S_me)} for b in th_bgs],
             "secLabels": {k: {i: S["sec_" + i] for i in ids} for k, ids in PF.SECTIONS.items()},
         }
         students.append({
@@ -677,6 +691,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "rv_anon": rv_anon,
             "rules": _rules(conn, cfg, cls, rw, today) if cls and rw else None,     # F22.1: the rule sheet
             "avatar": avatar,                                                # F22.4 (own page + parent page only)
+            "look": look, "bg_src": next((b["src"] for b in th_bgs if b["id"] == look["bg"]), ""),   # F22.5 (own page only)
             "S": S_me, "S_p": S_p, "tour_parent": json_script(tour_data(S_p, TOUR_PARENT)),   # F22.3
             "order": {"today": PF.ordered("today", pf.get("today")), "profile": PF.ordered("profile", pf.get("profile"))},
             "skills": CW.skill_map(conn, cfg, s["id"], cw_tags),           # F21.2: 내 실력 지도 (own page; parent: share_classwork)
@@ -729,6 +744,22 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         "av_gallery": [{"d": d, "svg": Markup(PF.gallery_svg(d, S["av_preset"].format(n=i + 1)))} for i, d in enumerate(PF.DESIGN_IDS)],
         "av_colors": PF.COLORS,
     }
+
+
+def _backgrounds(cfg: Config) -> list[dict]:
+    """F22.5: brand.backgrounds that exist locally and fit (<= 120 KB), each with its published path."""
+    out = []
+    for b in TH.backgrounds(cfg.extra):
+        p = Path(b["file"])
+        for cand in ((p,) if p.is_absolute() else (Path.cwd() / p, ROOT / p)):
+            if cand.is_file() and cand.stat().st_size <= TH.BG_MAX and cand.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
+                out.append({**b, "path": cand, "src": f"/b/bg/{b['id']}{cand.suffix.lower()}"})
+                break
+    return out
+
+
+def _lock_text(rule: dict, S: dict) -> str:
+    return S["lock_streak"].format(n=rule["streak"]) if "streak" in rule else S["lock_goal"]
 
 
 def _avatar(conn, student_id: int, pf: dict, has_mascot: bool, S: dict) -> dict | None:
@@ -889,8 +920,10 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
     # of keeping a cache-first copy forever.
     (out / "static" / "review_filter.js").write_text(review_filter_js(), encoding="utf-8", newline="")   # F18.3
     (out / "static" / "tour.js").write_text(tour_js(), encoding="utf-8", newline="")                     # F22.2
+    (out / "static" / "themes.css").write_text(TH.css(), encoding="utf-8", newline="")                   # F22.5 (student pages only)
     shell = hashlib.sha256(b"".join((STATIC / n).read_bytes() for n in ("app.js", "app.css", "sw.js"))
-                           + (out / "static" / "review_filter.js").read_bytes() + (out / "static" / "tour.js").read_bytes()).hexdigest()[:10]
+                           + (out / "static" / "review_filter.js").read_bytes() + (out / "static" / "tour.js").read_bytes()
+                           + (out / "static" / "themes.css").read_bytes()).hexdigest()[:10]
     (out / "sw.js").write_text((STATIC / "sw.js").read_text(encoding="utf-8").replace("daybook-shell-v1", f"daybook-shell-{shell}"),
                                encoding="utf-8", newline="")
     if any(v["thumb_src"] for v in ctx["videos"]):
@@ -899,6 +932,10 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
         for v in ctx["videos"]:
             if v["thumb_src"]:
                 make_thumb(v["thumb_src"], out / "t" / f"{v['id']}.jpg", max_w=360 if v["kind"] == "short" else 480)
+    for b in _backgrounds(cfg):
+        dst = out / b["src"].lstrip("/")
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_bytes(b["path"].read_bytes())
     if ctx["mascot"]:                                              # F15.4
         (out / "b").mkdir()
         (out / "b" / "mascot.png").write_bytes(brand.png_bytes(brand.source(cfg), brand.png_size(cfg)))

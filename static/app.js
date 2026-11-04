@@ -916,11 +916,23 @@
           if (n) e.appendChild(n); else { var sp = document.createElement('span'); sp.textContent = e.getAttribute('data-init'); e.appendChild(sp); }
         }
       }
-      applyOrder(); applyAvatar();
+      /* F22.5: the look (presets only; a locked choice falls back to the default, as the console does) */
+      var THEMES = D.themes || [], BGS = D.bgs || [];
+      function okTheme(id) { return THEMES.some(function (t) { return t.id === id && !t.lock; }); }
+      function bgOf(id) { for (var i = 0; i < BGS.length; i++) if (BGS[i].id === id && !BGS[i].lock) return BGS[i]; return null; }
+      function applyLook() {
+        var b = document.body, th = prefs.theme || '', md = prefs.mode || 'auto', sz = prefs.size || 'md', bg = bgOf(prefs.bg || '');
+        if (th && okTheme(th)) b.setAttribute('data-theme', th); else b.removeAttribute('data-theme');
+        if (md === 'light' || md === 'dark') b.setAttribute('data-mode', md); else b.removeAttribute('data-mode');
+        if (sz === 'lg') b.setAttribute('data-size', 'lg'); else b.removeAttribute('data-size');
+        if (bg) { b.setAttribute('data-bg', bg.id); b.style.setProperty('--bgimg', 'url(' + bg.src + ')'); }
+        else { b.removeAttribute('data-bg'); b.style.removeProperty('--bgimg'); }
+      }
+      applyOrder(); applyAvatar(); applyLook();
       if (!TASTE && D.worker) {
         fetch(D.worker + '/prefs?t=' + tok, { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
           if (!j || !j.ok) return;
-          if (j.prefs) { prefs = j.prefs; LS.set(PKEY, JSON.stringify(prefs)); applyOrder(); applyAvatar(); }
+          if (j.prefs) { prefs = j.prefs; LS.set(PKEY, JSON.stringify(prefs)); applyOrder(); applyAvatar(); applyLook(); }
           upState(j.avatar);
         }).catch(function () { /* offline: the saved copy */ });
       }
@@ -941,6 +953,33 @@
         }
         var cs = document.querySelectorAll('.set-col');
         for (var k = 0; k < cs.length; k++) cs[k].setAttribute('aria-pressed', Number(cs[k].getAttribute('data-c')) === col ? 'true' : 'false');
+        var groups = [['#set-themes .set-th', 'data-theme', draft.theme || ''], ['#set-mode .set-sb', 'data-mode', draft.mode || 'auto'],
+          ['#set-size .set-sb', 'data-size', draft.size || 'md'], ['#set-bgs .set-bgb', 'data-bg', draft.bg || '']];
+        groups.forEach(function (g) {
+          var els = document.querySelectorAll(g[0]);
+          for (var n = 0; n < els.length; n++) els[n].setAttribute('aria-pressed', els[n].getAttribute(g[1]) === g[2] ? 'true' : 'false');
+        });
+      }
+      function lookButtons() {
+        var box = $('set-themes'); box.innerHTML = '';
+        [{ id: '', name: S.set_theme_default, grad: 'var(--grad)', lock: '' }].concat(THEMES).forEach(function (t) {
+          var b = document.createElement('button'); b.type = 'button'; b.className = 'set-th'; b.setAttribute('data-theme', t.id);
+          var sw = document.createElement('span'); sw.className = 'sw'; sw.style.background = t.grad; b.appendChild(sw);
+          var nm = document.createElement('span'); nm.textContent = (t.lock ? '🔒 ' : '') + t.name; b.appendChild(nm);
+          if (t.lock) { var lk = document.createElement('span'); lk.className = 'lk'; lk.textContent = t.lock; b.appendChild(lk); b.disabled = true; }
+          box.appendChild(b);
+        });
+        var bb = $('set-bgs'), soon = $('set-bg-soon');
+        Array.prototype.slice.call(bb.querySelectorAll('.set-bgb')).forEach(function (x) { x.remove(); });
+        soon.hidden = BGS.length > 0;
+        if (!BGS.length) return;
+        [{ id: '', label: S.set_bg_none, src: '', lock: '' }].concat(BGS).forEach(function (g) {
+          var b = document.createElement('button'); b.type = 'button'; b.className = 'set-bgb'; b.setAttribute('data-bg', g.id);
+          if (g.src) { var im = document.createElement('img'); im.src = g.src; im.alt = ''; b.appendChild(im); }
+          var nm = document.createElement('span'); nm.textContent = (g.lock ? '🔒 ' : '') + g.label; b.appendChild(nm);
+          if (g.lock) { var lk = document.createElement('span'); lk.className = 'lk'; lk.textContent = g.lock; b.appendChild(lk); b.disabled = true; }
+          bb.appendChild(b);
+        });
       }
       function lists() {
         var ols = document.querySelectorAll('.set-ord');
@@ -961,9 +1000,10 @@
         }
       }
       function open() {
-        draft = { avatar: prefs.avatar || '', rings: orderOf('rings', prefs.rings), today: orderOf('today', prefs.today), profile: orderOf('profile', prefs.profile), _c: 0 };
+        draft = { avatar: prefs.avatar || '', rings: orderOf('rings', prefs.rings), today: orderOf('today', prefs.today), profile: orderOf('profile', prefs.profile), _c: 0,
+          theme: okTheme(prefs.theme || '') ? prefs.theme : '', mode: prefs.mode || 'auto', size: prefs.size || 'md', bg: bgOf(prefs.bg || '') ? prefs.bg : '' };
         $('set-err').textContent = '';
-        pressed(); lists();
+        lookButtons(); pressed(); lists();
         $('set').hidden = false;
       }
       $('set-open').addEventListener('click', open);
@@ -980,6 +1020,12 @@
         pressed();
       });
       $('set').addEventListener('click', function (e) {
+        var lb = e.target.closest('.set-th, .set-sb, .set-bgb');
+        if (lb && !lb.disabled) {
+          ['theme', 'mode', 'size', 'bg'].forEach(function (k) { if (lb.hasAttribute('data-' + k)) draft[k] = lb.getAttribute('data-' + k); });
+          pressed();
+          return;
+        }
         var b = e.target.closest('.so-b'); if (!b) return;
         var kind = b.getAttribute('data-kind'), i = Number(b.getAttribute('data-i')), j = i + Number(b.getAttribute('data-dir')), a = draft[kind];
         if (j < 0 || j >= a.length) return;
@@ -993,8 +1039,9 @@
         lists();
       });
       $('set-save').addEventListener('click', function () {
-        var out = { avatar: draft.avatar || '', rings: draft.rings, today: draft.today, profile: draft.profile };
-        prefs = out; LS.set(PKEY, JSON.stringify(out)); applyOrder(); applyAvatar();
+        var out = { avatar: draft.avatar || '', rings: draft.rings, today: draft.today, profile: draft.profile,
+          theme: draft.theme || '', mode: draft.mode || 'auto', size: draft.size || 'md', bg: draft.bg || '' };
+        prefs = out; LS.set(PKEY, JSON.stringify(out)); applyOrder(); applyAvatar(); applyLook();
         if (TASTE || !D.worker) { $('set-err').textContent = S.set_saved; return; }
         var fd = new FormData(); fd.append('t', tok); fd.append('prefs', JSON.stringify(out));
         fetch(D.worker + '/prefs', { method: 'POST', body: fd }).then(function (r) { return r.json(); })

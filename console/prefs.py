@@ -116,6 +116,16 @@ def gallery_svg(design: str, label: str) -> str:
             f' style="fill: var(--avc, {COLORS[0]})"/>{DESIGNS[design]}</svg>')
 
 
+# ---------------------------------------------------------------- F22.5: the look (theme, light/dark, text size, background)
+def _look():
+    from . import themes as TH
+    return {"theme": lambda v: v == "" or v in TH.THEMES, "mode": lambda v: v in TH.MODES, "size": lambda v: v in TH.SIZES,
+            "bg": lambda v: v == "" or bool(TH.BG_RE.match(v))}
+
+
+LOOK = _look()
+
+
 # ---------------------------------------------------------------- validation and order
 def validate(obj) -> dict:
     """The Worker's rule: known kinds only; an order names every id of its kind exactly once (no hiding)."""
@@ -131,6 +141,10 @@ def validate(obj) -> dict:
         elif k == "avatar":
             if not isinstance(v, str) or not valid_avatar(v):
                 raise PrefsError("unknown avatar")
+            out[k] = v
+        elif k in LOOK:                                   # F22.5: presets only (locks are applied when a page renders)
+            if not isinstance(v, str) or not LOOK[k](v):
+                raise PrefsError(f"unknown {k}")
             out[k] = v
         else:
             raise PrefsError(f"unknown key {k}")

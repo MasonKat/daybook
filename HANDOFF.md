@@ -14,7 +14,7 @@ write, checks each step with the doctor, and continues where it stopped (`--from
 1. [대시보드] Workers & Pages → pick the free `workers.dev` subdomain (once per account).
 2. [콘솔] `cd worker`, `npx wrangler login`, `npx wrangler d1 create daybook`; paste the printed `database_id` into `worker\wrangler.toml`.
 3. [콘솔] `npx wrangler secret put TEACHER_TOKEN` (a long random string; keep it for step 5).
-4. [콘솔] `npx wrangler deploy` (Worker v13: 학생 리뷰 with its hourly vote cron, 영상 반응, the teacher remote, 수업 문제; also creates the AMP Live Durable Object). Note the `https://….workers.dev` URL.
+4. [콘솔] `npx wrangler deploy` (Worker v14: 학생 리뷰 with its hourly vote cron, 영상 반응, the teacher remote, 수업 문제, ⚙ 설정 (avatar, order, theme); also creates the AMP Live Durable Object). Note the `https://….workers.dev` URL.
 5. [콘솔] copy `daybook.example.json` to `daybook.json`: `worker_url` (step 4), `pages_url`, `teacher_token` (step 3),
    `backup_dir` (a folder on the BitLocker-encrypted USB drive), `academy` (the academy name for the printed letter).
 6. [선생님 탭 / 콘솔] classes with hours, the 지각 rule, and (F21.3) a colour and a short label per class
@@ -33,19 +33,32 @@ write, checks each step with the doctor, and continues where it stopped (`--from
 10. [선생님 탭] 발행 (sends the links, the consent list, the rounds and the 학생 리뷰 wordlist / name hashes / vote moment
    to the Worker, then backs up). Optional before it: extra filter words in `filters\review_words.local.txt` (one per line).
 11. [선생님 탭] 배포 (needs `npx wrangler login` from step 2; the Pages project is created on the first deploy).
-12. [선생님 탭] 점검 (`doctor`): no ✗ ("Worker version ⚠" means the v13 deploy of step 4 did not happen). "consent ⚠" (slips not back yet) and "session not started" (before class) are fine.
+12. [선생님 탭] 점검 (`doctor`): no ✗ ("Worker version ⚠" means the v14 deploy of step 4 did not happen). "consent ⚠" (slips not back yet) and "session not started" (before class) are fine.
 13. [선생님 탭] 명단 → 학생 안내 복사 / 학부모 안내 복사 → the teacher's own 1:1 KakaoTalk (parents: only after a yes).
 14. From then on: 선생님 탭 → 학생 리뷰 → 승인 / 숨김 (after `pull` or 발행). Nothing a student writes reaches classmates before 승인.
 15. [선생님 탭] 명단: a 호출명 per student (가람, 7번; unique per class) before the first 음성 메모 가져오기 (CLOVA Note → 텍스트 내보내기 → paste).
 16. [선생님 탭] 리모컨 → QR 보기 → open it with the teacher's iPhone camera once, then 홈 화면에 추가. The QR holds the teacher token: never print it or send it.
+17. From then on, after `pull` or 발행: 선생님 탭 → 아바타 확인 → 승인 / 거절 (F22.4). A student's own picture is shown (own page + parent page,
+   from the next 발행) only after 승인. Optional: background pictures for ⚙ 설정 → 배경 (F22.5) in `brand\backgrounds\` (≤ 120 KB each, the
+   academy's own or approved student artwork), listed in daybook.json `brand.backgrounds` as `[{"id": "stars", "file": "brand/backgrounds/stars.jpg", "label": "별", "streak": 7}]`
+   (`streak` optional: locked until that many 연속 days). Empty list = the page shows "곧 나와유".
 
 The cloud build used synthetic data only. Real students, phones, scores and notes exist only on the teacher's laptop,
 in `daybook.sqlite` (gitignored), and on the deployed pages behind unguessable links. Never commit `daybook.sqlite`,
 `daybook.json`, `dist/`, a real roster CSV or real screener snapshots. Never deploy to GitHub Pages.
 
+## State at 11-05 (after F20–F22): the priority list is done
+
+Done and pushed, each as its own commit on `main`: F20 setup wizard, F21.1 share_classwork, F21.2 수업 문제 + 실력 지도,
+F21.3 class lever, F21.4 서술형, F21.5 photo-grading import, F22.1 per-class goal rules + rule sheet, F22.2 first-visit tutorial,
+F22.3 varied endings (`console/copy_ko.json`), F22.4 ⚙ 설정 (avatar presets + a pre-moderated own picture; reorder, never hide),
+F22.5 themes (7 AA-checked presets, 밝게/어둡게/자동, 글자 크기, the background slot, attendance-only unlocks). Console schema v15,
+Worker v14 (redeploy: checklist step 4; `doctor` warns until then). Nothing is half-built. Deferred items are listed at the end of
+DECISIONS.md (F22.4: avatars beside 베스트 리뷰 winners and on the remote's buttons; drag-to-reorder).
+
 ## 0. State at 11-04 (after F6–F14 and G1–G5): what to do before Friday 11-06
 
-`main` is green from a clean clone: 300 pytest, 61 Worker node tests (incl. the class-day budget with an AMP Live round
+`main` is green from a clean clone: 319 pytest, 61 Worker node tests (incl. the class-day budget with an AMP Live round
 and a weekly-test round), the full Playwright check. Built: P0, design v2, F1–F14, hotfix H1–H6, G1 doctor, G2 backup,
 G3 운영 가이드, G4 안내 cards, G5 taste refresh. Every choice is in `DECISIONS.md`. Console schema v8 (migrates by itself);
 Worker v6. The pilot: two Mon/Wed/Fri 고1 classes from Friday 11-06; the weekly test restarts that day (고2 on Saturday).

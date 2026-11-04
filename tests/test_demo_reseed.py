@@ -38,6 +38,7 @@ def test_reseed_twice_with_every_table_filled(conn):
                     VALUES (?, ?, '2026-11-05', '서술형 1', 1, 'p', 'essay', 't', 't')""", (sid, cls["id"]))
     conn.execute("INSERT INTO review_wins (round_id, review_id, votes) VALUES ('r1', 'abcdefabcdef', 1)")
     conn.execute("INSERT INTO avatar_uploads (student_id, mime, image, ts) VALUES (?, 'image/png', x'89', 't')", (sid,))
+    conn.execute("INSERT INTO unlocks (student_id, item, ts) VALUES (?, 'sunset', 't')", (sid,))
     conn.commit()
     tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")]
     empty = [t for t in tables if t != "events" and not conn.execute(f"SELECT 1 FROM {t} LIMIT 1").fetchone()]

@@ -18,7 +18,7 @@ const RID_RE = /^[a-f0-9]{16}$/;
 // 1 base, 2 출석, 3 장면 + Live, 4 푼 문제 수, 5 주간 테스트 reports, 6 /health version + /tokmap-info, 7 /watch,
 // 8 Web Push, 9 consent (no watch / push without the parent's yes), 10 학생 리뷰, 11 영상 반응 (5-way, pooled per grade),
 // 12 the teacher remote (/t/remote: tap who, speak what), 13 수업 문제 (in-class ○/✕/– checks),
-// 14 ⚙ 설정 (per-token settings JSON + a pre-moderated own avatar picture)
+// 14 ⚙ 설정 (per-token settings JSON + a pre-moderated own avatar picture; F22.5 adds theme / mode / size / bg)
 export const WORKER_VERSION = 14;
 const DAILY_CRON = '17 19 * * *';
 // the worst words, used until the console has sent the full list (filters/review_words.txt)
@@ -39,6 +39,10 @@ const DAY = 86400;
 // console/prefs.py SECTIONS must stay equal (tests/test_prefs.py compares them).
 export const PREF_SECTIONS = {"rings":["moments","videos","popular","streak","goal","review","teacher"],"today":["routine","test","classwork","vote"],"profile":["watched","solved","tiles","lines","skills","shouts","notes"]};
 const AVATAR_RE = /^(|own|mascot|p:[a-z]{2,10}-[0-7])$/;
+// F22.5: theme presets only (console/themes.py THEMES, compared by tests/test_themes.py); locks are applied by the console
+export const THEME_IDS = ["amp","sea","forest","sunset","mono","blossom","night"];
+const LOOK = { theme: (v) => v === '' || THEME_IDS.includes(v), mode: (v) => ['auto', 'light', 'dark'].includes(v),
+  size: (v) => ['md', 'lg'].includes(v), bg: (v) => /^[a-z0-9_-]{0,24}$/.test(v) };
 const AVATAR_MAX = 60 * 1024;
 
 export const seoulDay = (ms) => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10);
@@ -1014,6 +1018,9 @@ export function checkPrefs(raw) {
       out[k] = v;
     } else if (k === 'avatar') {
       if (typeof v !== 'string' || !AVATAR_RE.test(v)) return null;
+      out[k] = v;
+    } else if (Object.prototype.hasOwnProperty.call(LOOK, k)) {
+      if (typeof v !== 'string' || !LOOK[k](v)) return null;
       out[k] = v;
     } else return null;
   }

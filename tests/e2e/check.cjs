@@ -1193,6 +1193,19 @@ print(c.execute("SELECT m.marks FROM classwork_marks m JOIN students s ON s.id =
       const rel = (list) => list.filter((x) => before.includes(x));
       check(n === 18 && sw <= 360 && after.length === before.length && rel(want).join() === after.join() && await sp.isVisible('.sbar .me-av svg'),
         `settings at 360 px (${n} rows, scroll ${sw}): ▼ moved ${ids[0]} after ${ids[1]}, nothing hidden (${after.length} rings), the owl avatar in the header`);
+      // F22.5: a theme preset, 어둡게, 크게; locked presets show 🔒 and cannot be picked
+      await sp.click('#set-open');
+      const locks = await sp.evaluate(() => [...document.querySelectorAll('#set-themes .set-th')].map((b) => [b.getAttribute('data-theme'), b.disabled, /🔒/.test(b.textContent)]));
+      await sp.click('#set-themes .set-th[data-theme="sea"]'); await sp.click('#set-mode [data-mode="dark"]'); await sp.click('#set-size [data-size="lg"]');
+      const soon = await sp.isVisible('#set-bg-soon');
+      await sp.click('#set-save');
+      await sp.waitForSelector('#set', { state: 'hidden', timeout: 5000 }).catch(() => {});
+      const look = await sp.evaluate(() => ({ t: document.body.getAttribute('data-theme'), m: document.body.getAttribute('data-mode'), z: document.body.getAttribute('data-size'),
+        acc: getComputedStyle(document.body).getPropertyValue('--accent').trim(), sw: document.documentElement.scrollWidth,
+        mw: document.getElementById('s-main').scrollWidth - document.getElementById('s-main').clientWidth }));
+      check(look.t === 'sea' && look.m === 'dark' && look.z === 'lg' && look.acc === '#0369a1' && look.sw <= 360 && look.mw <= 0 && soon
+        && locks.length === 8 && locks.every((x) => x[1] === x[2]),
+        `theme 바다 + 어둡게 + 크게 applied (${look.acc}), no horizontal scroll at 360 px (${look.sw}/${look.mw}); locked presets 🔒 (${locks.filter((x) => x[1]).map((x) => x[0]).join(',') || 'none'}); 배경: 곧 나와유`);
       await sc.close();
       const oc = await browser.newContext({ viewport: { width: 390, height: 844 } });          // another device: from the Worker
       const op = await oc.newPage();

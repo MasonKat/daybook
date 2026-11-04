@@ -38,7 +38,7 @@ h1, h2, h3 { line-height: 1.25; }
 [hidden] { display: none !important; }
 .chip { display: inline-block; background: var(--card); color: var(--fg); border-radius: 999px; padding: 2px 10px; font-size: 12px; max-width: 100%; }
 .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 20px; border-radius: 999px; border: 0; font: 600 15px var(--font); cursor: pointer; text-decoration: none; }
-.btn.primary { background: var(--accent); color: #fff; }
+.btn.primary { background: var(--accent); color: var(--accent-fg); }
 .btn.ghost { background: var(--card); color: var(--fg); }
 .err { color: var(--err); font-weight: 600; }
 
@@ -723,3 +723,15 @@ select.hold { min-height: 32px; border-radius: 8px; margin-left: 4px; }
 .set-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: var(--s3); }
 .three-av { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; }
 .three-av .av { width: 28px; height: 28px; font-size: 12px; }
+
+/* F22.5 테마 / 밝기 / 글자 크기 / 배경 (presets only; static/themes.css holds the palettes) */
+.set-themes, .set-bgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin-bottom: var(--s2); }
+.set-th, .set-bgb { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 6px; border-radius: 12px; border: 2px solid var(--line); background: var(--card); color: var(--fg); font: 600 13px var(--font); cursor: pointer; text-align: left; min-height: 44px; }
+.set-th[aria-pressed="true"], .set-bgb[aria-pressed="true"] { border-color: var(--accent); }
+.set-th .sw { display: block; height: 22px; border-radius: 8px; }
+.set-th .lk, .set-bgb .lk { font-weight: 400; font-size: 12px; color: var(--muted); }
+.set-th:disabled, .set-bgb:disabled { cursor: default; opacity: .85; }
+.set-bgb img { width: 100%; height: 44px; object-fit: cover; border-radius: 8px; }
+.set-seg { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--s2); }
+.set-sb { min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: 600 14px var(--font); cursor: pointer; }
+.set-sb[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
