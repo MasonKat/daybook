@@ -36,6 +36,21 @@ test('F18.3 filter: 욕설 (plain, 초성, spaced, substituted), hate, phones, l
   }
 });
 
+// the Windows spot-check (11-04): 17 must block, 10 must pass, 0 false blocks
+const PEER_BLOCK = ['ㅆㅂ', '씨 발', 'ㅂㅅ같은', '병1신', 'qudtls', '개새끼', '김치녀', '전라디언', '존나', 'ㅈㄴ', 'ㄱㅅㄲ',
+  '느금마', '틀딱', '한남', '장애인같이 풀었다', '흑형', '시이발'];
+const PEER_PASS = ['피카소급', '개웃김ㅋㅋ', '시발점', '삑사리', '병아리', '존경합니다', '롤러코스터', '수학의 신', '18번', '미친 난이도'];
+test('F18 fix: 패드립, age, gender, race, region, disability insults and elongation are blocked; ordinary words pass', () => {
+  for (const bad of [...PEER_BLOCK, '씨이이발', '조오온나', '니애미', '급식충', '한남충', '페미충', '짱께', '쪽발이', '찐따', '장애인처럼 느림',
+    '장애인 새끼', '븅신', '김치년']) {
+    assert.equal(check(bad, LIST).ok, false, bad);
+  }
+  for (const ok of [...PEER_PASS, '장애인 차별 반대 포스터', '한 남자가 문제를 풀었다', '한남동 학원 앞', '한 녀석이 웃김', '홍어 먹어 봄',
+    '살이 찐다 간식 그만', '기이한 문제', '오오 정답', '아아 아깝다', '좋아요', '8등신 그림', '흑인 수학자 이야기']) {
+    assert.equal(check(ok, LIST).ok, true, ok);
+  }
+});
+
 test('F18.3 write: pre-moderated, one a day, ≤ 60 characters, blocked text is never stored, a classmate\'s name is blocked', async () => {
   const env = await ready();
   assert.deepEqual((await call(env, write(TOK, '시발 문제'))).body, { ok: false, error: 'blocked' });

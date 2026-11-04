@@ -3,6 +3,8 @@
 # a Korean keyboard (tlqkf = 시발), so one plain entry covers its variants. Extend it locally in
 # filters/review_words.local.txt (gitignored); publish sends the merged list to the pages and the Worker.
 # Words that must never be blocked (e.g. 시발점) go in a line starting with "!".
+# Elongation is read through: a syllable that only repeats the previous vowel is dropped (시이발, 씨이이발, 조오온나).
+# A plain group word (장애인, 흑인, 여자, 노인) is never listed alone: only its insulting forms and patterns are.
 
 # 욕설
 시발
@@ -44,21 +46,54 @@ bitch
 sibal
 ssibal
 shibal
-# 혐오 · 차별 (지역)
-홍어
+# 패드립
+느금마
+느금
+니애미
+니어미
+니엄마없
+느개비
+니애비
+애미없
+애비없
+엠창
+# 혐오 · 차별 (지역; 홍어 is left out on purpose: it is also a food and a common word)
 전라디언
 개쌍도
+과메기충
+# 혐오 · 차별 (나이)
+틀딱
+틀니딱딱
+급식충
+잼민이
+연금충
 # 혐오 · 차별 (성별)
 김치녀
+김치년
+김치남
 된장녀
+한남
 한남충
+한녀
+한녀충
 메갈
 꼴페미
+페미년
+페미충
 보슬아치
 # 혐오 · 차별 (장애)
 애자
 찐따
 장애새끼
+장애인같
+장애인처럼
+장애인새끼
+장애인이냐
+장애냐
+정신병자
+병쉰
+병싄
+벙신
 벙어리
 # 혐오 · 차별 (외모)
 뚱보
@@ -68,9 +103,14 @@ shibal
 얼평
 # 혐오 · 차별 (국적 · 인종)
 짱깨
+짱께
 쪽바리
+쪽발이
 깜둥이
+흑형
+흑누나
 똥남아
+조선족새끼
 # 따돌림
 왕따
 자살
@@ -78,3 +118,10 @@ shibal
 !시발표
 !시발점
 !시발역
+!한남동
+!한남대
+!한남자
+!한남성
+!한남학
+!한남편
+!한녀석

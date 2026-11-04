@@ -30,6 +30,21 @@ function keys(s) {          // syllables -> the jamo keystrokes that type them (
   return out;
 }
 
+// 시이발 -> 시발, 씨이이발 -> 씨발, 조오온나 -> 존나: a syllable that only repeats the previous vowel (initial ㅇ, same
+// vowel, the previous one open) is dropped; its final consonant, if any, moves onto the previous syllable
+function collapse(syl) {
+  let out = '';
+  for (const ch of syl) {
+    const c = ch.charCodeAt(0) - SBASE, p = out ? out.charCodeAt(out.length - 1) - SBASE : -1;
+    if (p >= 0 && p % 28 === 0 && Math.floor(c / 588) === 11 && Math.floor((c % 588) / 28) === Math.floor((p % 588) / 28)) {
+      if (c % 28) out = out.slice(0, -1) + String.fromCharCode(SBASE + p + (c % 28));
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
 export function readings(text) {
   // NFKC (full-width letters, ligatures) for everything but standalone jamo, which NFKC would turn into conjoining jamo
   let t = '';
@@ -43,7 +58,7 @@ export function readings(text) {
   }
   let typed = '';
   for (const ch of lat) typed += QWERTY[ch] || '';
-  return { raw: t, syl, jamo, lat, typed, sylKeys: keys(syl) };
+  return { raw: t, syl, sylc: collapse(syl), jamo, lat, typed, sylKeys: keys(syl) };
 }
 
 export function parseList(text) {
@@ -62,12 +77,12 @@ export function check(text, list, nameHit = null) {
   const r = readings(text);
   if (PHONE_RE.test(r.raw.replace(/[^\d\s.\-]/g, ' ')) || PHONE_RE.test(r.raw)) return { ok: false, reason: 'phone' };
   if (LINK_RE.test(r.raw)) return { ok: false, reason: 'link' };
-  let syl = r.syl;
-  for (const a of list.allow) if (SYL_RE.test(a)) syl = syl.split(a).join('');      // 시발점 is a math word
+  let syl = r.syl, sylc = r.sylc;
+  for (const a of list.allow) if (SYL_RE.test(a)) { syl = syl.split(a).join(''); sylc = sylc.split(a).join(''); }   // 시발점 is a math word
   for (const w of list.block) {
     if (/^[ㄱ-ㅣ]+$/.test(w)) { if (r.jamo.includes(w) || keys(r.jamo).includes(keys(w))) return { ok: false, reason: 'word' }; continue; }
     if (/^[a-z]+$/.test(w)) { if (r.lat.includes(w)) return { ok: false, reason: 'word' }; continue; }
-    if (syl.includes(w)) return { ok: false, reason: 'word' };
+    if (syl.includes(w) || sylc.includes(w)) return { ok: false, reason: 'word' };
     const k = keys(w);
     if (k.length >= 4 && (r.typed.includes(k) || (r.jamo && keys(r.jamo).includes(k)))) return { ok: false, reason: 'word' };
   }

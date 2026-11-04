@@ -191,6 +191,10 @@ def test_published_filter_equals_the_worker_filter_and_hashes_match(conn, klass,
     (tmp_path / "rf.js").write_text(js, encoding="utf-8")
     samples = ["시발 어려움", "ㅅㅂ", "ㅅ 1 ㅂ", "tlqkf", "f u c k", "010-1234-5678", "www.naver.com", "오늘 시발점 문제",
                "이번 시 발표 최고", "선생님 판서가 피카소급", "18문제 다 맞음", "김치녀", "병.신"]
+    peer_block = ["ㅆㅂ", "씨 발", "ㅂㅅ같은", "병1신", "qudtls", "개새끼", "김치녀", "전라디언", "존나", "ㅈㄴ", "ㄱㅅㄲ",
+                  "느금마", "틀딱", "한남", "장애인같이 풀었다", "흑형", "시이발"]
+    peer_pass = ["피카소급", "개웃김ㅋㅋ", "시발점", "삑사리", "병아리", "존경합니다", "롤러코스터", "수학의 신", "18번", "미친 난이도"]
+    samples += peer_block + peer_pass
     name = studs[0]["display_name"]
     script = f"""
       const fs = require('fs'), vm = require('vm'), crypto = require('crypto');
@@ -206,7 +210,7 @@ def test_published_filter_equals_the_worker_filter_and_hashes_match(conn, klass,
     """
     out = json.loads(subprocess.run([NODE, "-e", script], capture_output=True, text=True, encoding="utf-8", check=True).stdout)
     assert out["page"] == out["worker"]
-    assert out["page"] == [False] * 7 + [True] * 4 + [False] * 2
+    assert out["page"] == [False] * 7 + [True] * 4 + [False] * 2 + [False] * 17 + [True] * 10   # 0 false blocks
     assert out["h"] in RV.page_name_hashes(conn, cls["id"]) and name in out["pieces"]   # the phone finds a classmate's name
 
 
