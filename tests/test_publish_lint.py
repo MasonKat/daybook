@@ -118,7 +118,6 @@ def test_parent_page_blocks(conn, cfg, klass, tmp_path):
     from console import importers
     cls, studs = klass
     s = studs[0]
-    conn.execute("UPDATE students SET share_tests = 'yes'")          # F21.1
     sid = ops.ensure_session(conn, cls["id"], TODAY)
     ops.set_attitude(conn, s["id"], sid, 3)
     ops.teacher_submit(conn, s["id"], TODAY)

@@ -589,7 +589,6 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                 "sep": _date_ko_full(stamp), "current": current, "time": at.strftime("%H:%M") if at else "",
                 "title": S["report_title"].format(m=mth, n=nth, range=rng),
                 "summary": (S["summary"] if trend else S["summary_no_test"]).format(range=rng, k=k, dir=dir_eff, w=wsum),
-                "summary_nt": S["summary_no_test"].format(range=rng, k=k, dir="", w=wsum),     # F21.1: tests not shared
                 "days": wdays, "k": k, "c": len(class_days_so_far),
                 "d": sum(1 for x in class_days_so_far if x["done"]),
                 "trend": trend if current else None, "has_tests": trend is not None,
@@ -649,7 +648,6 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "class_name": cls["name"] if cls else "",
             "student_token": s["student_token"],
             "consent": consent.get(s["id"]) == "yes",            # F17: the parent page, watch signals and push need it
-            "share_tests": s["share_tests"] == "yes",            # F21.1: weekly-test results on the parent page (both agreed)
             # F19.1: korea mode: the student's own positive 칭찬 lines ("선생님 한마디"); manitoba: teacher-only
             "shouts": [] if rv_anon else _shouts(conn, s["id"], scrub, wk),
             "mic": 0 if rv_anon else VC.mic_total(conn, s["id"]),

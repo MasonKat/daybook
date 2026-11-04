@@ -121,8 +121,7 @@ def status(conn: sqlite3.Connection, cfg: Config, today: date, class_id: int | N
         out.append({"id": s["id"], "slug": s["slug"], "display_name": s["display_name"], "class_name": s["class_name"],
                     "days": d, "level": "red" if d >= st["red"] else "amber" if d >= st["amber"] else "ok",
                     "last": last.isoformat() if last else None, **profile(conn, s["id"]),
-                    "consent": conn.execute("SELECT consent FROM students WHERE id = ?", (s["id"],)).fetchone()[0],
-                    "share_tests": conn.execute("SELECT share_tests FROM students WHERE id = ?", (s["id"],)).fetchone()[0]})
+                    "consent": conn.execute("SELECT consent FROM students WHERE id = ?", (s["id"],)).fetchone()[0]})
     out.sort(key=lambda x: (-x["days"], x["class_name"] or "", x["display_name"]))
     return out
 
@@ -235,9 +234,8 @@ def rules_for(conn: sqlite3.Connection, cfg: Config, s: sqlite3.Row, cls: sqlite
             flags.append({"rule": "test", "level": "need", "evidence": date.fromisoformat(last["date"]),
                           "reason": S["reason_test"].format(drop=drop, now=round(100 * last["efficiency"]),
                                                             mean=round(100 * sum(prev) / 3), d=_md(date.fromisoformat(last["date"]))),
-                          # F21.1: the call script / 카톡 draft quotes no test numbers unless both agreed to share them
-                          "fact": S["fact_test"].format(drop=drop, now=round(100 * last["efficiency"]), mean=round(100 * sum(prev) / 3))
-                          if _shared(s) else S["fact_test_private"],
+                          "fact": S["fact_test"].format(drop=drop, now=round(100 * last["efficiency"]),
+                                                        mean=round(100 * sum(prev) / 3)),
                           "proposal": S["prop_test"]})
     # 오래 연락 없음: the red state of 연락 현황
     st = settings(cfg)
@@ -259,13 +257,6 @@ def _cleared(conn: sqlite3.Connection, student_id: int, flag: dict, today: date)
     return bool(sn)
 
 
-def _shared(s) -> bool:
-    try:
-        return s["share_tests"] == "yes"
-    except (IndexError, KeyError):
-        return False
-
-
 def good_facts(conn: sqlite3.Connection, s: sqlite3.Row, cls: sqlite3.Row | None, today: date, since: date | None = None) -> list[str]:
     """Only positive facts, most convincing first: test strength/rise, streak, ♥ days, the class reward, a moment."""
     S = P()
@@ -273,7 +264,7 @@ def good_facts(conn: sqlite3.Connection, s: sqlite3.Row, cls: sqlite3.Row | None
     out = []
     tests = conn.execute("SELECT date, efficiency FROM tests WHERE student_id = ? AND efficiency IS NOT NULL ORDER BY date",
                          (s["id"],)).fetchall()
-    if tests and _shared(s):                        # F21.1: test results reach a parent only when both agreed
+    if tests:
         last = tests[-1]["efficiency"]
         if last >= 0.8:
             out.append(S["good_test_high"].format(p=round(100 * last)))

@@ -54,7 +54,6 @@ def test_unknown_ext_id_is_reported_and_skipped_and_caps_apply(conn, klass, tmp_
 
 def test_review_ring_parent_line_and_matched_videos(conn, klass, tmp_path):
     _, studs = klass
-    conn.execute("UPDATE students SET share_tests = 'yes'")          # F21.1: the parent line sits in the test row
     importers.import_insights(conn, write(tmp_path, [{"ext_id": "S901", "focus": ["계수비교"],
                                                       "videos": ["https://example.com/q/v1/", "https://example.com/q/other/"],
                                                       "student_line": "부호 실수가 두 번 있었어요.", "parent_line": "계수비교 복습을 권해요."}]))

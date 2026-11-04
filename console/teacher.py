@@ -45,12 +45,10 @@ def roster_edit(conn: sqlite3.Connection, cfg: Config, body: dict) -> dict:
     active = body.get("active")
     consent = body.get("consent")
     callsign = body.get("callsign")
-    share = body.get("share_tests")
     changed = ops.edit_student(conn, str(body.get("slug", "")), display if isinstance(display, str) else None,
                                active=active if isinstance(active, bool) else None,
                                consent=consent if isinstance(consent, str) else None,
-                               callsign=callsign if isinstance(callsign, str) else None,
-                               share_tests=share if isinstance(share, str) else None)
+                               callsign=callsign if isinstance(callsign, str) else None)
     conn.commit()
     msg = push_tokmap(conn, cfg) if {"active", "consent"} & changed else ""
     return {"ok": True, "changed": sorted(changed), "message": msg}

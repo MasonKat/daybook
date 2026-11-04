@@ -352,10 +352,6 @@
     ['yes', 'no', 'unknown'].forEach(function (k) { var o = el('option', { value: k }, C.consent[k]); if (x.consent === k) o.selected = true; cs.appendChild(o); });
     cs.onchange = function () { api('/api/teacher/roster', { slug: x.slug, consent: cs.value }).then(function (j) { $('status-msg').textContent = j.ok ? S.saved + (j.message ? ' · ' + j.message : '') : (j.error || ''); cs.className = 'consent ' + cs.value; }); };
     td.appendChild(cs);
-    var sh = el('select', { 'aria-label': 'share_tests', 'class': 'share ' + x.share_tests });   /* F21.1: tests on the parent page */
-    ['no', 'yes'].forEach(function (k) { var o = el('option', { value: k }, C.share[k]); if (x.share_tests === k) o.selected = true; sh.appendChild(o); });
-    sh.onchange = function () { api('/api/teacher/roster', { slug: x.slug, share_tests: sh.value }).then(function (j) { $('status-msg').textContent = j.ok ? S.saved : (j.error || ''); sh.className = 'share ' + sh.value; }); };
-    td.appendChild(sh);
     td.appendChild(sel('greeting', { '어머님': '어머님', '아버님': '아버님', '보호자님': '보호자님' }));
     tr.appendChild(td);
     var td2 = el('td');

@@ -161,8 +161,6 @@ def seed(conn: sqlite3.Connection, today: date | None = None, force: bool = Fals
         conn.execute("INSERT INTO meetings (student_id, day, kind, ts) VALUES (?, ?, 'slc', ?)",
                      (r["id"], today.isoformat(), "2026-01-01T00:00:00.000Z"))
     conn.execute("UPDATE students SET consent = 'yes'")           # F17: every synthetic parent said yes (콩 too)
-    # F21.1: 콩 and the late star (and their parents) agreed to share test results; everyone else keeps the default no
-    conn.execute("UPDATE students SET share_tests = 'yes' WHERE slug = ? OR ext_id = ?", (KONG["slug"], LATE_STAR))
     log_event(conn, "demo_seed", {"today": today.isoformat()})
     conn.commit()
 

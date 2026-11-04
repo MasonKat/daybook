@@ -193,7 +193,7 @@ async function audit(browser, url, file, label, viewport, colorScheme) {
     const pickFrom = (cls) => JSON.parse(execFileSync(PYTHON, ['-c', `
 import json, sqlite3, sys
 c = sqlite3.connect(sys.argv[1]); c.row_factory = sqlite3.Row
-r = c.execute("""SELECT s.student_token, s.parent_token, s.display_name, s.slug FROM students_public s JOIN classes k ON k.id = s.class_id
+r = c.execute("""SELECT s.student_token, s.parent_token, s.display_name FROM students_public s JOIN classes k ON k.id = s.class_id
   WHERE k.name = ? AND s.active = 1 AND s.id NOT IN (SELECT student_id FROM submissions WHERE day = ?) ORDER BY s.id LIMIT 1""", (sys.argv[3], sys.argv[2])).fetchone()
 print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' }));
     const pick = pickFrom(CLASS_ON), offPick = pickFrom(CLASS_OFF);
@@ -584,17 +584,6 @@ print(json.dumps(dict(r)))`, env.DAYBOOK_DB, today, cls], { encoding: 'utf-8' })
         `pull → export reports: the Notion columns, one row per reporting student (${lines.length - 1} rows)`);
     }
     console.log('      ' + daybook('publish').trim().split('\n').pop());
-    {   // F21.1: weekly-test results are private by default: no 주간 테스트 row until the student AND the parent agreed
-      const pc0 = await browser.newContext({ viewport: { width: 390, height: 844 } });
-      const p0 = await pc0.newPage();
-      await p0.goto(`${PAGES}/p/${pick.parent_token}/`, { waitUntil: 'networkidle' });
-      const html0 = await p0.content();
-      check(!html0.includes('주간 테스트</span>') && (await p0.locator('svg.trend').count()) === 0 && (await p0.locator('.rline.insight').count()) === 0,
-        'F21.1: share_tests = no (default): the parent page has no 주간 테스트 row, no trend, no insight line');
-      await pc0.close();
-      daybook('roster', 'edit', pick.slug, '--share-tests', 'yes');
-      console.log('      ' + daybook('publish').trim().split('\n').pop());
-    }
     for (const cs of SCHEMES) {
       const pctx = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: cs });
       const pp = await pctx.newPage();
