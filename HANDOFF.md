@@ -3,13 +3,37 @@
 **Windows: every `daybook …` command in this file is `.venv\Scripts\python.exe -m console …`** (antivirus blocks pip's
 generated launcher; `scripts\*.ps1` and the e2e already run the module). Mac/Linux keep `daybook`.
 
+## Thursday checklist (real setup before Friday 11-06), in this order
+
+[대시보드] = the teacher's Cloudflare dashboard in a browser. [콘솔] = PowerShell in the repo folder
+(`.venv\Scripts\python.exe -m console …` for DAYBOOK, never pip's .exe). [선생님 탭] = the board's Teacher tab.
+
+1. [대시보드] Workers & Pages → pick the free `workers.dev` subdomain (once per account).
+2. [콘솔] `cd worker`, `npx wrangler login`, `npx wrangler d1 create daybook`; paste the printed `database_id` into `worker\wrangler.toml`.
+3. [콘솔] `npx wrangler secret put TEACHER_TOKEN` (a long random string; keep it for step 5).
+4. [콘솔] `npx wrangler deploy` (Worker v9; also creates the AMP Live Durable Object). Note the `https://….workers.dev` URL.
+5. [콘솔] copy `daybook.example.json` to `daybook.json`: `worker_url` (step 4), `pages_url`, `teacher_token` (step 3),
+   `backup_dir` (a folder on the BitLocker-encrypted USB drive), `academy` (the academy name for the printed letter).
+6. [선생님 탭 / 콘솔] classes with hours and the 지각 rule: 반 만들기, then 반 규칙 · 수업 시간
+   (`class add 고1A --term 2026-11-06..2027-02-26 --days 월,수,금 --grade 고1 --start 18:00`, `class edit 고1A --end 20:00 --late-min 10`).
+7. [선생님 탭] 명단 · 반 관리 → 가져오기 미리보기 with the roster CSV → 이대로 가져오기.
+8. [콘솔] print the letters: `cards parents <class>` (one A4 page per family, with a tear-off consent slip; no name, link or QR).
+   [선생님 탭] as the slips come back: 연락 현황 → 동의 / 동의 안 함 (`roster edit <slug> --consent yes|no`). Until a yes there is
+   no parent page, no watch signal and no push for that student; the class routine works either way.
+9. [콘솔] weekly-test rounds: `round add <Friday round id> --grade 1학년 --classes <both 고1 classes> --quizzes <N> --open "2026-11-06 20:00" --close "2026-11-08 23:59"`,
+   and the 고2 round for Saturday the same way.
+10. [선생님 탭] 발행 (sends the links, the consent list and the rounds to the Worker, then backs up).
+11. [선생님 탭] 배포 (needs `npx wrangler login` from step 2; the Pages project is created on the first deploy).
+12. [선생님 탭] 점검 (`doctor`): no ✗. "consent ⚠" (slips not back yet) and "session not started" (before class) are fine.
+13. [선생님 탭] 명단 → 학생 안내 복사 / 학부모 안내 복사 → the teacher's own 1:1 KakaoTalk (parents: only after a yes).
+
 The cloud build used synthetic data only. Real students, phones, scores and notes exist only on the teacher's laptop,
 in `daybook.sqlite` (gitignored), and on the deployed pages behind unguessable links. Never commit `daybook.sqlite`,
 `daybook.json`, `dist/`, a real roster CSV or real screener snapshots. Never deploy to GitHub Pages.
 
 ## 0. State at 11-04 (after F6–F14 and G1–G5): what to do before Friday 11-06
 
-`main` is green from a clean clone: 210 pytest, 48 Worker node tests (incl. the class-day budget with an AMP Live round
+`main` is green from a clean clone: 214 pytest, 49 Worker node tests (incl. the class-day budget with an AMP Live round
 and a weekly-test round), the full Playwright check. Built: P0, design v2, F1–F14, hotfix H1–H6, G1 doctor, G2 backup,
 G3 운영 가이드, G4 안내 cards, G5 taste refresh. Every choice is in `DECISIONS.md`. Console schema v8 (migrates by itself);
 Worker v6. The pilot: two Mon/Wed/Fri 고1 classes from Friday 11-06; the weekly test restarts that day (고2 on Saturday).

@@ -352,6 +352,12 @@ One line each. "deferred" = not built in P0, on purpose.
 - no public praise by name and no individual scores on any shared screen (what manitoba practice mode already does on the board).
 The current `practice_mode = manitoba` is only the teacher's personal practice layer inside the Korean hagwon setup; it does not make DAYBOOK fit for a Canadian school.
 
+## F17: parent consent (2026-11-04, Friday blocker)
+- **The letter** (`daybook cards parents <class>`): warm-formal Korean, one A4 page per family, the same for everyone: what is recorded (출석 시각, 과제 사진 (과제만, 얼굴 X), 수업 태도 점수, 주간 테스트 결과, 학습 영상 시청 여부, 선생님 한 줄), what is never on the page, where it is kept (the teacher's laptop + Cloudflare, encrypted at rest; the page opens only with the parent's own link; nothing is sold or shared), push (only if the parent turns it on; 22:00–08:00 quiet; at most once a day), how to stop (tell the teacher: the link is rotated, records deleted on request), and a tear-off slip (학생 이름 / 동의함 □ / 동의하지 않음 □ / 보호자 서명 / 날짜). The academy name comes from daybook.json `"academy"` (blank when unset); `{원장·학원 문구}` stays a placeholder. **No name, token or QR is printed** (the parent writes the name on the slip; handout QRs stay `/go/?set=`). Wording in `parent_msg.letter_*` (tone test).
+- **The switch:** `students.consent` = yes | no | unknown (default unknown; also in `students_public`, it is not personal data; an older view is recreated by the migration). `roster edit <slug> --consent …`, or the select in 연락 현황; every change is logged (`consent`, with the old value). Without a yes: no parent page is published, the student page measures and sends no watch signal (and `pull` stores none), the student's push box is not shown, the parent's link is not in the Worker's parent map, and the Worker itself refuses watch records and push subscriptions for listed tokens and deletes any it holds (`no_consent` travels with every token-map push; Worker v9). The student page keeps working: 출석 / 과제 is the class routine.
+- `doctor` lists students whose consent is not yes as ⚠ (never ✗). The demo marks every synthetic student yes (콩 too); the shared test fixture's three students are yes.
+- HANDOFF starts with the Thursday checklist (dashboard / console / Teacher tab per step).
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).
