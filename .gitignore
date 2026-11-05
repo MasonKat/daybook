@@ -32,3 +32,6 @@ filters/review_words.local.txt
 filters/shoutout_negative.local.txt
 setup_state.json
 classwork_tags.json
+
+# live-v2: generated / real AMP Live sets and their pictures (question content never goes into git; demo/live/ is synthetic)
+/live/

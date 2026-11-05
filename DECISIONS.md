@@ -517,6 +517,20 @@ The current `practice_mode = manitoba` is only the teacher's personal practice l
   value, or 크리스마스 outside December, as 없음; the page checks the month again (a November build opened in December).
 - Labels are nouns; the hint and the lock line use F22.3's varied endings ("12월에만 열려유", "…가리지 않습니다").
 
+## live-v2 phase 1 (branch only): questions on phones, `live gen`, 세트 미리보기 approval (2026-11-05)
+- Mason's ruling (11-05): in his offline classes the quiz may appear on students' phones. Class-token-gated (joined phones of the
+  room's class only), held by the room (LiveRoom Durable Object) only while open, wiped at close / alarm, never on a page or in git
+  (`/live/` is git-ignored). Phone mode is the default per room; projector-only stays available (the old behaviour).
+- The Worker validates phone sets (stem <= 600 chars, exactly 5 choices <= 200 chars, PNG <= 150 KB); the current question goes
+  to phones without the answer key; pictures come once per question from `/live/img`. Worker v15.
+- KaTeX 0.16.11 vendored in static/katex (MIT, woff2 only, README with the upgrade steps), loaded only when a question shows math;
+  plain text is inserted as text nodes, math as KaTeX output with trust off. The 100 KB page-weight lint exempts that folder only
+  (cap 300 KB).
+- `live gen`: stdlib urllib, key only from ANTHROPIC_API_KEY (refused with a clear message when missing; never in any output),
+  labelled plain-text sections parsed by hand, 5-choice / one-answer / 검산 (ast whitelist over Fraction) checks, one retry.
+  Tests run against a local mock server (no network, no key).
+- 세트 미리보기: a set never opens a room without the approval click; the approval is the digest of the file and its pictures.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

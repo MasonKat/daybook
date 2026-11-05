@@ -267,3 +267,26 @@ Locally, `node worker/test/dev_server.mjs` runs the same Worker on http://127.0.
 Screenshots (synthetic data, 390 px; refreshed only on purpose with `make screenshots` / `check.ps1 -Screenshots`):
 `demo/screenshots/student-*.png`, `parent-light.png`, `parent-dark.png`, `board.png`, `teacher.png`, `live-projector.png`,
 `live-phone.png`, `taste-*.png`.
+
+## AMP Live v2 (branch `live-v2`): questions on the phones, generated sets, approval first
+
+1. **Generate a set** (laptop, PowerShell; the key lives only in this window's environment, never in a file):
+   ```powershell
+   $env:ANTHROPIC_API_KEY = "<your key>"
+   .venv\Scripts\python.exe -m console live gen --unit 이차방정식 --level easy --n 8 --out live\이차방정식-easy.json
+   ```
+   Default model `claude-haiku-4-5-20251001` (`--model` overrides). The model answers in labelled plain-text sections
+   (no JSON, so LaTeX backslashes are safe); every item is checked (5 distinct choices, exactly one marked, the optional
+   검산 arithmetic must equal the marked choice); failures are dropped and the shortfall is asked for once more.
+   The key is never written to daybook.json, the Worker, Pages, a log or the set file. `live/` is git-ignored.
+2. **Approve it on the board**: `daybook board <class>` → AMP Live → pick the set → **세트 미리보기** (every item with its answer,
+   math rendered) → tick **문항과 정답을 확인했어요** → **승인하고 방 열기**. The room opens only with the digest of exactly
+   what was shown (a file edited after the preview needs a new preview). Untick **학생 휴대폰에 문제 보이기** for projector-only.
+3. **In class**: students type the room code (오늘 → Live). In phone mode each joined phone of that class shows the current
+   stem, choices ①–⑤ or the number pad, and an optional picture (`"image": "q1.png"` next to the set file, PNG ≤ 150 KB).
+   Math renders with KaTeX 0.16.11, self-hosted in `static/katex/` (MIT, see its README); no CDN. The room holds the set
+   only while open and wipes it at 방 닫기 or the 90-minute alarm.
+
+**Cost per set (Haiku 4.5, list price at the time of writing: $1 / MTok input, $5 / MTok output; check anthropic.com/pricing):**
+a 10-item request is about 700 input tokens and 2,500-3,000 output tokens, so about **$0.013-0.016 per set**
+(about 20 KRW); with the one retry for dropped items, at most about $0.03.
