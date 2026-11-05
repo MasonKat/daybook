@@ -197,8 +197,14 @@ class Board:
             raise L.LiveError("AMP Live needs the Worker (worker_url and teacher_token in daybook.json)")
         with self.conn() as conn:
             if op == "open":
-                data = L.find_set(self.cfg, str((body or {}).get("set", "")))
-                r = http_post_json(self.cfg, "/live/open", L.worker_payload(self.class_id, data["questions"]))
+                name = str((body or {}).get("set", ""))
+                data = L.find_set(self.cfg, name)
+                # live-v2: a set never opens without the 세트 미리보기 approval of exactly this file (and its images)
+                if str((body or {}).get("approved") or "") != L.digest(self.cfg, name):
+                    raise L.LiveError("세트 미리보기에서 문항과 정답을 확인하고 승인해 주세요 (approval needed)")
+                payload = (L.phone_payload(self.class_id, data) if (body or {}).get("phone", True)
+                           else L.worker_payload(self.class_id, data["questions"]))
+                r = http_post_json(self.cfg, "/live/open", payload)
                 if not r.get("ok"):
                     raise L.LiveError(r.get("error") or "could not open a room")
                 self.live = {"room": r["room"], "title": data["title"], "questions": data["questions"], "size": r.get("size", 0)}
@@ -490,6 +496,13 @@ def make_handler(board: Board):
             if path == "/api/live/sets":
                 from . import live as L
                 return self._json({"sets": L.list_sets(board.cfg), "open": board.live and {k: board.live[k] for k in ("room", "title")}})
+            if path == "/api/live/preview":            # live-v2: 세트 미리보기 (answers stay on the laptop)
+                from . import live as L
+                try:
+                    from urllib.parse import parse_qs
+                    return self._json(L.preview(board.cfg, (parse_qs(query).get("set") or [""])[0]))
+                except L.LiveError as e:
+                    return self._json({"ok": False, "error": str(e)}, 404)
             if path == "/api/live/state":
                 from . import live as L
                 if not board.live:          # a poll that lands just after 방 닫기: an answer, not an error
@@ -505,10 +518,10 @@ def make_handler(board: Board):
             elif path == "/api/state":
                 with board.conn() as conn:
                     self._json(board.state_json(conn))
-            elif path.startswith("/static/") and "/" not in path[len("/static/"):]:
+            elif path.startswith("/static/") and ("/" not in path[len("/static/"):] or path.startswith("/static/katex/")) and ".." not in path:
                 f = static / path[len("/static/"):]
                 if f.is_file():
-                    ctype = {".css": "text/css", ".js": "text/javascript", ".png": "image/png"}.get(f.suffix, "application/octet-stream")
+                    ctype = {".css": "text/css", ".js": "text/javascript", ".png": "image/png", ".woff2": "font/woff2"}.get(f.suffix, "application/octet-stream")
                     self._send(200, f.read_bytes(), ctype)
                 else:
                     self._send(404, b"not found", "text/plain")

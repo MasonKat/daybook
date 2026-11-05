@@ -3,6 +3,8 @@ The Worker receives, per question, only the kind (choice ①–⑤ / num) and th
 from __future__ import annotations
 
 import io
+import base64
+import hashlib
 import json
 import math
 import sqlite3
@@ -52,18 +54,74 @@ def load_set(path: Path) -> dict:
         if (kind == "choice" and ans not in "12345") or (kind == "num" and not ans.lstrip("-").isdigit()) or not ans:
             raise LiveError(f"{path.name}: question {i} has no valid answer")
         qs.append({"q": str(q.get("q", "")), "kind": kind, "choices": [str(c) for c in (q.get("choices") or [])][:5],
-                   "answer": ans})
+                   "answer": ans, "explain": str(q.get("explain") or ""), "image": str(q.get("image") or "")})
     if not qs or len(qs) > 30:
         raise LiveError(f"{path.name}: 1-30 questions")
-    return {"title": str(data.get("title") or path.stem), "questions": qs}
+    return {"title": str(data.get("title") or path.stem), "questions": qs, "path": str(path)}
 
 
-def find_set(cfg: Config, name: str) -> dict:
+def set_path(cfg: Config, name: str) -> Path:
     name = Path(name).name
     for d in set_dirs(cfg):
         if (d / name).exists():
-            return load_set(d / name)
+            return d / name
     raise LiveError("no such question set")
+
+
+def find_set(cfg: Config, name: str) -> dict:
+    return load_set(set_path(cfg, name))
+
+
+# ---------------------------------------------------------------- live-v2: 세트 미리보기 (approval) and questions on phones
+IMG_MAX = 150 * 1024
+
+
+def digest(cfg: Config, name: str) -> str:
+    """What the teacher approved: the set file's bytes and its images. Editing the file after 미리보기 needs a new approval."""
+    p = set_path(cfg, name)
+    h = hashlib.sha256(p.read_bytes())
+    for q in load_set(p)["questions"]:
+        if q["image"]:
+            h.update(_image(p, q["image"]))
+    return h.hexdigest()[:12]
+
+
+def _image(set_file: Path, rel: str) -> bytes:
+    f = (set_file.parent / rel).resolve()
+    if set_file.parent.resolve() not in f.parents or not f.is_file():
+        raise LiveError(f"image not found next to the set: {rel}")
+    data = f.read_bytes()
+    if data[:8] != b"\x89PNG\r\n\x1a\n" or len(data) > IMG_MAX:
+        raise LiveError(f"{rel}: a PNG of at most 150 KB")
+    return data
+
+
+def preview(cfg: Config, name: str) -> dict:
+    """The board's 세트 미리보기: every item with its answer (laptop only), and the digest that 승인 sends back."""
+    p = set_path(cfg, name)
+    data = load_set(p)
+    items = []
+    for q in data["questions"]:
+        it = {k: q[k] for k in ("q", "kind", "choices", "answer", "explain")}
+        if q["image"]:
+            it["image"] = "data:image/png;base64," + base64.b64encode(_image(p, q["image"])).decode()
+        items.append(it)
+    return {"ok": True, "name": p.name, "title": data["title"], "questions": items, "digest": digest(cfg, name)}
+
+
+def phone_payload(class_id: int, data: dict) -> dict:
+    """live-v2 (Mason, 11-05): the questions ALSO go to the room, so joined phones of this class show them. The room holds
+    them only while open and wipes them at close; they never reach a page, a file or git."""
+    p = Path(data["path"])
+    qs = []
+    for q in data["questions"]:
+        x = {"kind": q["kind"], "answer": q["answer"], "q": q["q"][:600]}
+        if q["kind"] == "choice":
+            x["choices"] = [c[:200] for c in q["choices"]]
+        if q["image"]:
+            x["img"] = base64.b64encode(_image(p, q["image"])).decode()
+        qs.append(x)
+    return {"class": ops.class_key(class_id), "questions": qs, "phone": True}
 
 
 def worker_payload(class_id: int, qs: list[dict]) -> dict:

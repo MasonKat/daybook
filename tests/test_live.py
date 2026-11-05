@@ -106,10 +106,16 @@ def test_board_live_flow(live_server, conn, klass):
     assert "방 코드" in html and "/static/live.js" in html
     sets = json.loads(urllib.request.urlopen(url + "/api/live/sets").read())
     assert any(s["name"] == "demo-round.json" for s in sets["sets"])
-    st = _post(url + "/api/live/open", {"set": "demo-round.json"})
+    with pytest.raises(urllib.error.HTTPError):                           # live-v2: never without the 세트 미리보기 approval
+        _post(url + "/api/live/open", {"set": "demo-round.json"})
+    pv = json.loads(urllib.request.urlopen(url + "/api/live/preview?set=demo-round.json").read())
+    assert pv["questions"][0]["answer"] == "3" and len(pv["digest"]) == 12
+    with pytest.raises(urllib.error.HTTPError):
+        _post(url + "/api/live/open", {"set": "demo-round.json", "approved": "0" * 12})
+    st = _post(url + "/api/live/open", {"set": "demo-round.json", "approved": pv["digest"], "phone": False})   # projector only
     assert st["room"] == "4821" and st["open"] and st["q"] == 0
     opened = [p for path, p in sent if path == "/live/open"][0]
-    assert "x + 5" not in json.dumps(opened, ensure_ascii=False)          # the text stayed on the laptop
+    assert "x + 5" not in json.dumps(opened, ensure_ascii=False)          # projector mode: the text stayed on the laptop
     st = _post(url + "/api/live/next", {})
     assert st["question"]["text"].startswith("x + 5") and st["question"]["answer"] is None   # no key before reveal
     before = M.class_total(conn, cls["id"])
@@ -121,3 +127,14 @@ def test_board_live_flow(live_server, conn, klass):
     assert conn.execute("SELECT text FROM moments").fetchone()[0].startswith("AMP Live · 1번")
     assert _post(url + "/api/live/close", {})["open"] is False
     assert "학생" not in json.dumps(st, ensure_ascii=False) and "가람" not in json.dumps(st, ensure_ascii=False)
+
+
+
+def test_phone_mode_sends_stems_and_choices_only_after_approval(live_server, conn, klass):
+    url, sent = live_server
+    pv = json.loads(urllib.request.urlopen(url + "/api/live/preview?set=demo-round.json").read())
+    _post(url + "/api/live/open", {"set": "demo-round.json", "approved": pv["digest"]})          # phone mode is the default
+    opened = [p for path, p in sent if path == "/live/open"][-1]
+    assert opened["phone"] is True and opened["questions"][0]["q"].startswith("x + 5") and len(opened["questions"][0]["choices"]) == 5
+    assert "가람" not in json.dumps(opened, ensure_ascii=False) and "explain" not in json.dumps(opened)
+    _post(url + "/api/live/close", {})
