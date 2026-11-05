@@ -119,7 +119,7 @@ def css() -> str:
     out.append(f'{sel}[data-mode="dark"] {{ --scrim: {r(dc, da)}; }}')
     out.append(f'{sel}[data-bg] .app {{ background-image: linear-gradient(var(--scrim), var(--scrim)), var(--bgimg); '
                'background-repeat: no-repeat; background-size: 100% 196px, cover; background-position: top center; }')
-    out.append(f'{sel}[data-size="lg"] .app {{ zoom: 1.12; }}')
+    out.append(f'{sel}[data-size="lg"] .s-main {{ zoom: 1.12; }}')   # the scrolling content only: the header keeps its fit
     return "\n".join(out) + "\n"
 
 

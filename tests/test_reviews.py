@@ -226,7 +226,7 @@ def test_student_page_carries_hashes_not_names_and_the_header_pill(conn, klass, 
     order = [head.index(x) for x in ('class="wordmark"', 'class="mslot"', 'id="rv-open"', 'class="rkt-gap"', 'class="av ring sm')]
     assert 'id="today-date"' not in head and 'id="today-date"' in html.split('class="rhead"')[1].split("</div>")[0]   # F19.3: date moved
     assert order == sorted(order) and 'class="mph"' in head                        # F18.4 order; the placeholder shape
-    assert '<script src="/static/review_filter.js" defer>' in html and (tmp_path / "d" / "static" / "review_filter.js").exists()
+    assert '<script src="/static/review_filter.js?v=' in html and (tmp_path / "d" / "static" / "review_filter.js").exists()
 
 
 def test_cli_review_list_approve_hide_open_vote(conn, klass, tmp_path, monkeypatch):

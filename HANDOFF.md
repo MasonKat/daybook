@@ -60,7 +60,7 @@ DECISIONS.md (F22.4: avatars beside 베스트 리뷰 winners and on the remote's
 
 ## 0. State at 11-04 (after F6–F14 and G1–G5): what to do before Friday 11-06
 
-`main` is green from a clean clone: 322 pytest, 61 Worker node tests (incl. the class-day budget with an AMP Live round
+`main` is green from a clean clone: 323 pytest, 61 Worker node tests (incl. the class-day budget with an AMP Live round
 and a weekly-test round), the full Playwright check. Built: P0, design v2, F1–F14, hotfix H1–H6, G1 doctor, G2 backup,
 G3 운영 가이드, G4 안내 cards, G5 taste refresh. Every choice is in `DECISIONS.md`. Console schema v8 (migrates by itself);
 Worker v6. The pilot: two Mon/Wed/Fri 고1 classes from Friday 11-06; the weekly test restarts that day (고2 on Saturday).

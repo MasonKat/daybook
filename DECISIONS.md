@@ -496,6 +496,17 @@ The current `practice_mode = manitoba` is only the teacher's personal practice l
 - `setup --status` shows every step and where the next run continues. The doctor's backup age no longer drops the time zone
   (it read a fresh backup as "9 h old" on a non-KST clock).
 
+## Launch fix: versioned static URLs (2026-11-05)
+- Bug (Mason's iPhone): ⚙ 설정 did nothing after a deploy. The service worker answers /static/* cache-first, and the pages asked for
+  /static/app.js with no version, so the phone's OLD worker served the OLD app.js to the NEW page (new buttons, no handlers). It would
+  have hit every student after every deploy.
+- Fix: publish rewrites every /static/ reference in the generated HTML to `?v=<sha8 of that exact file>` (`generate.version_static`),
+  and sw.js precaches the same versioned URLs. The service worker matches by full URL, so a changed file is a new URL: a cache miss
+  even under the old worker already on a phone. Pages under /s/ stay network-first; `/sw.js` is served `Cache-Control: no-cache`.
+  `tests/test_static_versions.py`: a page built after a static change never references a stale or unversioned URL; unchanged files
+  keep their URL (cache stays warm).
+- Also: 글자 크기 크게 zoomed the whole `.app` (header included: the mascot grew past 44 px); it now zooms the scrolling content only.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

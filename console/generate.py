@@ -881,6 +881,33 @@ def taste_remote_html(S: dict) -> str:
             '<script src="/static/remote.js" defer></script></body></html>')
 
 
+STATIC_REF_RE = re.compile(r'((?:src|href)=")(/static/[^"?#]+)(")')
+
+
+def version_static(out: Path) -> dict[str, str]:
+    """Launch fix (11-05): after a deploy, a phone's OLD service worker answered /static/app.js from its cache-first store,
+    so the NEW page ran the OLD script (⚙ 설정 did nothing). Every /static/ reference in the generated HTML now carries
+    ?v=<sha8 of that exact file>, so a changed file is a new URL: a cache miss under any service worker, old or new.
+    sw.js precaches the same versioned URLs. Returns {path: versioned url}."""
+    vers = {}
+    for f in sorted((out / "static").rglob("*")):
+        if f.is_file():
+            rel = "/" + f.relative_to(out).as_posix()
+            vers[rel] = f"{rel}?v={hashlib.sha256(f.read_bytes()).hexdigest()[:8]}"
+    for page in out.rglob("*.html"):
+        text = page.read_text(encoding="utf-8")
+        new = STATIC_REF_RE.sub(lambda m: m.group(1) + vers.get(m.group(2), m.group(2)) + m.group(3), text)
+        if new != text:
+            page.write_text(new, encoding="utf-8")
+    sw = out / "sw.js"
+    if sw.exists():
+        t = sw.read_text(encoding="utf-8")
+        t = re.sub(r"var STATIC = \[[^\]]*\];", lambda m: "var STATIC = " + json.dumps(
+            [vers.get(u, u) for u in json.loads(m.group(0)[len("var STATIC = "):-1].replace("'", '"'))]) + ";", t, count=1)
+        sw.write_text(t, encoding="utf-8", newline="")
+    return vers
+
+
 def headers_file(cfg: Config) -> str:
     connect = "'self'" + (f" {cfg.worker}" if cfg.worker else "")
     csp = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
@@ -893,6 +920,7 @@ def headers_file(cfg: Config) -> str:
         "  Referrer-Policy: no-referrer\n"
         "  X-Content-Type-Options: nosniff\n"
         f"  Content-Security-Policy: {csp}\n"
+        "/sw.js\n  Cache-Control: no-cache\n"
         "/s/*\n  Cache-Control: no-cache\n"
         "/p/*\n  Cache-Control: no-cache\n"
     )
@@ -981,6 +1009,7 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
         (out / "go").mkdir()
         (out / "go" / "index.html").write_text(gt.render(ctx, page="go"), encoding="utf-8")
         (out / "index.html").write_text(it.render(ctx, page="index"), encoding="utf-8")
+    version_static(out)                                            # every /static/ URL carries its content hash
     (out / "robots.txt").write_text("User-agent: *\nDisallow: /\n", encoding="utf-8")
     (out / "_headers").write_text(headers_file(cfg), encoding="utf-8")
     return ctx

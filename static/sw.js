@@ -1,5 +1,7 @@
 /* F9: the student page opens on bad classroom Wi-Fi. Scope /s/ only. Pages: network first, cached copy when offline.
-   Static files: cache first. Requests to the Worker (another origin) are never touched. */
+   Static files: cache first BY FULL URL: the pages ask for /static/app.js?v=<content hash> (publish writes the hashes, and
+   the STATIC list below), so a changed file is a new URL and never answered from an old copy. Requests to the Worker
+   (another origin) are never touched. */
 'use strict';
 var CACHE = 'daybook-shell-v1';
 var STATIC = ['/static/app.css', '/static/themes.css', '/static/app.js', '/static/icon-192.png'];
