@@ -120,7 +120,7 @@
     var m = location.pathname.match(/\/s\/([a-z2-7]{26})\//);
     var TASTE = !!D.taste;   /* taste build (F1): no Worker, nothing leaves this browser */
     var tok = TASTE ? 'kong' : (m ? m[1] : '');
-    if (tok && !TASTE) LS.set('daybook.token', tok);
+    if (tok && !TASTE) { LS.set('daybook.token', tok); LS.set('daybook.watchok', D.watch === false ? '0' : '1'); }   /* /v/ pages count only with consent */
     var set = (new URLSearchParams(location.search).get('set') || '').replace(/[^\w\-]/g, '').slice(0, 80);
     var today = kstDay();
     var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -875,7 +875,7 @@
       var MAX = 20, KINDS = ['snow', 'xmas', 'petals', 'leaves', 'stars'];
       var cv = null, cx = null, parts = [], kind = 'none', raf = 0, last = 0, w = 0, h = 0, star = null, nextStar = 0;
       var reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-      function december() { return new Date(Date.now() + 9 * 3600e3).getUTCMonth() === 11; }
+      function december() { return TASTE || new Date(Date.now() + 9 * 3600e3).getUTCMonth() === 11; }   /* taste: preview 크리스마스 any month */
       function size() {
         var d = Math.min(window.devicePixelRatio || 1, 1.5);
         w = window.innerWidth; h = window.innerHeight;

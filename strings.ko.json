@@ -913,5 +913,19 @@
   "set_fx_leaves": "낙엽",
   "set_fx_stars": "별똥별",
   "set_fx_hint": "배경에서 살짝 움직여요. 글자와 버튼은 가리지 않아요.",
-  "lock_dec": "12월에만 열려유"
+  "lock_dec": "12월에만 열려유",
+  "vp_play": "재생",
+  "vp_pause": "일시정지",
+  "vp_chapter_now": "지금 보는 부분",
+  "vp_wide": "넓게",
+  "vp_full": "전체화면",
+  "vp_concept": "개념 영상",
+  "vp_next": "다음 문제",
+  "vp_same_unit": "같은 단원 문제",
+  "vp_mine": "내 데이북으로",
+  "vp_note": "여기서 본 시간만 내 기록에 들어가유. 유튜브로 나가지 않고 그대로 보면 됩니다.",
+  "lib_title": "라이브러리",
+  "lib_roadmap": "개념 로드맵",
+  "lib_search": "문제 번호로 찾기 (예: 574)",
+  "lib_none": "찾는 번호가 없어요. 번호를 다시 확인해 보쥬."
 }

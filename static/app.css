@@ -753,3 +753,25 @@ body[data-fx="xmas"] .sbar::before { content: ""; position: absolute; left: 0; r
   animation: fx-twinkle 2.4s ease-in-out infinite alternate; }
 @keyframes fx-twinkle { from { opacity: .55; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { body[data-fx="xmas"] .sbar::before { animation: none; } }
+
+/* video-library: /v/<key>/ player page and the 영상 tab's 라이브러리 */
+.vp-main { max-width: 960px; }
+.vp-title { font-size: 18px; margin: 4px 0 10px; }
+.vp-stage { display: grid; gap: 10px; }
+.vp-frame { position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: 12px; overflow: hidden; }
+.vp-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.vp-start { position: absolute; inset: 0; width: 100%; border: 0; background: #111827; color: #fff; font-size: 44px; cursor: pointer; }
+.vp-chapters { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 260px; overflow-y: auto; }
+.vp-ch { width: 100%; min-height: 40px; text-align: left; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--fg); font: 500 14px var(--font); padding: 6px 10px; cursor: pointer; }
+.vp-ch.now { border-color: var(--accent); font-weight: 700; }
+.vp-ch .tnum { color: var(--muted); margin-right: 6px; }
+.vp-ctrl { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.vp-links { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.vp-links .chip { font-size: 13px; padding: 6px 12px; text-decoration: none; }
+@media (min-width: 760px) { body:not(.vp-theater) .vp-stage { grid-template-columns: 2fr 1fr; } body:not(.vp-theater) .vp-chapters { max-height: none; } }
+body.vp-theater .vp-main { max-width: none; }
+.lib { margin-top: 18px; }
+.lib input { width: 100%; min-height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--fg); padding: 0 12px; font: 15px var(--font); }
+.lib-g summary { font-weight: 700; padding: 8px 0; cursor: pointer; }
+.lib-list { list-style: none; margin: 0; padding: 0; }
+.lib-list a { display: block; padding: 8px 4px; border-bottom: 1px solid var(--line); color: var(--fg); text-decoration: none; }

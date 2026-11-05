@@ -105,6 +105,17 @@
   {% else %}
   <p class="muted pad">{{ S.videos_empty }}</p>
   {% endif %}
+  {% if me.library.any %}
+  <div class="lib" id="lib">
+    <h2 class="sec-h">📚 {{ S.lib_title }}</h2>
+    <input id="lib-q" type="search" inputmode="numeric" autocomplete="off" placeholder="{{ S.lib_search }}">
+    <p class="muted" id="lib-none" hidden>{{ S.lib_none }}</p>
+    {% for g in me.library.groups %}<details class="lib-g" open><summary>{{ g.name }} <span class="muted tnum">{{ g["items"]|length }}</span></summary>
+      <ul class="lib-list">{% for x in g["items"] %}<li data-no="{{ x.no }}"><a href="/v/{{ x.key }}/">{% if x.no %}<b class="tnum">{{ x.no }}</b> {% endif %}{{ x.title }}</a></li>{% endfor %}</ul></details>{% endfor %}
+    {% if me.library.roadmap %}<details class="lib-g"><summary>🧭 {{ S.lib_roadmap }}</summary>
+      <ol class="lib-list">{% for x in me.library.roadmap %}<li><a href="/v/{{ x.key }}/">{% if x.unit %}<span class="muted">{{ x.unit }}</span> {% endif %}{{ x.title }}</a></li>{% endfor %}</ol></details>{% endif %}
+  </div>
+  {% endif %}
 </section>
 
 <section id="tab-today" class="panel" role="tabpanel">
@@ -500,5 +511,6 @@
 <script type="application/json" id="data">{{ me.js | safe }}</script>
 <script src="/static/review_filter.js" defer></script>
 <script src="/static/tour.js" defer></script>
+<script src="/static/library.js" defer></script>
 <script src="/static/app.js" defer></script>
 {% endblock %}

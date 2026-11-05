@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="vp" id="vp">
+  <header class="top"><a class="brand tlink" href="/" id="vp-home">{{ S.app_name }}</a><span class="who">{{ v.book }}{% if v.no %} · {{ v.no }}{% endif %}</span></header>
+  <main class="vp-main">
+    <h1 class="vp-title">{{ v.title }}</h1>
+    <div class="vp-stage">
+      <div class="vp-frame" id="vp-frame"><button type="button" class="vp-start" id="vp-start" aria-label="{{ S.vp_play }}">▶</button></div>
+      <ol class="vp-chapters" id="vp-chapters">{% for c in v.chapters %}<li><button type="button" class="vp-ch" data-t="{{ c.t }}"><span class="tnum">{{ '%d:%02d' | format(c.t // 60, c.t % 60) }}</span> {{ c.label }}</button></li>{% endfor %}</ol>
+    </div>
+    <div class="vp-ctrl" role="group">
+      <button type="button" class="set-sb" id="vp-pp">{{ S.vp_play }}</button>
+      {% for r in ("1", "1.25", "1.5", "2") %}<button type="button" class="set-sb vp-rate" data-r="{{ r }}" aria-pressed="{{ 'true' if r == '1' else 'false' }}">{{ r }}×</button>{% endfor %}
+      <button type="button" class="set-sb" id="vp-wide" aria-pressed="false">{{ S.vp_wide }}</button>
+      <button type="button" class="set-sb" id="vp-full">{{ S.vp_full }}</button>
+    </div>
+    <nav class="vp-links">
+      {% if links.concept %}<a class="chip" href="/v/{{ links.concept.key }}/">{{ S.vp_concept }} · {{ links.concept.title }}</a>{% endif %}
+      {% if links.next %}<a class="chip" href="/v/{{ links.next.key }}/">{{ S.vp_next }} · {{ links.next.title }}</a>{% endif %}
+      {% for r in links.related %}<a class="chip" href="/v/{{ r.key }}/">{{ S.vp_same_unit }} · {{ r.title }}</a>{% endfor %}
+      <a class="chip" id="vp-mine" href="/go/" hidden>{{ S.vp_mine }}</a>
+    </nav>
+    <p class="muted">{{ S.vp_note }}</p>
+  </main>
+</div>
+<script type="application/json" id="data">{{ js | safe }}</script>
+<script src="/static/video.js" defer></script>
+{% endblock %}

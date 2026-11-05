@@ -183,7 +183,30 @@ def _video_item(p: Path, v: dict) -> dict | None:
             "classes": _tags(v.get("classes")), "grades": _tags(v.get("grades")), "pin": v.get("pin") is True,
             # F15.2: YouTube's own counters, filled by the local agent; the Teacher tab shows them, pages never do
             "views": v.get("views") if isinstance(v.get("views"), int) else None,
-            "views_7d": v.get("views_7d") if isinstance(v.get("views_7d"), int) else None}
+            "views_7d": v.get("views_7d") if isinstance(v.get("views_7d"), int) else None,
+            **_lib_fields(v)}
+
+
+def write_video_pages(out: Path, ctx: dict, cfg: Config, e) -> int:
+    """video-library: one page per catalog item with a key and a YouTube id. The page has no token in it or in its URL
+    (safe to share or print as a QR); it counts watch time only for a phone that opened its own /s/ page with consent."""
+    from . import videolib as VL
+    items = [v for v in ctx["videos"] if v.get("key") and v.get("yt_id")]
+    by_key = {v["key"]: v for v in items}
+    tpl = e.get_template("video.html")
+    S = ctx["S"]
+    for v in items:
+        d = out / "v" / v["key"]
+        d.mkdir(parents=True, exist_ok=True)
+        js = {"yt": v["yt_id"], "key": v["key"], "title": v["title"], "chapters": v.get("chapters") or [], "worker": cfg.worker,
+              "S": {k: S[k] for k in ("vp_play", "vp_pause", "vp_chapter_now")}}
+        (d / "index.html").write_text(tpl.render(ctx, page="video", v=v, links=VL.links(v, by_key), js=json_script(js)), encoding="utf-8")
+    return len(items)
+
+
+def _lib_fields(v: dict) -> dict:
+    from . import videolib as VL                 # video-library: key, chapters, book/no/level/unit, links, feed
+    return VL.fields(v)[0]
 
 
 def video_for(v: dict, cls) -> bool:
@@ -504,6 +527,9 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         # F10: this student's videos (untagged + their class / grade), pinned 강의 first
         hot = popular.get(s["class_id"])
         my_videos = [dict(v, hot=True) if v["id"] == hot else v for v in videos if video_for(v, cls)]
+        from . import videolib as VL
+        my_library = {"any": False} if taste else VL.library(my_videos)      # video-library: the 영상 tab's 라이브러리
+        my_videos = [v for v in my_videos if v.get("feed", True)]             # feed: false = library only
         my_shorts = [v for v in my_videos if v["kind"] == "short"]
         my_longs = sorted((v for v in my_videos if v["kind"] == "long"), key=lambda v: not v["pin"])
         rank = _rank(conn, cfg, cls, today, my_videos, rv_anon or taste) if cls else None     # F19.3 (taste: no names)
@@ -717,6 +743,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
             "videos_week": len(W.watched_ids(conn, s["id"], mon, today)),
             "shorts": my_shorts,
             "longs": my_longs,
+            "library": my_library,
             "hours": class_hours(cls, S),
             "js": json_script(js),
         })
@@ -1006,6 +1033,7 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
         (out / "remote").mkdir()
         (out / "remote" / "index.html").write_text(taste_remote_html(ctx["S"]), encoding="utf-8")
     else:
+        write_video_pages(out, ctx, cfg, e)                          # video-library: /v/<key>/ (no token in any URL)
         (out / "go").mkdir()
         (out / "go" / "index.html").write_text(gt.render(ctx, page="go"), encoding="utf-8")
         (out / "index.html").write_text(it.render(ctx, page="index"), encoding="utf-8")
