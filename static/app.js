@@ -470,6 +470,10 @@
       padRender(TASTE ? S.live_taste : '', false);
     });
 
+
+    /* games-v1 수학 용어 찾기 lives in /static/game.js (keeps app.js under the page-weight limit) */
+    function gmStart(st, code) { if (window.DaybookGame) window.DaybookGame.start(st, code); }
+    if (window.DaybookGame) window.DaybookGame.init({ D: D, S: S, tok: tok, fmt: fmt });
     /* ---- AMP Live (F7): only answer buttons on the phone; the question is on the projector */
     var LV = { room: null, timer: null, st: null, buf: '', picked: {}, stop: true, sim: null };
     function liveShow(on) {
@@ -485,6 +489,7 @@
         .then(function (st) {
           padBusy = false;
           if (!st.open) { digits = ''; padRender(S.live_noroom, true); return; }
+          if (st.game) { padClose(); return gmStart(st, code); }              /* games-v1: the code is a word-search room */
           LV.room = code; LV.stop = false; LV.picked = {};
           padClose(); liveShow(true); liveRender(st);
           LV.timer = setInterval(livePoll, 2000);

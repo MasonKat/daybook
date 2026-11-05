@@ -1079,6 +1079,16 @@ print(c.execute("SELECT m.marks FROM classwork_marks m JOIN students s ON s.id =
       await tp.waitForFunction(() => /정답|아쉬|아깝/.test(document.getElementById('lv-status').textContent), null, { timeout: 12000 }).catch(() => {});
       check(/정답|아쉬|아깝/.test(await tp.textContent('#lv-status')) && /반 정답 \d\/8/.test(await tp.textContent('#lv-class')), `taste: the 8-student practice room plays itself (${await tp.textContent('#lv-class')})`);
       await tp.click('#lv-x');
+      // games-v1: the taste build's self-playing word search (practice friends find words; nothing is sent)
+      await tp.click('#gm-practice');
+      const demo = await tp.evaluate(() => JSON.parse(document.getElementById('data').textContent).gameDemo.words[0]);
+      await tp.click(`#gm-grid .gm-c[data-r="${demo.cells[0][0]}"][data-c="${demo.cells[0][1]}"]`);
+      const lastC = demo.cells[demo.cells.length - 1];
+      await tp.click(`#gm-grid .gm-c[data-r="${lastC[0]}"][data-c="${lastC[1]}"]`);
+      const gm = await tp.evaluate(() => ({ lit: document.querySelectorAll('#gm-grid .gm-c.f').length, msg: document.getElementById('gm-msg').textContent,
+        count: document.getElementById('gm-count').textContent }));
+      check(gm.lit >= demo.w.length && /찾았/.test(gm.msg) && /찾은 단어 [1-8]\/8/.test(gm.count), `taste: the practice word search (${demo.w} found; ${gm.count})`);
+      await tp.click('#gm-x');
       check(await tp.isVisible('#wt-card'), 'taste: a practice 주간 테스트 round is open for 콩');
       await tp.click('#wt-open');
       check((await tp.locator('#wt-grid .wq').count()) === 20, 'taste: 20 quiz tiles');
@@ -1270,6 +1280,35 @@ c = sqlite3.connect(sys.argv[1])
 print(c.execute("SELECT p.prefs FROM student_prefs p JOIN students s ON s.id = p.student_id WHERE s.student_token = ?", (sys.argv[2],)).fetchone()[0])`,
         env.DAYBOOK_DB, pick.student_token], { encoding: 'utf-8' }).trim();
       check(JSON.parse(row).avatar === 'p:owl-2' && JSON.parse(row).rings.join() === want.join(), `pull copied the settings to SQLite: ${row.slice(0, 80)}…`);
+    }
+
+    console.log('\n[7c] games-v1 수학 용어 찾기: one shared board, a find lights up on every phone, n/N, no names');
+    {
+      const opened = daybook('game', 'open', CLASS_ON, '--round', '함수', '--minutes', '5', '--seed', '5');
+      const GROOM = (/room code (\d{4})/.exec(opened) || [])[1];
+      const place = JSON.parse(execFileSync(PYTHON, ['-c', 'import json; from console import wordsearch as W; print(json.dumps(W.round_grid("함수", 5)["words"][0]))'],
+        { cwd: ROOT, encoding: 'utf-8' }));
+      const gp = [];
+      for (const t of twoToks) {
+        const c = await browser.newContext({ viewport: { width: 360, height: 740 } });
+        const p = await c.newPage();
+        await p.goto(`${PAGES}/s/${t}/#today`, { waitUntil: 'networkidle' });
+        await p.click('#live-open');
+        for (const k of GROOM) await p.click(`#keys button[data-k="${k}"]`);
+        await p.waitForSelector('#gm:not([hidden])', { timeout: 6000 }).catch(() => {});
+        gp.push({ c, p });
+      }
+      const cell = (rc) => `#gm-grid .gm-c[data-r="${rc[0]}"][data-c="${rc[1]}"]`;
+      await gp[0].p.click(cell(place.cells[0])); await gp[0].p.click(cell(place.cells[place.cells.length - 1]));   // first + last letter
+      await gp[1].p.waitForFunction((n) => document.querySelectorAll('#gm-grid .gm-c.f').length === n, place.w.length, { timeout: 8000 }).catch(() => {});
+      const other = await gp[1].p.evaluate(() => ({ lit: document.querySelectorAll('#gm-grid .gm-c.f').length, count: document.getElementById('gm-count').textContent,
+        cells: document.querySelectorAll('#gm-grid .gm-c').length, w: document.querySelector('#gm-grid .gm-c').getBoundingClientRect().width,
+        sw: document.documentElement.scrollWidth, done: document.querySelector('#gm-words li.done') ? document.querySelector('#gm-words li.done').textContent : '' }));
+      check(!!GROOM && other.cells === 64 && other.lit === place.w.length && /찾은 단어 1\/8/.test(other.count) && other.done === place.w && other.w >= 36 && other.sw <= 360,
+        `room ${GROOM}: a find by one phone (${place.w}) lights up on the other; ${other.count}; 8×8 cells ${Math.round(other.w)} px at 360 px`);
+      for (const x of gp) await x.c.close();
+      const closed = daybook('game', 'close', GROOM);
+      check(/찾은 단어 1\/8/.test(closed) && !/bonus/.test(closed), `game close: ${closed.trim()} (unfinished: no class bonus)`);
     }
 
     console.log('\n[8] F19 mascot size: brand.mascot_px 44 keeps the student header on one line at 360 px');

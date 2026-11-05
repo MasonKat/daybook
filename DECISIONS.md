@@ -517,6 +517,20 @@ The current `practice_mode = manitoba` is only the teacher's personal practice l
   value, or 크리스마스 outside December, as 없음; the page checks the month again (a November build opened in December).
 - Labels are nouns; the hint and the lock line use F22.3's varied endings ("12월에만 열려유", "…가리지 않습니다").
 
+## games-v1 (branch only, not on main): 수학 용어 찾기 (2026-11-05)
+- A cooperative break-time word search, 5-10 min. `daybook game open <class> --round 함수 --minutes 8 [--seed N]` builds an 8x8 Hangul
+  grid on the laptop (`console/wordsearch.py`; term lists in `games/wordsearch_terms.json`; fill syllables from a distractor pool so
+  near-words like 역합수 appear) and opens it as an AMP Live room in game mode: students type the code in 오늘 → Live as usual.
+- Words run across, down or diagonally (down-right, up-right), never backwards on the grid (a find may be selected either way).
+  The generator places every word (crossings only on the same syllable), refuses a word inside another (it could never be found
+  once), checks each word reads exactly once after the fill, and is deterministic with a seed.
+- Select by dragging or by tapping the first and last letters. The room (the existing LiveRoom Durable Object) checks each find
+  against the placements; every phone polls every 3 s and lights the found cells: "찾은 단어 n/N" and the time left. No names, no
+  per-student record (closing keeps nothing), no ranking. `daybook game close <code>` reads n/N and closes; a finished board gets the
+  class bonus (`game_bonus`, default `live_bonus`) once per room and day.
+- The taste build has a self-playing practice board (practice friends find a word now and then; nothing is sent).
+- The game code is its own /static/game.js (app.js stays under the 100 KB page-weight lint). Worker v15 on this branch.
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

@@ -753,3 +753,16 @@ body[data-fx="xmas"] .sbar::before { content: ""; position: absolute; left: 0; r
   animation: fx-twinkle 2.4s ease-in-out infinite alternate; }
 @keyframes fx-twinkle { from { opacity: .55; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { body[data-fx="xmas"] .sbar::before { animation: none; } }
+
+/* games-v1 수학 용어 찾기: an 8x8 grid that fits 360 px (>= 36 px cells), drag or tap first + last */
+.gm-time { margin-left: auto; margin-right: 8px; font-weight: 700; }
+.gm-count { font-weight: 700; font-size: 17px; margin: 8px 0; }
+.gm-grid { display: grid; grid-template-columns: repeat(var(--n, 8), 1fr); gap: 4px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.gm-c { aspect-ratio: 1; min-width: 0; min-height: 36px; padding: 0; border-radius: 8px; border: 1px solid var(--line); background: var(--card);
+  color: var(--fg); font: 700 17px var(--font); cursor: pointer; }
+.gm-c.sel { outline: 3px solid var(--accent); outline-offset: -3px; }
+.gm-c.f { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.gm-words { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 10px 0; }
+.gm-words li { background: var(--card); border-radius: 999px; padding: 4px 10px; font-weight: 600; }
+.gm-words li.done { text-decoration: line-through; opacity: .6; }
+.gm-msg { min-height: 1.5em; font-weight: 600; }

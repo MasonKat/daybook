@@ -1,0 +1,8 @@
+{
+  "_note": "수학 용어 찾기 (break-time word search). One list per round (2-6 syllables each, at most 8 words for an 8x8 grid). The fill syllables come from `distractors` so fake near-words (명재, 충부조건, 역합수…) show up. Edit freely; no student data here.",
+  "rounds": {
+    "명제와 조건": ["명제", "대우", "필요조건", "충분조건", "진리집합", "가정", "결론", "부정"],
+    "함수": ["합성함수", "역함수", "일대일대응", "유리함수", "점근선", "정의역", "치역", "공역"]
+  },
+  "distractors": "명재제대우조건견충부분요필함합성역수치정의공리유무점근선진집합가결론일대응응부정"
+}

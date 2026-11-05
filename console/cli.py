@@ -1444,3 +1444,37 @@ def classwork_export(obj: Ctx, class_name, out_dir):
 
 if __name__ == "__main__":
     main()
+
+
+# ---------------------------------------------------------------- games-v1: 수학 용어 찾기 (break-time, cooperative)
+
+@cli.group()
+def game():
+    """Break-time games: 수학 용어 찾기 (a cooperative word search on every phone, via an AMP Live room code)."""
+
+
+@game.command("open")
+@click.argument("class_name")
+@click.option("--round", "round_name", required=True, help="A term list in games/wordsearch_terms.json")
+@click.option("--minutes", type=int, default=8, show_default=True)
+@click.option("--seed", type=int, default=None, help="Same seed, same grid")
+@click.pass_obj
+def game_open(obj: Ctx, class_name, round_name, minutes, seed):
+    from . import wordsearch as WS
+    try:
+        r = WS.open_room(obj.conn, obj.cfg, class_name, round_name, minutes, seed)
+    except (WS.WordSearchError, ops.OpError) as e:
+        fail(str(e))
+    click.echo(f"room code {r['room']} (students: 오늘 → Live → the code) · {len(r['words'])} words · {minutes} min · seed {r['seed']}")
+
+
+@game.command("close")
+@click.argument("room")
+@click.pass_obj
+def game_close(obj: Ctx, room):
+    from . import wordsearch as WS
+    try:
+        r = WS.finish(obj.conn, obj.cfg, room)
+    except WS.WordSearchError as e:
+        fail(str(e))
+    click.echo(f"찾은 단어 {r['found']}/{r['n']}" + (f" · class bonus +{r['bonus']}" if r["bonus"] else ""))

@@ -18,8 +18,9 @@ const RID_RE = /^[a-f0-9]{16}$/;
 // 1 base, 2 출석, 3 장면 + Live, 4 푼 문제 수, 5 주간 테스트 reports, 6 /health version + /tokmap-info, 7 /watch,
 // 8 Web Push, 9 consent (no watch / push without the parent's yes), 10 학생 리뷰, 11 영상 반응 (5-way, pooled per grade),
 // 12 the teacher remote (/t/remote: tap who, speak what), 13 수업 문제 (in-class ○/✕/– checks),
-// 14 ⚙ 설정 (per-token settings JSON + a pre-moderated own avatar picture; F22.5 adds theme / mode / size / bg)
-export const WORKER_VERSION = 14;
+// 14 ⚙ 설정 (per-token settings JSON + a pre-moderated own avatar picture; F22.5 adds theme / mode / size / bg),
+// 15 games-v1: a Live room in game mode (수학 용어 찾기: /live/find)
+export const WORKER_VERSION = 15;
 const DAILY_CRON = '17 19 * * *';
 // the worst words, used until the console has sent the full list (filters/review_words.txt)
 const CORE_WORDS = '시발\n씨발\nㅅㅂ\nㅆㅂ\n병신\nㅂㅅ\n좆\n지랄\n존나\n개새끼\nfuck\nshit\n!시발점\n!시발표';
@@ -874,6 +875,7 @@ async function roomCall(env, code, op, body) {
 async function liveOpen(req, env) {
   let b;
   try { b = await req.json(); } catch { return json({ ok: false, error: 'bad_json' }, 400, {}); }
+  if (b && b.game) return gameOpen(env, b);
   const qs = Array.isArray(b && b.questions) ? b.questions : [];
   if (!CLASS_RE.test((b && b.class) || '') || !qs.length || qs.length > 30 ||
       !qs.every((q) => (q.kind === 'choice' && /^[1-5]$/.test(String(q.answer))) || (q.kind === 'num' && /^-?\d{1,6}$/.test(String(q.answer))))) {
@@ -895,6 +897,47 @@ async function liveOpen(req, env) {
   return json({ ok: true, room: code, size, closes_at: closes }, 200, {});
 }
 
+// ---------------------------------------------------------------- 수학 용어 찾기 (games-v1): a Live room in game mode
+// The laptop sends the grid and the placements; the room checks each find; every phone polls "찾은 단어 n/N" and the time.
+const HANGUL_RE = /^[가-힣]+$/;
+export function checkGame(g) {
+  if (!g || !Array.isArray(g.grid) || !Array.isArray(g.words)) return null;
+  const n = g.grid.length;
+  if (n < 5 || n > 10 || !g.grid.every((r) => typeof r === 'string' && HANGUL_RE.test(r) && r.length === n)) return null;
+  if (!g.words.length || g.words.length > 10) return null;
+  const words = [];
+  for (const x of g.words) {
+    const w = String((x && x.w) || ''), cells = Array.isArray(x && x.cells) ? x.cells : [];
+    if (!HANGUL_RE.test(w) || w.length < 2 || w.length > n || cells.length !== w.length) return null;
+    for (let i = 0; i < cells.length; i++) {
+      const [r, c] = cells[i] || [];
+      if (!Number.isInteger(r) || !Number.isInteger(c) || r < 0 || c < 0 || r >= n || c >= n || g.grid[r][c] !== w[i]) return null;
+    }
+    words.push({ w, cells: cells.map(([r, c]) => [r, c]) });
+  }
+  const minutes = Number(g.minutes);
+  if (!(minutes >= 3 && minutes <= 15)) return null;
+  return { grid: g.grid, words, minutes };
+}
+async function gameOpen(env, b) {
+  const g = checkGame(b.game);
+  if (!CLASS_RE.test(b.class || '') || !g) return json({ ok: false, error: 'bad_game' }, 400, {});
+  const size = (await one(env, 'SELECT COUNT(*) AS n FROM tokmap WHERE class = ?', b.class)).n;
+  const now = Date.now(), day = seoulDay(now), ends = new Date(now + g.minutes * 60e3).toISOString();
+  const closes = new Date(now + (g.minutes + 10) * 60e3).toISOString();       // the room outlives the timer a little
+  let code = null;
+  for (let i = 0; i < 20 && !code; i++) {
+    const c = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+    const r = await run(env, `INSERT INTO live_rooms (code, class, date, status, closes_at) VALUES (?, ?, ?, 'open', ?)
+      ON CONFLICT (code) DO UPDATE SET class = excluded.class, date = excluded.date, status = 'open', closes_at = excluded.closes_at
+      WHERE live_rooms.status != 'open' OR live_rooms.closes_at < ?`, c, b.class, day, closes, new Date(now).toISOString());
+    if (r.meta && r.meta.changes) code = c;
+  }
+  if (!code) return json({ ok: false, error: 'busy' }, 503, {});
+  await roomCall(env, code, 'open', { code, class: b.class, date: day, size, game: { grid: g.grid, words: g.words, ends }, closes_at: closes });
+  return json({ ok: true, room: code, size, ends, closes_at: closes }, 200, {});
+}
+
 async function liveStudent(req, env, url, h, op) {
   const form = op === 'state' ? url.searchParams : await req.formData().catch(() => null);
   if (!form) return json({ ok: false, error: 'bad_form' }, 400, h);
@@ -905,6 +948,11 @@ async function liveStudent(req, env, url, h, op) {
   if (!cls || !room || room.class !== cls || Date.parse(room.closes_at) < Date.now()) return json({ ok: false, error: 'no_room', open: false }, 200, h);
   const body = { token };
   if (op === 'answer') { body.q = Number(form.get('q')); body.a = String(form.get('a') || ''); }
+  if (op === 'find') {                                 // a word search find: its first and last cells ("r,c")
+    const cell = (v) => { const m = /^(\d),(\d)$/.exec(String(v || '')); return m ? [Number(m[1]), Number(m[2])] : null; };
+    body.a = cell(form.get('a')); body.b = cell(form.get('b'));
+    if (!body.a || !body.b) return json({ ok: false, error: 'bad_find' }, 400, h);
+  }
   return json(await roomCall(env, code, op, body), 200, h);
 }
 
@@ -927,6 +975,16 @@ export class LiveRoom {
     this.sql.exec('CREATE TABLE IF NOT EXISTS members (token TEXT PRIMARY KEY, ts TEXT NOT NULL)');
     this.sql.exec(`CREATE TABLE IF NOT EXISTS answers (token TEXT NOT NULL, q INTEGER NOT NULL, a TEXT NOT NULL,
       correct INTEGER NOT NULL, ts TEXT NOT NULL, PRIMARY KEY (token, q))`);
+    this.sql.exec('CREATE TABLE IF NOT EXISTS gfound (i INTEGER PRIMARY KEY, ts TEXT NOT NULL)');     // games-v1: found words (no who)
+  }
+  gameView() {
+    const st = this.get('state'), g = this.get('game');
+    const found = this.sql.exec('SELECT i FROM gfound ORDER BY ts').toArray().map((r) => r.i);
+    const joined = this.sql.exec('SELECT COUNT(*) AS n FROM members').toArray()[0].n;
+    const over = Date.now() > Date.parse(g.ends);
+    return { ok: true, open: true, game: true, grid: g.grid, words: g.words.map((x) => x.w), n: g.words.length,
+      found: found.map((i) => ({ i, cells: g.words[i].cells })), ends: g.ends, over, done: found.length === g.words.length,
+      joined, size: st.size };
   }
   get(k) { const r = this.sql.exec('SELECT v FROM meta WHERE k = ?', k).toArray()[0]; return r ? JSON.parse(r.v) : null; }
   set(k, v) { this.sql.exec('INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v', k, JSON.stringify(v)); }
@@ -937,6 +995,7 @@ export class LiveRoom {
   view(token) {
     const st = this.get('state');
     if (!st || st.closed) return { ok: true, open: false };
+    if (st.game) return this.gameView();
     const qs = this.get('questions'), q = st.q, joined = this.sql.exec('SELECT COUNT(*) AS n FROM members').toArray()[0].n;
     const c = q ? this.counts(q) : { answered: 0, correct: 0 };
     const out = { ok: true, open: true, q, n: qs.length, kind: q ? qs[q - 1].kind : null, accepting: st.accepting,
@@ -952,9 +1011,10 @@ export class LiveRoom {
     const op = new URL(req.url).pathname.slice(1), b = await req.json().catch(() => ({}));
     const st = this.get('state');
     if (op === 'open') {
-      this.sql.exec('DELETE FROM members'); this.sql.exec('DELETE FROM answers');
-      this.set('questions', b.questions);
-      this.set('state', { code: b.code, class: b.class, date: b.date, size: b.size, q: 0, accepting: false, revealed: false, closed: false });
+      this.sql.exec('DELETE FROM members'); this.sql.exec('DELETE FROM answers'); this.sql.exec('DELETE FROM gfound');
+      if (b.game) this.set('game', b.game); else this.set('questions', b.questions);
+      this.set('state', { code: b.code, class: b.class, date: b.date, size: b.size, q: 0, accepting: false, revealed: false, closed: false,
+        game: !!b.game });
       await this.ctx.storage.setAlarm(Date.parse(b.closes_at));
       return Response.json({ ok: true });
     }
@@ -965,6 +1025,20 @@ export class LiveRoom {
     }
     if (op === 'state') return Response.json(this.view(b.token));
     if (op === 'teacher') return Response.json(this.view(null));
+    if (st.game && ['answer', 'next', 'reveal'].includes(op)) return Response.json({ ok: false, error: 'op' });
+    if (op === 'find') {
+      if (!st.game) return Response.json({ ok: false, error: 'op' });
+      const g = this.get('game'), same = (x, y) => x[0] === y[0] && x[1] === y[1];
+      if (Date.now() > Date.parse(g.ends)) return Response.json({ ...this.gameView(), hit: -1 });
+      this.sql.exec('INSERT OR IGNORE INTO members (token, ts) VALUES (?, ?)', b.token, new Date().toISOString());
+      let hit = -1;
+      g.words.forEach((x, i) => {
+        const f = x.cells[0], l = x.cells[x.cells.length - 1];
+        if (hit < 0 && ((same(f, b.a) && same(l, b.b)) || (same(f, b.b) && same(l, b.a)))) hit = i;
+      });
+      if (hit >= 0) this.sql.exec('INSERT OR IGNORE INTO gfound (i, ts) VALUES (?, ?)', hit, new Date().toISOString());
+      return Response.json({ ...this.gameView(), hit });
+    }
     if (op === 'answer') {
       const qs = this.get('questions');
       if (!st.accepting || b.q !== st.q) return Response.json({ ...this.view(b.token), ok: false, error: 'closed' });
@@ -987,6 +1061,11 @@ export class LiveRoom {
   async close() {
     const st = this.get('state');
     if (!st || st.closed) return { ok: true, closed: true, results: 0 };
+    if (st.game) {                                   // a game keeps nothing per student: the console read n/N before closing
+      await this.env.DB.prepare("UPDATE live_rooms SET status = 'closed' WHERE code = ?").bind(st.code).run();
+      await this.ctx.storage.deleteAll();
+      return { ok: true, closed: true, results: 0 };
+    }
     // keep nothing but per-student counts (in D1, for `daybook pull` -> effort, source 'live')
     const rows = this.sql.exec(`SELECT m.token, COUNT(a.q) AS answered, COALESCE(SUM(a.correct), 0) AS correct
       FROM members m LEFT JOIN answers a ON a.token = m.token GROUP BY m.token`).toArray();
@@ -1131,6 +1210,7 @@ async function route(req, env, url, h) {
   if (p === '/push/unsubscribe' && req.method === 'POST') return pushUnsubscribe(req, env, h);
   if (p === '/live/join' && req.method === 'POST') return liveStudent(req, env, url, h, 'join');
   if (p === '/live/answer' && req.method === 'POST') return liveStudent(req, env, url, h, 'answer');
+  if (p === '/live/find' && req.method === 'POST') return liveStudent(req, env, url, h, 'find');
   if (p === '/live/state' && req.method === 'GET' && url.searchParams.get('t')) return liveStudent(req, env, url, h, 'state');
   if (p === '/status' && req.method === 'GET') {
     const token = (url.searchParams.get('t') || '').toLowerCase();
@@ -1277,7 +1357,7 @@ export default {
     const url = new URL(req.url);
     const h = corsHeaders(req, env);
     const origin = req.headers.get('Origin');
-    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react', '/report', '/watch', '/push/subscribe', '/push/unsubscribe', '/review', '/review/vote', '/reviews', '/vreact', '/vreacts', '/classwork-mark', '/prefs', '/avatar', '/live/join', '/live/answer'].includes(url.pathname)
+    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react', '/report', '/watch', '/push/subscribe', '/push/unsubscribe', '/review', '/review/vote', '/reviews', '/vreact', '/vreacts', '/classwork-mark', '/prefs', '/avatar', '/live/join', '/live/answer', '/live/find'].includes(url.pathname)
       || (url.pathname === '/live/state' && url.searchParams.has('t'));
     // CORS: browsers may only call the student endpoints from the Pages origin.
     if (isStudent && origin && origin !== env.ALLOWED_ORIGIN) return json({ ok: false, error: 'origin' }, 403, h);

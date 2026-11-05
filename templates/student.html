@@ -108,7 +108,7 @@
 </section>
 
 <section id="tab-today" class="panel" role="tabpanel">
-  <div class="rhead"><h1 class="rtitle" id="r-title">{{ S.ritual_study }}</h1><p class="chip set-chip" id="today-set" hidden></p><span class="rdate tnum" id="today-date">&nbsp;</span><button type="button" class="chip livebtn" id="live-open">{{ S.live_btn }}</button></div>
+  <div class="rhead"><h1 class="rtitle" id="r-title">{{ S.ritual_study }}</h1><p class="chip set-chip" id="today-set" hidden></p><span class="rdate tnum" id="today-date">&nbsp;</span><button type="button" class="chip livebtn" id="live-open">{{ S.live_btn }}</button>{% if taste %}<button type="button" class="chip livebtn" id="gm-practice">{{ S.gm_practice }}</button>{% endif %}</div>
   {% set sec_test %}
   <div class="card wtcard" id="wt-card" data-sec="test" hidden>
     <div class="wt-row"><b id="wt-label">{{ S.wt_title }}</b><span class="muted wt-leg" id="wt-state"></span></div>
@@ -408,6 +408,17 @@
   </div>
 </div>
 
+<div class="wt gm" id="gm" role="dialog" aria-modal="true" aria-labelledby="gm-h" hidden>
+  <div class="wt-top"><b id="gm-h">{{ S.gm_title }}</b><span class="tnum gm-time" id="gm-time"></span><button type="button" class="live-x" id="gm-x" aria-label="{{ S.close }}">×</button></div>
+  <div class="wt-body">
+    {% if taste %}<p class="muted">{{ S.gm_taste }}</p>{% endif %}
+    <p class="gm-count tnum" id="gm-count"></p>
+    <div class="gm-grid" id="gm-grid"></div>
+    <p class="muted">{{ S.gm_hint }}</p>
+    <ul class="gm-words" id="gm-words"></ul>
+    <p class="gm-msg" id="gm-msg" aria-live="polite"></p>
+  </div>
+</div>
 <div class="live" id="live" role="dialog" aria-modal="true" aria-label="{{ S.live_btn }}" hidden>
   <div class="live-top"><b>{{ S.live_btn }} <span class="tnum" id="lv-qn"></span></b><button type="button" class="live-x" id="lv-x" aria-label="{{ S.close }}">×</button></div>
   <p class="live-status" id="lv-status" aria-live="polite"></p>
@@ -500,5 +511,6 @@
 <script type="application/json" id="data">{{ me.js | safe }}</script>
 <script src="/static/review_filter.js" defer></script>
 <script src="/static/tour.js" defer></script>
+<script src="/static/game.js" defer></script>
 <script src="/static/app.js" defer></script>
 {% endblock %}

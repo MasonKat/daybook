@@ -32,7 +32,7 @@ TEMPLATES = ROOT / "templates"
 STATIC = ROOT / "static"
 
 SVG_W, SVG_H = 320, 150
-JS_STRINGS = ("lock_dec", "set_theme_default", "set_bg_none", "set_up_pending", "set_up_approved", "set_up_rejected", "set_up_limit", "set_up_err", "set_up_taste", "set_saved", "set_err",
+JS_STRINGS = ("gm_count", "gm_hit", "gm_miss", "gm_done", "gm_over", "gm_closed", "lock_dec", "set_theme_default", "set_bg_none", "set_up_pending", "set_up_approved", "set_up_rejected", "set_up_limit", "set_up_err", "set_up_taste", "set_saved", "set_err",
               "set_move_up", "set_move_down", "wt_todo", "wt_done", "wt_queued", "wt_err", "wt_closed", "wt_hard_max", "wt_edit", "wt_open", "wt_title", "done_title", "streak_label", "class_plus", "reward_to_go", "uploading", "upload_error",
               "upload_rate", "upload_offline", "replaced", "no_worker", "today_set", "set_default", "weekdays", "story_streak",
               "recorded_at", "recorded", "ritual_class", "ritual_study", "study_cta", "end_cta", "ck_done", "ck_bad",
@@ -664,6 +664,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
                       if taste else {})},
             "S": {k: S_me[k] for k in JS_STRINGS},
             "tour": tour_data(S_me, TOUR_STUDENT),                             # F22.2
+            **({"gameDemo": _game_demo()} if taste else {}),                  # games-v1: the self-playing practice board
             # F22.4: the saved settings, the known ids, the class window (the routine is pinned first inside it)
             "prefs": pf, "sections": PF.SECTIONS, "colors": PF.COLORS, "mascot": has_mascot,
             "win": list(ops.class_window(cls)) if cls and ops.class_window(cls) else None,
@@ -744,6 +745,13 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         "av_gallery": [{"d": d, "svg": Markup(PF.gallery_svg(d, S["av_preset"].format(n=i + 1)))} for i, d in enumerate(PF.DESIGN_IDS)],
         "av_colors": PF.COLORS,
     }
+
+
+def _game_demo() -> dict:
+    """games-v1 taste: a fixed practice grid (the first term list, seed 7); bots find words in the browser, nothing is sent."""
+    from . import wordsearch as WS
+    t = WS.load_terms()
+    return WS.round_grid(next(iter(t["rounds"])), 7)
 
 
 def _backgrounds(cfg: Config) -> list[dict]:
