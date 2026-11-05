@@ -18,8 +18,9 @@ const RID_RE = /^[a-f0-9]{16}$/;
 // 1 base, 2 출석, 3 장면 + Live, 4 푼 문제 수, 5 주간 테스트 reports, 6 /health version + /tokmap-info, 7 /watch,
 // 8 Web Push, 9 consent (no watch / push without the parent's yes), 10 학생 리뷰, 11 영상 반응 (5-way, pooled per grade),
 // 12 the teacher remote (/t/remote: tap who, speak what), 13 수업 문제 (in-class ○/✕/– checks),
-// 14 ⚙ 설정 (per-token settings JSON + a pre-moderated own avatar picture; F22.5 adds theme / mode / size / bg)
-export const WORKER_VERSION = 14;
+// 14 ⚙ 설정 (per-token settings JSON + a pre-moderated own avatar picture; F22.5 adds theme / mode / size / bg),
+// 15 live-v2 phone mode (stems, choices, PNG on joined phones; wiped at close)
+export const WORKER_VERSION = 15;
 const DAILY_CRON = '17 19 * * *';
 // the worst words, used until the console has sent the full list (filters/review_words.txt)
 const CORE_WORDS = '시발\n씨발\nㅅㅂ\nㅆㅂ\n병신\nㅂㅅ\n좆\n지랄\n존나\n개새끼\nfuck\nshit\n!시발점\n!시발표';
@@ -879,6 +880,14 @@ async function liveOpen(req, env) {
       !qs.every((q) => (q.kind === 'choice' && /^[1-5]$/.test(String(q.answer))) || (q.kind === 'num' && /^-?\d{1,6}$/.test(String(q.answer))))) {
     return json({ ok: false, error: 'bad_room' }, 400, {});
   }
+  // live-v2 (Mason, 11-05): phone mode carries each stem, its 5 choices and an optional PNG, for joined phones of this
+  // class only; the room keeps them only while open and wipes them at close / alarm
+  const phone = !!b.phone;
+  if (phone && !qs.every((q) => typeof q.q === 'string' && q.q.length <= 600 &&
+      (q.kind !== 'choice' || (Array.isArray(q.choices) && q.choices.length === 5 && q.choices.every((c) => typeof c === 'string' && c.length <= 200))) &&
+      (q.img === undefined || (typeof q.img === 'string' && q.img.length <= 205000 && q.img.startsWith('iVBORw0KGgo'))))) {
+    return json({ ok: false, error: 'bad_room' }, 400, {});
+  }
   const size = (await one(env, 'SELECT COUNT(*) AS n FROM tokmap WHERE class = ?', b.class)).n;
   const now = Date.now(), day = seoulDay(now), closes = new Date(now + LIVE_MINUTES * 60e3).toISOString();
   let code = null;
@@ -890,13 +899,15 @@ async function liveOpen(req, env) {
     if (r.meta && r.meta.changes) code = c;
   }
   if (!code) return json({ ok: false, error: 'busy' }, 503, {});
-  await roomCall(env, code, 'open', { code, class: b.class, date: day, size,
-    questions: qs.map((q) => ({ kind: q.kind, answer: String(q.answer) })), closes_at: closes });
+  await roomCall(env, code, 'open', { code, class: b.class, date: day, size, phone,
+    questions: qs.map((q) => ({ kind: q.kind, answer: String(q.answer),
+      ...(phone ? { q: q.q, ...(q.kind === 'choice' ? { choices: q.choices } : {}), img: q.img ? 1 : 0 } : {}) })),
+    imgs: phone ? qs.map((q) => q.img || '') : [], closes_at: closes });
   return json({ ok: true, room: code, size, closes_at: closes }, 200, {});
 }
 
 async function liveStudent(req, env, url, h, op) {
-  const form = op === 'state' ? url.searchParams : await req.formData().catch(() => null);
+  const form = op === 'state' || op === 'img' ? url.searchParams : await req.formData().catch(() => null);
   if (!form) return json({ ok: false, error: 'bad_form' }, 400, h);
   const token = String(form.get('t') || '').toLowerCase(), code = String(form.get('room') || '');
   if (!TOKEN_RE.test(token) || !ROOM_RE.test(code)) return json({ ok: false, error: 'bad_request' }, 400, h);
@@ -927,6 +938,7 @@ export class LiveRoom {
     this.sql.exec('CREATE TABLE IF NOT EXISTS members (token TEXT PRIMARY KEY, ts TEXT NOT NULL)');
     this.sql.exec(`CREATE TABLE IF NOT EXISTS answers (token TEXT NOT NULL, q INTEGER NOT NULL, a TEXT NOT NULL,
       correct INTEGER NOT NULL, ts TEXT NOT NULL, PRIMARY KEY (token, q))`);
+    this.sql.exec('CREATE TABLE IF NOT EXISTS imgs (q INTEGER PRIMARY KEY, b64 TEXT NOT NULL)');      // live-v2 phone mode
   }
   get(k) { const r = this.sql.exec('SELECT v FROM meta WHERE k = ?', k).toArray()[0]; return r ? JSON.parse(r.v) : null; }
   set(k, v) { this.sql.exec('INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v', k, JSON.stringify(v)); }
@@ -941,6 +953,10 @@ export class LiveRoom {
     const c = q ? this.counts(q) : { answered: 0, correct: 0 };
     const out = { ok: true, open: true, q, n: qs.length, kind: q ? qs[q - 1].kind : null, accepting: st.accepting,
       revealed: st.revealed, size: st.size, joined, answered: c.answered, correct: st.revealed ? c.correct : null };
+    if (st.phone && q) {                               // live-v2: the current question on the phones (never the answer key)
+      const cur = qs[q - 1];
+      out.stem = cur.q || ''; out.choices = cur.choices || null; out.img = !!cur.img;
+    }
     if (token) {
       const mine = q ? this.sql.exec('SELECT correct FROM answers WHERE token = ? AND q = ?', token, q).toArray()[0] : null;
       out.mine = { joined: !!this.sql.exec('SELECT 1 AS x FROM members WHERE token = ?', token).toArray()[0], answered: !!mine,
@@ -952,9 +968,11 @@ export class LiveRoom {
     const op = new URL(req.url).pathname.slice(1), b = await req.json().catch(() => ({}));
     const st = this.get('state');
     if (op === 'open') {
-      this.sql.exec('DELETE FROM members'); this.sql.exec('DELETE FROM answers');
+      this.sql.exec('DELETE FROM members'); this.sql.exec('DELETE FROM answers'); this.sql.exec('DELETE FROM imgs');
       this.set('questions', b.questions);
-      this.set('state', { code: b.code, class: b.class, date: b.date, size: b.size, q: 0, accepting: false, revealed: false, closed: false });
+      (b.imgs || []).forEach((x, i) => { if (x) this.sql.exec('INSERT INTO imgs (q, b64) VALUES (?, ?)', i + 1, x); });
+      this.set('state', { code: b.code, class: b.class, date: b.date, size: b.size, q: 0, accepting: false, revealed: false, closed: false,
+        phone: !!b.phone });
       await this.ctx.storage.setAlarm(Date.parse(b.closes_at));
       return Response.json({ ok: true });
     }
@@ -964,6 +982,10 @@ export class LiveRoom {
       return Response.json(this.view(b.token));
     }
     if (op === 'state') return Response.json(this.view(b.token));
+    if (op === 'img') {                                  // the current question's picture only (fetched once per question)
+      const r = st.phone && st.q ? this.sql.exec('SELECT b64 FROM imgs WHERE q = ?', st.q).toArray()[0] : null;
+      return Response.json({ ok: !!r, q: st.q, img: r ? r.b64 : null });
+    }
     if (op === 'teacher') return Response.json(this.view(null));
     if (op === 'answer') {
       const qs = this.get('questions');
@@ -1132,6 +1154,7 @@ async function route(req, env, url, h) {
   if (p === '/live/join' && req.method === 'POST') return liveStudent(req, env, url, h, 'join');
   if (p === '/live/answer' && req.method === 'POST') return liveStudent(req, env, url, h, 'answer');
   if (p === '/live/state' && req.method === 'GET' && url.searchParams.get('t')) return liveStudent(req, env, url, h, 'state');
+  if (p === '/live/img' && req.method === 'GET') return liveStudent(req, env, url, h, 'img');
   if (p === '/status' && req.method === 'GET') {
     const token = (url.searchParams.get('t') || '').toLowerCase();
     if (!TOKEN_RE.test(token)) return json({ ok: false, error: 'bad_token' }, 400, h);
@@ -1277,7 +1300,7 @@ export default {
     const url = new URL(req.url);
     const h = corsHeaders(req, env);
     const origin = req.headers.get('Origin');
-    const isStudent = ['/submit', '/status', '/checkin', '/moments', '/moment', '/react', '/report', '/watch', '/push/subscribe', '/push/unsubscribe', '/review', '/review/vote', '/reviews', '/vreact', '/vreacts', '/classwork-mark', '/prefs', '/avatar', '/live/join', '/live/answer'].includes(url.pathname)
+    const isStudent = url.pathname === '/live/img' || ['/submit', '/status', '/checkin', '/moments', '/moment', '/react', '/report', '/watch', '/push/subscribe', '/push/unsubscribe', '/review', '/review/vote', '/reviews', '/vreact', '/vreacts', '/classwork-mark', '/prefs', '/avatar', '/live/join', '/live/answer'].includes(url.pathname)
       || (url.pathname === '/live/state' && url.searchParams.has('t'));
     // CORS: browsers may only call the student endpoints from the Pages origin.
     if (isStudent && origin && origin !== env.ALLOWED_ORIGIN) return json({ ok: false, error: 'origin' }, 403, h);
