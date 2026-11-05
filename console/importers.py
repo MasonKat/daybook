@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import io
 import json
 import re
 import sqlite3
@@ -69,69 +70,129 @@ def import_roster(conn: sqlite3.Connection, csv_path: str | Path, mapping: dict,
     return rep
 
 
+# F23 (setup rehearsal): Korean / variant headers are accepted as the mapped English ones (any spacing or case)
+HEADER_ALIASES = {
+    "full_name": ("name", "이름", "성명", "학생명", "학생 이름", "학생이름"),
+    "ext_id": ("student id", "id", "학번", "학생 id", "학생번호", "번호(id)", "아이디"),
+    "active": ("status", "상태", "재원상태", "재원 상태", "재원여부"),
+    "parent_phone": ("phone number", "phone", "연락처", "전화번호", "보호자 연락처", "학부모 연락처", "보호자연락처", "학부모연락처"),
+    "callsign": ("callsign", "call sign", "호출명"),
+}
+ROSTER_ENCODINGS = ("utf-8-sig", "cp949")          # Excel's "CSV UTF-8" and the plain Korean-Windows "CSV" (CP949)
+
+
+def _norm(h: str) -> str:
+    return re.sub(r"\s+", " ", (h or "").replace("\ufeff", "").strip().lower())
+
+
+def read_roster_rows(csv_path: str | Path, mapping: dict) -> tuple[list[tuple[int, dict]], list[str]]:
+    """(line, {field: value}) for every non-blank row, and notes. Accepts a BOM, CP949, Korean headers, blank rows."""
+    raw = Path(csv_path).read_bytes()
+    text, notes = None, []
+    for enc in dict.fromkeys((mapping.get("encoding", "utf-8-sig"),) + ROSTER_ENCODINGS):
+        try:
+            text = raw.decode(enc)
+            if enc == "cp949":
+                notes.append("read as CP949 (Excel's plain CSV); saving as 'CSV UTF-8' avoids this")
+            break
+        except UnicodeDecodeError:
+            continue
+    if text is None:
+        raise ValueError("cannot read the CSV (not UTF-8 or CP949): in Excel, Save As → 'CSV UTF-8'")
+    text = text.lstrip("\ufeff")
+    reader = csv.DictReader(io.StringIO(text, newline=""))
+    heads = reader.fieldnames or []
+    want = {}                                    # field -> the CSV's header for it
+    for src, dst in mapping["columns"].items():
+        for h in heads:
+            if _norm(h) == _norm(src) or _norm(h) in HEADER_ALIASES.get(dst, ()):
+                want.setdefault(dst, h)
+    for dst, names in HEADER_ALIASES.items():
+        for h in heads:
+            if _norm(h) in names:
+                want.setdefault(dst, h)
+    if "full_name" not in want:
+        raise ValueError(f"CSV has no name column (Name / 이름 / 성명); found {heads}")
+    out = []
+    for i, row in enumerate(reader, start=2):
+        if not any((v or "").strip() for v in row.values() if isinstance(v, str)):
+            continue                                 # a blank row (Excel leaves some at the end): ignored
+        out.append((i, {dst: (row.get(h) or "").strip() for dst, h in want.items()}))
+    return out, notes
+
+
 def _import_roster(conn: sqlite3.Connection, csv_path: str | Path, mapping: dict, class_id: int | None,
                    rep: RosterReport) -> None:
-    cols = mapping["columns"]                     # source column -> DAYBOOK field
     active_values = {v.strip() for v in mapping.get("active_values", [])}
-    enc = mapping.get("encoding", "utf-8-sig")
-    with open(csv_path, newline="", encoding=enc) as fh:
-        reader = csv.DictReader(fh)
-        missing = [c for c in cols if c not in (reader.fieldnames or [])]
-        if missing:
-            raise ValueError(f"CSV is missing mapped columns: {missing}; found {reader.fieldnames}")
-        for i, row in enumerate(reader, start=2):
-            rec = {dst: (row.get(src) or "").strip() for src, dst in cols.items()}
-            name = rec.get("full_name", "")
-            if not name:
-                rep.skipped.append(f"line {i}: empty name")
-                rep.rows.append({"line": i, "name": "", "ext_id": rec.get("ext_id") or "", "status": "skipped", "why": "empty name"})
+    rows, notes = read_roster_rows(csv_path, mapping)
+    rep.warnings.extend(notes)
+    for i, rec in rows:
+        name = rec.get("full_name", "")
+        if not name:
+            rep.skipped.append(f"line {i}: empty name")
+            rep.rows.append({"line": i, "name": "", "ext_id": rec.get("ext_id") or "", "status": "skipped", "why": "empty name"})
+            continue
+        active = (rec["active"] in active_values) if "active" in rec and active_values else True
+        ext_id = rec.get("ext_id") or None
+        phone = rec.get("parent_phone") or None
+        existing = None
+        if ext_id:
+            existing = conn.execute("SELECT * FROM students WHERE ext_id = ?", (ext_id,)).fetchone()
+        if existing is None:
+            same = conn.execute("SELECT * FROM students WHERE full_name = ?", (name,)).fetchall()
+            if len(same) == 1 and (not ext_id or not same[0]["ext_id"]):
+                existing = same[0]
+            elif len(same) > 1:
+                rep.skipped.append(f"line {i}: several students share this name and no ID matched; fix by hand")
+                rep.rows.append({"line": i, "name": name, "ext_id": ext_id or "", "status": "skipped", "why": "same name"})
                 continue
-            active = (rec["active"] in active_values) if "active" in rec and active_values else True
-            ext_id = rec.get("ext_id") or None
-            phone = rec.get("parent_phone") or None
-            existing = None
-            if ext_id:
-                existing = conn.execute("SELECT * FROM students WHERE ext_id = ?", (ext_id,)).fetchone()
-            if existing is None:
-                same = conn.execute("SELECT * FROM students WHERE full_name = ?", (name,)).fetchall()
-                if len(same) == 1 and (not ext_id or not same[0]["ext_id"]):
-                    existing = same[0]
-                elif len(same) > 1:
-                    rep.skipped.append(f"line {i}: several students share this name and no ID matched; fix by hand")
-                    rep.rows.append({"line": i, "name": name, "ext_id": ext_id or "", "status": "skipped", "why": "same name"})
-                    continue
-            if existing is None:
-                if class_id is None:
-                    rep.skipped.append(f"line {i}: new student but no --class given")
-                    rep.rows.append({"line": i, "name": name, "ext_id": ext_id or "", "status": "skipped", "why": "no class"})
-                    continue
-                s = add_student(conn, class_id, name, ext_id=ext_id, parent_phone=phone, active=active)
-                rep.added.append(s["slug"])
-                rep.rows.append({"line": i, "name": name, "ext_id": ext_id or "", "status": "new", "why": ""})
-                if s["display_name"] == s["full_name"]:
-                    rep.warnings.append(
-                        f"{s['slug']}: display name equals the full name; publish will refuse it until you run "
-                        f"`daybook roster edit {s['slug']} --display <given name>`")
+        if existing is None:
+            if class_id is None:
+                rep.skipped.append(f"line {i}: new student but no --class given")
+                rep.rows.append({"line": i, "name": name, "ext_id": ext_id or "", "status": "skipped", "why": "no class"})
                 continue
-            changes = {}
-            if existing["full_name"] != name:
-                changes["full_name"] = name
-            if ext_id and existing["ext_id"] != ext_id:
-                changes["ext_id"] = ext_id
-            if "parent_phone" in rec and (existing["parent_phone"] or None) != phone:
-                changes["parent_phone"] = phone
-            if bool(existing["active"]) != active:
-                changes["active"] = 1 if active else 0
-            if changes:
-                sets = ", ".join(f"{k} = ?" for k in changes)
-                conn.execute(f"UPDATE students SET {sets} WHERE id = ?", (*changes.values(), existing["id"]))
-                log_event(conn, "student_update", {"student_id": existing["id"], "fields": sorted(changes)})
-                rep.updated.append(existing["slug"])
-                rep.rows.append({"line": i, "name": name, "ext_id": ext_id or "", "status": "updated",
-                                 "why": ", ".join(sorted(changes))})
-            else:
-                rep.unchanged.append(existing["slug"])
-                rep.rows.append({"line": i, "name": name, "ext_id": ext_id or "", "status": "unchanged", "why": ""})
+            s = add_student(conn, class_id, name, ext_id=ext_id, parent_phone=phone, active=active)
+            _set_callsign(conn, s, rec.get("callsign"), rep)
+            rep.added.append(s["slug"])
+            rep.rows.append({"line": i, "name": name, "ext_id": ext_id or "", "status": "new", "why": ""})
+            if s["display_name"] == s["full_name"]:
+                rep.warnings.append(
+                    f"{s['slug']}: display name equals the full name; publish will refuse it until you run "
+                    f"`daybook roster edit {s['slug']} --display <given name>`")
+            continue
+        changes = {}
+        if existing["full_name"] != name:
+            changes["full_name"] = name
+        if ext_id and existing["ext_id"] != ext_id:
+            changes["ext_id"] = ext_id
+        if "parent_phone" in rec and (existing["parent_phone"] or None) != phone:
+            changes["parent_phone"] = phone
+        if bool(existing["active"]) != active:
+            changes["active"] = 1 if active else 0
+        if rec.get("callsign") and rec["callsign"] != (existing["callsign"] or ""):
+            _set_callsign(conn, existing, rec["callsign"], rep)
+        if changes:
+            sets = ", ".join(f"{k} = ?" for k in changes)
+            conn.execute(f"UPDATE students SET {sets} WHERE id = ?", (*changes.values(), existing["id"]))
+            log_event(conn, "student_update", {"student_id": existing["id"], "fields": sorted(changes)})
+            rep.updated.append(existing["slug"])
+            rep.rows.append({"line": i, "name": name, "ext_id": ext_id or "", "status": "updated",
+                             "why": ", ".join(sorted(changes))})
+        else:
+            rep.unchanged.append(existing["slug"])
+            rep.rows.append({"line": i, "name": name, "ext_id": ext_id or "", "status": "unchanged", "why": ""})
+
+
+def _set_callsign(conn, s, cs: str | None, rep: RosterReport) -> None:
+    """F19.1 호출명 from the CSV (optional column 호출명 / callsign); a clash is a warning, never a failed import."""
+    if not cs:
+        return
+    from . import ops
+    s = conn.execute("SELECT * FROM students WHERE id = ?", (s["id"],)).fetchone()
+    try:
+        conn.execute("UPDATE students SET callsign = ? WHERE id = ?", (ops.check_callsign(conn, s, cs), s["id"]))
+    except ops.OpError as e:
+        rep.warnings.append(f"{s['slug']}: call sign {cs!r} not set ({e})")
 
 
 # ---------------------------------------------------------------- screeners

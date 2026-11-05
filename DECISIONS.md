@@ -479,6 +479,23 @@ The current `practice_mode = manitoba` is only the teacher's personal practice l
   The Worker validates ids only (it cannot know locks); a locked or unknown choice renders as the default look.
 - Stored with the F22.4 settings JSON (`theme`, `mode`, `size`, `bg`), so it applies on every device. The taste site opens every theme.
 
+## F23: setup rehearsal fixes (2026-11-05)
+- Rehearsed `python -m console setup` end to end on synthetic data (4 classes, two rosters, two rounds, publish against the local
+  Worker, doctor); the runbook is docs/SETUP_TONIGHT.md.
+- **Secrets are never shown in full:** the teacher token appears masked (`AbCd…xy`). With "제가 대신 실행할까요? 네" the wizard runs
+  `npx wrangler secret put` itself and sends the value on stdin (never on a command line; wrangler's own output is masked too). By hand,
+  it prints a PowerShell one-liner that pipes the value from daybook.json. The VAPID keys go the same way.
+- **wrangler steps can run for the teacher:** `whoami` first (not logged in → "npx wrangler login", then check again), D1 by `d1 list`
+  (an existing `daybook` is reused, so "already exists" never blocks a re-run) else `d1 create`, `deploy` reads the workers.dev address
+  from its output. Pasting a whole output line works too (the id / URL is extracted). The Pages deploy checks the login first.
+- **Roster CSVs as Excel writes them:** UTF-8 with or without BOM, or CP949 (Korean Windows' plain "CSV", noted in the preview);
+  Korean or variant headers (이름/성명, 학번, 상태, 보호자 연락처…); only a name column is required; blank rows are ignored (not
+  "skipped"); an optional 호출명 column fills the call signs (a clash is a warning, never a failed import).
+- **Classes:** colour, label and rubric are asked in setup; days, term, times, minutes and colour are checked at their own question
+  (a typo is asked again, not discovered after the whole form). The mascot file is checked before it is written; its size is asked (36).
+- `setup --status` shows every step and where the next run continues. The doctor's backup age no longer drops the time zone
+  (it read a fresh backup as "9 h old" on a non-KST clock).
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

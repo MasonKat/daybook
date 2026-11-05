@@ -71,12 +71,12 @@ def env(tmp_path, monkeypatch):
 
 FIRST_FOUR = ["네",                                         # 1 db: create it
               "다 했어요",                                   # 2 subdomain
-              "다 했어요", D1, "네",                         # 3 d1: id -> wrangler.toml
-              "네", "다 했어요"]                             # 4 token: write, then `wrangler secret put`
-REST = ["다 했어요", "https://w.example", "네",              # 5 worker
+              "아니요", "다 했어요", D1, "네",               # 3 d1: by hand (no auto), id -> wrangler.toml
+              "네", "아니요", "다 했어요"]                   # 4 token: write, then `wrangler secret put` by hand
+REST = ["아니요", "다 했어요", "https://w.example", "네",    # 5 worker (by hand)
         "아니요",                                            # 6 vapid: not now
-        "https://p.example", "AMP 수학", "usb", "", "네",     # 7 config
-        "고1A", "월,수,금", "2026-11-06..2027-02-26", "고1", "18:00", "20:00", "", "피자", "네", "",   # 8 classes
+        "https://p.example", "AMP 수학", "usb", "", "", "네",  # 7 config (no mascot yet, 36 px)
+        "고1A", "월,수,금", "2026-11-06..2027-02-26", "고1", "18:00", "20:00", "", "피자", "#16a34a", "고1 기본 월수금", "", "네", "",   # 8 classes
         "roster.csv", "", "네", "네", "가람", "", "7번", "",   # 9 roster (preview, call signs)
         "y", "n", "", "네",                                  # 10 consent
         "네", "Adaptive_Screeners_1S_Nov06_G10", "1학년", "", "20", "2026-11-06 20:00", "2026-11-08 23:59", "네", "아니요",   # 11 rounds
@@ -94,6 +94,7 @@ def test_full_synthetic_night(env):
     c = dbmod.connect(env.db)
     cls = c.execute("SELECT * FROM classes").fetchone()
     assert (cls["name"], cls["start_time"], cls["end_time"], cls["late_min"], cls["grade"]) == ("고1A", "18:00", "20:00", 10, "고1")
+    assert (cls["color"], cls["label"]) == ("#16a34a", "고1 기본 월수금")
     studs = c.execute("SELECT full_name, callsign, consent FROM students ORDER BY id").fetchall()
     assert [tuple(r) for r in studs] == [("한가람", "가람", "yes"), ("윤도담", None, "no"), ("서하늘", "7번", "unknown")]
     assert c.execute("SELECT COUNT(*) FROM rounds").fetchone()[0] == 1
@@ -117,7 +118,7 @@ def test_resume_after_a_stop_at_step_5(env):
     assert w2.run() is True, io2.text
     assert "이어서" in io2.text.split("\n")[2] and "[5/14]" in io2.text                 # it continued at step 5
     assert "[4/14]" not in io2.text
-    w3, io3 = env.make(["다 했어요", "https://w2.example", "네"])                       # --from worker: redo one step
+    w3, io3 = env.make(["아니요", "다 했어요", "https://w2.example", "네"])             # --from worker: redo one step
     assert w3.run("worker") is True
     assert json.loads((env.tmp / "daybook.json").read_text(encoding="utf-8"))["worker_url"] == "https://w2.example"
     with pytest.raises(SU.SetupError):
@@ -154,11 +155,11 @@ def test_never_touches_the_demo(env, tmp_path):
 
 def test_backup_dir_warning(env, monkeypatch):
     monkeypatch.setattr(B, "is_removable", lambda folder: False)
-    w, io = env.make(["https://p.example", "AMP 수학", "C:\\backup", "", "네"])
+    w, io = env.make(["https://p.example", "AMP 수학", "C:\\backup", "", "", "네"])
     assert w.step_config() == D.WARN
     assert "이동식(USB) 드라이브가 아니에요" in io.text
     monkeypatch.setattr(B, "is_removable", lambda folder: None)
-    w, io = env.make(["https://p.example", "AMP 수학", "C:\\backup", "", "네"])
+    w, io = env.make(["https://p.example", "AMP 수학", "C:\\backup", "", "", "네"])
     w.step_config()
     assert "확인할 수 없어요" in io.text
 
@@ -177,3 +178,76 @@ def test_cli_entry(tmp_path, monkeypatch):
     assert r.exit_code == 3 and "멈췄어요" in r.output
     r = CliRunner().invoke(cli, ["--db", "daybook.sqlite", "setup", "--from", "nope"], input="")
     assert r.exit_code != 0 and "--from" in r.output
+
+
+# ---------------------------------------------------------------- the rehearsal's fixes (11-05)
+
+class FakeWrangler:
+    """npx wrangler: not logged in at first; D1 'daybook' already exists; secrets arrive on stdin; deploy prints the URL."""
+    def __init__(self):
+        self.calls, self.logged = [], False
+
+    def __call__(self, args, stdin):
+        self.calls.append((args, stdin))
+        if args == ["whoami"]:
+            return (0, "Getting User settings...\nYou are not authenticated. Please run `wrangler login`.") if not self.logged else (0, "You are logged in")
+        if args[:2] == ["d1", "list"]:
+            return 0, json.dumps([{"uuid": D1, "name": "daybook", "created_at": "2026-11-05"}])
+        if args[:2] == ["d1", "create"]:
+            return 1, "A database with that name already exists"
+        if args[:2] == ["secret", "put"]:
+            return 0, f"✨ Success! Uploaded secret {args[2]} (value {stdin.strip()})"
+        if args == ["deploy"]:
+            return 0, "Uploaded daybook-worker\nhttps://daybook-worker.amp-test.workers.dev\nCurrent Version ID: x"
+        return 1, "?"
+
+
+def test_wrangler_steps_run_for_the_teacher_and_never_show_the_token(env):
+    fw = FakeWrangler()
+    w, io = env.make(["네", "다 했어요",
+                      "네", "다 했어요", "네",                    # d1: auto -> login needed -> 다 했어요 -> found existing id -> write
+                      "네", "네",                                  # token: write, auto
+                      "네", "네",                                  # worker: auto deploy -> URL -> write
+                      "그만"], wrangler=fw)
+    fw_login = fw.__call__
+
+    def logging_in(args, stdin):                                    # the teacher logs in while the wizard waits
+        if args == ["whoami"] and any(a == ["whoami"] for a, _ in fw.calls):
+            fw.logged = True
+        return fw_login(args, stdin)
+    w.wrangler = logging_in
+    assert w.run() is False
+    tok = json.loads((env.tmp / "daybook.json").read_text(encoding="utf-8"))["teacher_token"]
+    assert tok not in io.text and SU.mask(tok) in io.text                                # masked, even in wrangler's own output
+    assert ("secret", "put", "TEACHER_TOKEN") == tuple(next(a for a, _ in fw.calls if a[:2] == ["secret", "put"]))
+    assert next(i for a, i in fw.calls if a[:2] == ["secret", "put"]) == tok + "\n"        # by stdin, never on the command line
+    assert f'database_id = "{D1}"' in env.toml.read_text(encoding="utf-8") and "already exists" not in io.text
+    assert "npx wrangler login" in io.text
+    assert json.loads((env.tmp / "daybook.json").read_text(encoding="utf-8"))["worker_url"] == "https://daybook-worker.amp-test.workers.dev"
+
+
+def test_pasted_lines_are_accepted_and_status_shows_the_progress(env):
+    w, io = env.make(["네", "다 했어요", "아니요", "다 했어요", f"✅ database_id = \"{D1}\"", "네", "그만"])
+    assert w.run() is False and f'database_id = "{D1}"' in env.toml.read_text(encoding="utf-8")
+    w2, io2 = env.make([])
+    w2.status()
+    assert "d1" in io2.text and "token" in io2.text and "'token'" in io2.text.splitlines()[-1]
+
+
+def test_roster_csv_from_excel_bom_cp949_korean_headers_blank_rows_and_call_signs(env):
+    from console import importers, ops
+    c = dbmod.connect(env.db); dbmod.init(c)
+    cls = ops.save_class(c, "고1A", create=True, term="2026-11-06..2027-02-26", days="월,수,금")
+    mapping = importers.load_mapping(ROOT / "mappings" / "roster.json")
+    body = "번호, 이름 ,학번,상태,보호자 연락처,호출명\n1,한가람,S901,재원,010-4821-7735,가람\n,,,,,\n2,윤도담,S902,재원,010-5937-2164,7번\n\n3,서하늘,S903,휴원,,\n"
+    for name, data in (("bom.csv", b"\xef\xbb\xbf" + body.encode("utf-8")), ("cp949.csv", body.encode("cp949"))):
+        (env.tmp / name).write_bytes(data)
+        rep = importers.import_roster(c, env.tmp / name, mapping, cls["id"], dry_run=True)
+        assert [r["status"] for r in rep.rows] == ["new", "new", "new"], rep.rows                # blank rows ignored, not "skipped"
+        assert ("CP949" in " ".join(rep.warnings)) == (name == "cp949.csv")
+    importers.import_roster(c, env.tmp / "bom.csv", mapping, cls["id"])
+    rows = [tuple(r) for r in c.execute("SELECT full_name, ext_id, active, callsign, parent_phone FROM students ORDER BY id")]
+    assert rows == [("한가람", "S901", 1, "가람", "010-4821-7735"), ("윤도담", "S902", 1, "7번", "010-5937-2164"), ("서하늘", "S903", 0, None, None)]
+    (env.tmp / "noname.csv").write_text("학번,상태\nS1,재원\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="name column"):
+        importers.import_roster(c, env.tmp / "noname.csv", mapping, cls["id"], dry_run=True)

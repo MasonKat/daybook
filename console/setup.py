@@ -15,7 +15,9 @@ from __future__ import annotations
 import json
 import re
 import secrets
+import shutil
 import sqlite3
+import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,6 +36,15 @@ DONE = {"다 했어요", "다했어요", "다 했어", "done", "네", "y", "yes"
 SKIP = {"건너뛰기", "skip", "s"}
 STOP = {"그만", "stop", "q", "quit"}
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+UUID_SEARCH = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+WORKER_URL_RE = re.compile(r"https://[a-z0-9.-]+\.workers\.dev")
+# PowerShell one-liner: reads a value from daybook.json and pipes it to wrangler, so the value is never on screen
+PIPE = "(Get-Content '{path}' -Raw | ConvertFrom-Json).{key} | npx wrangler secret put {name}"
+
+
+def mask(value: str) -> str:
+    """Never a secret in full on screen: the first 4 and the last 2 characters."""
+    return (value[:4] + "…" + value[-2:]) if len(value) > 8 else "…"
 
 EN = {
     "title": "DAYBOOK first setup (Thursday night, real data)",
@@ -52,16 +63,15 @@ EN = {
     "db_backup": "Back it up now first? (yes/no)", "db_backed": "backup: {path}",
     "sub_do": "In a browser: Cloudflare dashboard → Workers & Pages → (first time only) choose your free workers.dev subdomain.",
     "sub_note": "checked later, when the Worker answers",
-    "d1_do": "In PowerShell, in the DAYBOOK folder:\n  cd worker\n  npx wrangler login\n  npx wrangler d1 create daybook\nIt prints a database_id (8-4-4-4-12 letters and digits).",
+    "d1_do": "In PowerShell, in the DAYBOOK folder:\n  cd worker\n  npx wrangler login\n  npx wrangler d1 create daybook\nIt prints a database_id (8-4-4-4-12 letters and digits).\nIf it says 'already exists': npx wrangler d1 list, and copy the id on the daybook line.",
     "d1_ask": "Paste the database_id", "d1_bad": "That is not a database_id (8-4-4-4-12).", "d1_write": "worker/wrangler.toml: database_id = {id}",
     "d1_ok": "worker/wrangler.toml has the D1 binding ({id})", "d1_missing": "worker/wrangler.toml still has no database_id",
     "tok_have": "daybook.json already has a teacher token; keeping it.", "tok_write": "daybook.json: teacher_token = (a new random token, 43 characters)",
-    "tok_do": "In the worker folder run:\n  npx wrangler secret put TEACHER_TOKEN\nand paste this value when it asks:\n  {token}",
     "wk_do": "In the worker folder run:\n  npx wrangler deploy\nIt prints the Worker address (https://….workers.dev).",
     "wk_ask": "Paste the Worker address", "wk_bad": "That is not an http(s) address.", "wk_write": "daybook.json: worker_url = {url}",
     "vp_ask": "Use push notifications? (yes/no)", "vp_subject": "Contact for the push service (mailto:you@example.com)",
     "vp_write": "daybook.json: vapid_public / vapid_private / vapid_subject (new keys)",
-    "vp_do": "In the worker folder run these three, each pasting the value from daybook.json:\n  npx wrangler secret put VAPID_PUBLIC   (vapid_public)\n  npx wrangler secret put VAPID_PRIVATE  (vapid_private)\n  npx wrangler secret put VAPID_SUBJECT  (vapid_subject)\nthen once more: npx wrangler deploy",
+    "vp_do": "In PowerShell, in the worker folder, run these (each reads its value from daybook.json without showing it):\n  {cmds}\nthen once more: npx wrangler deploy",
     "vp_ok": "the Worker has the push keys", "vp_not": "the Worker does not report push keys yet",
     "cf_pages": "Pages address (https://<project>.pages.dev)", "cf_academy": "Academy name for the printed letter",
     "cf_backup": "Backup folder (on the BitLocker-encrypted USB drive, e.g. E:\\daybook-backup)",
@@ -82,6 +92,18 @@ EN = {
     "pb_write": "publish: build the student and parent pages in dist/ (the no-PII lint), send links, consent and rounds to the Worker, back up",
     "dp_write": "deploy: npx wrangler pages deploy (dist/ → your Pages project)", "dp_ok": "deployed", "dp_fail": "deploy failed: {out}",
     "dr_ok": "no ✗: ready for Friday", "dr_fail": "{n} ✗ left: fix them (each line says how), then run setup --from doctor",
+    "auto_ask": "Shall I run wrangler for you? (yes = I run it, no = you run it yourself)",
+    "wr_login": "wrangler is not logged in. In PowerShell, in the worker folder, run:\n  npx wrangler login\n(a browser opens: allow it)",
+    "wr_fail": "wrangler did not finish (exit {rc}). The last lines:\n{out}",
+    "wr_nonpx": "npx was not found: install Node.js 22 LTS (nodejs.org), open a NEW PowerShell, then run setup again.",
+    "d1_found": "found the existing D1 'daybook': {id}", "d1_made": "created D1 'daybook': {id}",
+    "tok_masked": "teacher token: {masked} ({n} characters, kept in daybook.json; never shown in full)",
+    "tok_put": "Worker secret TEACHER_TOKEN set", "tok_manual": "In PowerShell, in the worker folder, run this one line (it reads the token from daybook.json without showing it):\n  {cmd}",
+    "wk_found": "Worker address: {url}", "vp_put": "Worker secrets VAPID_PUBLIC / VAPID_PRIVATE / VAPID_SUBJECT set",
+    "cf_px": "Mascot size in px (28-44; Enter = 36)", "cf_no_file": "no such file: {path} (put it in the brand folder, or Enter for none)",
+    "cl_color": "Banner colour #rrggbb (Enter = automatic)", "cl_label": "Short label (e.g. 고1 기본 월수금 20시; Enter = the class name)",
+    "cl_rubric": "Rubric 1점|2점|3점 (Enter = the default rubric)",
+    "st_title": "setup progress ({path}):", "st_line": "  {n:>2}. {step:<10} {mark} {title}{at}", "st_next": "next: setup continues at '{step}'; redo one step: setup --from <step>",
 }
 
 
@@ -110,6 +132,7 @@ class Wizard:
     fetch: Callable[[str], bytes] | None = None        # the Worker (doctor); None = the real one
     deploy_runner: Callable | None = None              # wrangler pages deploy; None = the real one
     dist: str = "dist"
+    wrangler: Callable | None = None                   # (args, input) -> (returncode, output); None = npx wrangler in worker/
 
     def __post_init__(self):
         self.T = EN if self.english else strings()["setup"]
@@ -133,6 +156,15 @@ class Wizard:
         if a.lower() in STOP:
             raise Stop()
         return a or default
+
+    def ask_valid(self, key: str, check: Callable[[str], str | None], default: str = "") -> str:
+        """Ask until the answer is valid: a typo is caught at its own question, never after the whole form."""
+        while True:
+            a = self.ask(key, default)
+            why = check(a)
+            if not why:
+                return a
+            self.say(f"  {D.FAIL} {a!r} → {why}")
 
     def yes(self, key: str, **kw) -> bool:
         while True:
@@ -212,7 +244,59 @@ class Wizard:
             finally:
                 c.close()
 
+    # ------------------------------------------------------------ wrangler (the teacher's own login; secrets go in by stdin)
+    def run_wrangler(self, args: list[str], stdin: str | None = None, secret: str | None = None) -> tuple[int, str]:
+        if self.wrangler:
+            rc, out = self.wrangler(args, stdin)
+        else:
+            npx = shutil.which("npx")
+            if not npx:
+                return 127, self.t("wr_nonpx")
+            try:
+                r = subprocess.run([npx, "wrangler", *args], cwd=Path(self.wrangler_toml).parent, input=stdin, capture_output=True,
+                                   timeout=600, encoding="utf-8", errors="replace")
+                rc, out = r.returncode, (r.stdout or "") + (r.stderr or "")
+            except (OSError, subprocess.SubprocessError) as e:
+                rc, out = 1, str(e)
+        if secret:
+            out = out.replace(secret, mask(secret))
+        return rc, out
+
+    def logged_in(self) -> bool:
+        """wrangler whoami; when it is not logged in, say how and wait (다 했어요 = check again, 건너뛰기 = manual path)."""
+        while True:
+            rc, out = self.run_wrangler(["whoami"])
+            if rc == 0 and "not authenticated" not in out.lower():
+                return True
+            if rc == 127:
+                self.say(self.t("wr_nonpx"))
+                return False
+            if not self.wait("wr_login"):
+                return False
+
+    def fail_lines(self, rc: int, out: str) -> None:
+        self.say(self.t("wr_fail", rc=rc, out="\n".join("    " + x for x in out.strip().splitlines()[-8:])))
+
+    def put_secret(self, name: str, value: str) -> bool:
+        rc, out = self.run_wrangler(["secret", "put", name], stdin=value + "\n", secret=value)
+        if rc != 0:
+            self.fail_lines(rc, out)
+        return rc == 0
+
     # ------------------------------------------------------------ the run
+    def status(self) -> None:
+        """setup --status: every step, done or not, and where the next run continues."""
+        self.say(self.t("st_title", path=self.state_path))
+        todo = None
+        for i, st in enumerate(STEPS, 1):
+            d = self.state["done"].get(st)
+            if not d and todo is None:
+                todo = st
+            self.say(self.t("st_line", n=i, step=st, mark=(d or {}).get("status", "·"), title=self.t("t_" + st),
+                            at=f"  ({d['at']})" if d else ""))
+        if todo:
+            self.say(self.t("st_next", step=todo))
+
     def run(self, start: str | None = None) -> bool:
         """True when every step is done. `start` (--from) redoes that step, then continues with what is not done."""
         self._guard()
@@ -276,15 +360,39 @@ class Wizard:
         m = re.search(r'^database_id\s*=\s*"([^"]*)"', text, re.M)
         return m.group(1) if m else ""
 
+    def d1_auto(self) -> str:
+        """The existing D1 'daybook' (a re-run, or one made earlier), else a new one: never a second 'already exists'."""
+        if not self.logged_in():
+            return ""
+        rc, out = self.run_wrangler(["d1", "list", "--json"])
+        if rc == 0:
+            try:
+                for x in json.loads(out[out.index("["):]):
+                    if x.get("name") == "daybook" and UUID_RE.match(str(x.get("uuid", ""))):
+                        self.say(self.t("d1_found", id=x["uuid"]))
+                        return x["uuid"]
+            except ValueError:
+                pass
+        rc, out = self.run_wrangler(["d1", "create", "daybook"])
+        m = UUID_SEARCH.search(out)
+        if rc == 0 and m:
+            self.say(self.t("d1_made", id=m.group(0)))
+            return m.group(0)
+        self.fail_lines(rc, out)
+        return ""
+
     def step_d1(self) -> str:
         if not UUID_RE.match(self._toml_id()):
-            if not self.wait("d1_do"):
-                return D.WARN
-            while True:
-                did = self.ask("d1_ask").lower()
-                if UUID_RE.match(did):
-                    break
-                self.say(self.t("d1_bad"))
+            did = self.d1_auto() if self.yes("auto_ask") else ""
+            if not did:
+                if not self.wait("d1_do"):
+                    return D.WARN
+                while True:
+                    m = UUID_SEARCH.search(self.ask("d1_ask").lower())     # a whole pasted line is fine
+                    if m:
+                        did = m.group(0)
+                        break
+                    self.say(self.t("d1_bad"))
             if not self.preview([self.t("d1_write", id=did)]):
                 raise Stop()
             p = Path(self.wrangler_toml)
@@ -302,18 +410,34 @@ class Wizard:
             if not self.preview([self.t("tok_write")]):
                 raise Stop()
             self.write_config({"teacher_token": token})
-        if not self.wait("tok_do", token=self.cfg.teacher_token):
+        tok = self.cfg.teacher_token
+        self.say(self.t("tok_masked", masked=mask(tok), n=len(tok)))
+        if self.yes("auto_ask") and self.logged_in() and self.put_secret("TEACHER_TOKEN", tok):
+            self.say(f"  {D.OK} " + self.t("tok_put"))
+        elif not self.wait("tok_manual", cmd=PIPE.format(path=Path(self.config_path).resolve(), key="teacher_token", name="TEACHER_TOKEN")):
             return D.WARN
         return self.show([x for x in D.check_config(self.cfg) if x.label == "teacher_token"])
 
     def step_worker(self) -> str:
-        if not self.wait("wk_do"):
-            return D.WARN
-        while True:
-            url = self.ask("wk_ask", self.cfg.worker_url).rstrip("/")
-            if re.match(r"^https?://[^\s/]+", url):
-                break
-            self.say(self.t("wk_bad"))
+        url = ""
+        if self.yes("auto_ask") and self.logged_in():
+            rc, out = self.run_wrangler(["deploy"])
+            m = WORKER_URL_RE.search(out)
+            if rc == 0 and m:
+                url = m.group(0)
+                self.say(self.t("wk_found", url=url))
+            else:
+                self.fail_lines(rc, out)
+        if not url:
+            if not self.wait("wk_do"):
+                return D.WARN
+            while True:
+                a = self.ask("wk_ask", self.cfg.worker_url)
+                m = WORKER_URL_RE.search(a) or re.match(r"^https?://[^\s/]+", a)   # a whole pasted line is fine
+                if m:
+                    url = m.group(0).rstrip("/")
+                    break
+                self.say(self.t("wk_bad"))
         if url != self.cfg.worker_url:
             if not self.preview([self.t("wk_write", url=url)]):
                 raise Stop()
@@ -333,7 +457,15 @@ class Wizard:
             from . import push as P
             P.write_keys(self.cfg, subject if subject.startswith(("mailto:", "https://")) else "mailto:" + subject)
             self.cfg = load_config(self.config_path)
-        if not self.wait("vp_do"):
+        e = self.cfg.extra
+        if self.yes("auto_ask") and self.logged_in() and all(self.put_secret(n, str(e.get(k) or "")) for n, k in (
+                ("VAPID_PUBLIC", "vapid_public"), ("VAPID_PRIVATE", "vapid_private"), ("VAPID_SUBJECT", "vapid_subject"))):
+            self.say(f"  {D.OK} " + self.t("vp_put"))
+            rc, out = self.run_wrangler(["deploy"])
+            if rc != 0:
+                self.fail_lines(rc, out)
+        elif not self.wait("vp_do", cmds="\n  ".join(PIPE.format(path=Path(self.config_path).resolve(), key=k, name=n) for n, k in (
+                ("VAPID_PUBLIC", "vapid_public"), ("VAPID_PRIVATE", "vapid_private"), ("VAPID_SUBJECT", "vapid_subject")))):
             return D.WARN
         from . import push as P
         from .pull import PullError
@@ -358,12 +490,20 @@ class Wizard:
         academy = self.ask("cf_academy", str(e.get("academy") or ""))
         backup_dir = self.ask("cf_backup", str(e.get("backup_dir") or ""))
         brand = e.get("brand") if isinstance(e.get("brand"), dict) else {}
-        mascot = self.ask("cf_mascot", str(brand.get("mascot") or ""))
+        while True:
+            mascot = self.ask("cf_mascot", str(brand.get("mascot") or ""))
+            if not mascot or any(c.is_file() for c in (Path(mascot), Path.cwd() / mascot, ROOT / mascot, ROOT / "brand" / mascot)):
+                break
+            self.say(self.t("cf_no_file", path=mascot))
+        if mascot and not Path(mascot).is_file() and (ROOT / "brand" / mascot).is_file() and not (ROOT / mascot).is_file():
+            mascot = "brand/" + mascot                         # just the file name of something in brand\\
+        px = self.ask("cf_px", str(brand.get("mascot_px") or 36))
+        px = int(px) if px.isdigit() and 28 <= int(px) <= 44 else 36
         warn = self.backup_warning(backup_dir) if backup_dir else None
         if warn:
             self.say(warn)
         changes = {"pages_url": pages, "academy": academy, "practice_mode": "korea",
-                   "brand": {"mascot_px": int(brand.get("mascot_px") or 36), **({"mascot": mascot} if mascot else {})}}
+                   "brand": {"mascot_px": px, **({"mascot": mascot} if mascot else {})}}
         if backup_dir:
             changes["backup_dir"] = backup_dir
         if not self.preview([self.t("cf_write", changes=json.dumps(changes, ensure_ascii=False))]):
@@ -384,9 +524,24 @@ class Wizard:
             if c.execute("SELECT 1 FROM classes WHERE name = ?", (name,)).fetchone():
                 self.say(self.t("cl_exists", name=name))
                 continue
-            v = {"days": self.ask("cl_days"), "term": self.ask("cl_term"), "grade": self.ask("cl_grade"),
-                 "start": self.ask("cl_start"), "end": self.ask("cl_end"), "late": self.ask("cl_late", "10"), "reward": self.ask("cl_reward")}
-            if not self.preview([self.t("cl_write", name=name, **v)]):
+            from . import models as M
+            hhmm = lambda x: None if re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", x) else "HH:MM (예: 18:00)"   # noqa: E731
+
+            def days_ok(x):
+                try:
+                    return None if x and M.mask_from_days(x) else "월,수,금"
+                except (ValueError, KeyError):
+                    return "월,수,금"
+            v = {"days": self.ask_valid("cl_days", days_ok),
+                 "term": self.ask_valid("cl_term", lambda x: None if M.parse_term(x) != (None, None) else "2026-11-06..2027-02-26"),
+                 "grade": self.ask("cl_grade"), "start": self.ask_valid("cl_start", hhmm), "end": self.ask_valid("cl_end", hhmm),
+                 "late": self.ask_valid("cl_late", lambda x: None if x.isdigit() and 0 < int(x) <= 60 else "1-60", "10"),
+                 "reward": self.ask("cl_reward"),
+                 "color": self.ask_valid("cl_color", lambda x: None if not x or ops.COLOR_RE.match(x) else "#16a34a"),
+                 "label": self.ask("cl_label"), "rubric": self.ask("cl_rubric")}
+            extra = [x for x in (v["color"] and f"colour {v['color']}", v["label"] and f"label {v['label']}",
+                                 v["rubric"] and f"rubric {v['rubric']}") if x]
+            if not self.preview([self.t("cl_write", name=name, **v)] + extra):
                 self.say(self.t("again"))
                 continue
             try:
@@ -395,6 +550,10 @@ class Wizard:
                 pol = ops.class_policy(c, cls, {"end_time": v["end"], "late_min": int(v["late"] or 10)})
                 if pol:
                     c.execute(f"UPDATE classes SET {', '.join(k + ' = ?' for k in pol)} WHERE id = ?", (*pol.values(), cls["id"]))
+                cls = c.execute("SELECT * FROM classes WHERE id = ?", (cls["id"],)).fetchone()
+                ops.set_class_look(c, cls, color=v["color"] or None, label=v["label"] or None)     # F21.3
+                if v["rubric"]:                                                                       # F22.1
+                    ops.set_goal_rules(c, cls, None, None, [x.strip() for x in v["rubric"].split("|")])
                 c.commit()
             except (ops.OpError, ValueError) as err:
                 c.rollback()
@@ -504,6 +663,8 @@ class Wizard:
         from . import teacher as T
         if not self.preview([self.t("dp_write")]):
             raise Stop()
+        if self.deploy_runner is None and not self.logged_in():          # the teacher's own wrangler login comes first
+            return self.show([D.Line(D.FAIL, self.t("t_deploy"), self.t("wr_login").splitlines()[0])])
         try:
             res = T.deploy(self.cfg, runner=self.deploy_runner, out=self.dist)
         except T.TeacherError as err:

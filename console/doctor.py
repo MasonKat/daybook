@@ -149,7 +149,7 @@ def check_history(conn: sqlite3.Connection, cfg: Config, db_path: str | Path, no
     out.append(Line(OK, "last deploy", _ago(dep["ts"], now)) if dep else
                Line(OK, "last deploy", "unknown (only the Teacher tab's 배포 button records it)"))
     folder = B.backup_dir(cfg, db_path)
-    age = B.newest_age_days(folder, now.replace(tzinfo=None) if now.tzinfo else now)
+    age = B.newest_age_days(folder, now)          # an aware time stays aware: right on a laptop in any time zone
     if age is None:
         out.append(Line(WARN, "last backup", f"none in {folder}", "daybook backup (or the 백업 button); 발행 also backs up"))
     elif age > B.MAX_AGE_DAYS:

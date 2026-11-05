@@ -1381,12 +1381,16 @@ def remote_link(obj: Ctx, rotate):
               "config, classes, roster, consent, rounds, publish, deploy, doctor)")
 @click.option("--english", is_flag=True, help="English prompts")
 @click.option("--state", "state_path", default="setup_state.json", show_default=True, help="Where the progress is kept (gitignored)")
+@click.option("--status", "show_status", is_flag=True, help="Show which steps are done and where the next run continues; change nothing")
 @click.pass_obj
-def setup_cmd(obj: Ctx, start, english, state_path):
+def setup_cmd(obj: Ctx, start, english, state_path, show_status):
     """The HANDOFF Thursday checklist as a guided, resumable wizard (previews before every write; type 그만 to pause)."""
     from . import setup as SU
     w = SU.Wizard(obj.db_path, obj.config_path or os.environ.get("DAYBOOK_CONFIG") or "daybook.json", english=english,
                   state_path=state_path)
+    if show_status:
+        w.status()
+        return
     try:
         ok = w.run(start)
     except SU.SetupError as e:
