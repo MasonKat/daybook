@@ -904,5 +904,14 @@
   "set_bg_none": "없음",
   "set_bg_soon": "곧 나와유",
   "lock_streak": "연속 {n}일이면 열려유",
-  "lock_goal": "반 목표 첫 단계에 닿으면 열려유"
+  "lock_goal": "반 목표 첫 단계에 닿으면 열려유",
+  "set_fx": "움직이는 효과",
+  "set_fx_none": "없음",
+  "set_fx_snow": "눈",
+  "set_fx_xmas": "크리스마스",
+  "set_fx_petals": "꽃바람",
+  "set_fx_leaves": "낙엽",
+  "set_fx_stars": "별똥별",
+  "set_fx_hint": "배경에서 살짝 움직여요. 글자와 버튼은 가리지 않아요.",
+  "lock_dec": "12월에만 열려유"
 }

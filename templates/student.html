@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="{{ S.app_name }}">
 <link rel="stylesheet" href="/static/themes.css">
 {% endblock %}
-{% block bodyattrs %}{% if me.look.theme %} data-theme="{{ me.look.theme }}"{% endif %}{% if me.look.mode != 'auto' %} data-mode="{{ me.look.mode }}"{% endif %}{% if me.look.size == 'lg' %} data-size="lg"{% endif %}{% if me.bg_src %} data-bg="{{ me.look.bg }}" style="--bgimg: url({{ me.bg_src }})"{% endif %}{% endblock %}
+{% block bodyattrs %}{% if me.look.theme %} data-theme="{{ me.look.theme }}"{% endif %}{% if me.look.mode != 'auto' %} data-mode="{{ me.look.mode }}"{% endif %}{% if me.look.size == 'lg' %} data-size="lg"{% endif %}{% if me.look.fx and me.look.fx != 'none' %} data-fx="{{ me.look.fx }}"{% endif %}{% if me.bg_src %} data-bg="{{ me.look.bg }}" style="--bgimg: url({{ me.bg_src }})"{% endif %}{% endblock %}
 {% block body %}
 <div class="app">
 <header class="sbar">
@@ -387,6 +387,9 @@
     <div class="set-seg" id="set-mode">{% for m in ("auto", "light", "dark") %}<button type="button" class="set-sb" data-mode="{{ m }}" aria-pressed="false">{{ S["set_mode_" ~ m] }}</button>{% endfor %}</div>
     <p class="set-oh">{{ S.set_size }}</p>
     <div class="set-seg" id="set-size">{% for z in ("md", "lg") %}<button type="button" class="set-sb" data-size="{{ z }}" aria-pressed="false">{{ S["set_size_" ~ z] }}</button>{% endfor %}</div>
+    <p class="set-oh">{{ S.set_fx }}</p>
+    <div class="set-seg" id="set-fx">{% for f in ("none", "snow", "xmas", "petals", "leaves", "stars") %}<button type="button" class="set-sb" data-fx="{{ f }}" aria-pressed="false">{{ S["set_fx_" ~ f] }}</button>{% endfor %}</div>
+    <p class="muted">{{ S.set_fx_hint }}</p>
     <p class="set-oh">{{ S.set_bg }}</p>
     <div class="set-bgs" id="set-bgs"><p class="muted" id="set-bg-soon" hidden>{{ S.set_bg_soon }}</p></div>
     <p class="wt-q">{{ S.set_order }}</p>

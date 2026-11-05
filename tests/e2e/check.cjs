@@ -1206,7 +1206,28 @@ print(c.execute("SELECT m.marks FROM classwork_marks m JOIN students s ON s.id =
       check(look.t === 'sea' && look.m === 'dark' && look.z === 'lg' && look.acc === '#0369a1' && look.sw <= 360 && look.mw <= 0 && soon
         && locks.length === 8 && locks.every((x) => x[1] === x[2]),
         `theme 바다 + 어둡게 + 크게 applied (${look.acc}), no horizontal scroll at 360 px (${look.sw}/${look.mw}); locked presets 🔒 (${locks.filter((x) => x[1]).map((x) => x[0]).join(',') || 'none'}); 배경: 곧 나와유`);
+      // F22.6: 꽃바람 runs on one canvas behind everything (<= 20 particles, never over a button); 크리스마스 only in December
+      await sp.click('#set-open');
+      const xmasLocked = await sp.evaluate(() => { const b = document.querySelector('#set-fx [data-fx="xmas"]'); return b.disabled === (new Date(Date.now() + 9 * 3600e3).getUTCMonth() !== 11); });
+      await sp.click('#set-fx [data-fx="petals"]'); await sp.click('#set-save');
+      await sp.waitForSelector('#set', { state: 'hidden', timeout: 5000 }).catch(() => {});
+      await sp.waitForTimeout(400);
+      const fx = await sp.evaluate(() => {
+        const cv = document.getElementById('fx'), b = document.getElementById('set-open').getBoundingClientRect();
+        const top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+        return { on: !!cv && !cv.hidden && window.DaybookFx.on(), n: window.DaybookFx.n(), pe: cv ? getComputedStyle(cv).pointerEvents : '',
+          attr: document.body.getAttribute('data-fx'), notOver: top && top.id !== 'fx', sw: document.documentElement.scrollWidth };
+      });
+      check(fx.on && fx.n > 0 && fx.n <= 20 && fx.pe === 'none' && fx.attr === 'petals' && fx.notOver && fx.sw <= 360 && xmasLocked,
+        `효과 꽃바람: one canvas, ${fx.n} particles (≤ 20), pointer-events ${fx.pe}, buttons stay on top; 크리스마스 only in December`);
       await sc.close();
+      const rm = await browser.newContext({ viewport: { width: 360, height: 740 }, reducedMotion: 'reduce' });
+      const rp2 = await rm.newPage();
+      await rp2.goto(`${PAGES}/s/${pick.student_token}/#me`, { waitUntil: 'networkidle' });
+      await rp2.waitForTimeout(600);
+      const still = await rp2.evaluate(() => ({ cv: !!document.getElementById('fx') && !document.getElementById('fx').hidden, on: window.DaybookFx.on() }));
+      check(!still.cv && !still.on, 'prefers-reduced-motion: the saved effect does not run (no canvas)');
+      await rm.close();
       const oc = await browser.newContext({ viewport: { width: 390, height: 844 } });          // another device: from the Worker
       const op = await oc.newPage();
       await op.goto(`${PAGES}/s/${pick.student_token}/#me`, { waitUntil: 'networkidle' });

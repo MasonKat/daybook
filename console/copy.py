@@ -24,7 +24,7 @@ SCREENS: dict[str, list[str]] = {
                "rv_best_empty", "rv_voted"],
     "tour": ["tour_s1", "tour_s2", "tour_s3", "tour_s4", "tour_s5"],
     "rules": ["gr_rubric", "gr_never", "gr_month"],
-    "settings": ["set_order_hint", "set_up_pending", "set_up_approved", "set_up_rejected", "set_up_limit", "set_saved"],
+    "settings": ["set_fx_hint", "lock_dec", "set_order_hint", "set_up_pending", "set_up_approved", "set_up_rejected", "set_up_limit", "set_saved"],
     "parent": ["tour_p1", "tour_p2", "tour_p3", "tour_p4", "tour_p5", "rv_parent_win"],
 }
 FAMILIES = ("니다", "쥬", "유", "죠", "요")

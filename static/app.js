@@ -869,6 +869,78 @@
       }).catch(function () { /* no IndexedDB: nothing queued */ }).then(function () { flushing = false; });
     }
     window.addEventListener('online', flushQueue);
+    /* ---- F22.6 light effects behind the content (⚙ 설정 → 움직이는 효과): one canvas, at most MAX particles, ~30 fps,
+       stopped while the tab is hidden, never under prefers-reduced-motion; #fx has pointer-events: none (app.css). */
+    var FX = (function () {
+      var MAX = 20, KINDS = ['snow', 'xmas', 'petals', 'leaves', 'stars'];
+      var cv = null, cx = null, parts = [], kind = 'none', raf = 0, last = 0, w = 0, h = 0, star = null, nextStar = 0;
+      var reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+      function december() { return new Date(Date.now() + 9 * 3600e3).getUTCMonth() === 11; }
+      function size() {
+        var d = Math.min(window.devicePixelRatio || 1, 1.5);
+        w = window.innerWidth; h = window.innerHeight;
+        cv.width = Math.round(w * d); cv.height = Math.round(h * d); cx.setTransform(d, 0, 0, d, 0, 0);
+      }
+      function count() { return Math.min(MAX, kind === 'snow' ? 18 : kind === 'xmas' ? 14 : kind === 'stars' ? 0 : 12); }
+      var LEAF = ['#d97706', '#b45309', '#ea580c'];
+      function spawn(top) {
+        return { x: Math.random() * w, y: top ? -10 : Math.random() * h, r: 1.5 + Math.random() * (kind === 'snow' || kind === 'xmas' ? 1.8 : 2.5),
+          vy: (kind === 'leaves' ? 26 : kind === 'petals' ? 20 : 16) + Math.random() * 14, sway: 10 + Math.random() * 16,
+          ph: Math.random() * 6.28, rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 1.6, c: LEAF[Math.floor(Math.random() * 3)] };
+      }
+      function draw(p) {
+        if (kind === 'snow' || kind === 'xmas') {
+          cx.fillStyle = 'rgba(190, 205, 225, .85)'; cx.beginPath(); cx.arc(p.x, p.y, p.r, 0, 6.283); cx.fill(); return;
+        }
+        cx.save(); cx.translate(p.x, p.y); cx.rotate(p.rot);
+        cx.fillStyle = kind === 'petals' ? 'rgba(249, 168, 212, .9)' : p.c;
+        cx.beginPath(); cx.ellipse(0, 0, p.r * (kind === 'leaves' ? 2.2 : 1.8), p.r * 1.1, 0, 0, 6.283); cx.fill(); cx.restore();
+      }
+      function frame(t) {
+        raf = requestAnimationFrame(frame);
+        if (last && t - last < 33) return;                                   /* ~30 fps is plenty */
+        var dt = last ? Math.min(t - last, 100) / 1000 : 0.033; last = t;
+        cx.clearRect(0, 0, w, h);
+        for (var i = 0; i < parts.length; i++) {
+          var p = parts[i];
+          p.y += p.vy * dt; p.ph += dt; p.x += Math.sin(p.ph) * p.sway * dt; p.rot += p.vr * dt;
+          if (p.y > h + 12 || p.x < -20 || p.x > w + 20) parts[i] = spawn(true);
+          draw(parts[i]);
+        }
+        if (kind === 'stars') {                                               /* a rare shooting star */
+          if (!star && t > nextStar) star = { x: w * (0.5 + Math.random() * 0.5), y: h * Math.random() * 0.3, k: 0 };
+          if (star) {
+            star.k += dt / 0.9;
+            var x = star.x - star.k * 220, y = star.y + star.k * 110, g = cx.createLinearGradient(x, y, x + 60, y - 30);
+            g.addColorStop(0, 'rgba(255, 255, 255, ' + (0.9 * (1 - star.k)) + ')'); g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            cx.strokeStyle = g; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(x, y); cx.lineTo(x + 60, y - 30); cx.stroke();
+            if (star.k >= 1) { star = null; nextStar = t + 7000 + Math.random() * 9000; }
+          }
+        }
+      }
+      function stop() { if (raf) cancelAnimationFrame(raf); raf = 0; last = 0; if (cx) cx.clearRect(0, 0, w, h); }
+      function run() { if (!raf && kind !== 'none' && !document.hidden) raf = requestAnimationFrame(frame); }
+      function set(k) {
+        k = KINDS.indexOf(k) >= 0 ? k : 'none';
+        if (k === 'xmas' && !december()) k = 'none';
+        kind = reduce ? 'none' : k;
+        stop();
+        if (k === 'none' || reduce) document.body.removeAttribute('data-fx'); else document.body.setAttribute('data-fx', k);
+        if (kind === 'none') { if (cv) cv.hidden = true; parts = []; return; }
+        if (!cv) {
+          cv = document.createElement('canvas'); cv.id = 'fx'; cv.setAttribute('aria-hidden', 'true');
+          document.body.insertBefore(cv, document.body.firstChild); cx = cv.getContext('2d');
+          window.addEventListener('resize', function () { if (kind !== 'none') size(); });
+          document.addEventListener('visibilitychange', function () { if (document.hidden) stop(); else run(); });
+        }
+        cv.hidden = false; size(); parts = []; star = null; nextStar = performance.now() + 2500;
+        for (var n = 0; n < count(); n++) parts.push(spawn(false));
+        run();
+      }
+      return { set: set, december: december, n: function () { return parts.length; }, on: function () { return !!raf; } };
+    })();
+    window.DaybookFx = FX;
+    /* ---- end F22.6 */
     /* ---- F22.4 ⚙ 설정: my avatar and the order of my sections (reorder, never hide), saved per token on the Worker */
     (function settings() {
       var PKEY = 'daybook.prefs.' + tok, SEC = D.sections || {}, COLS = D.colors || [];
@@ -927,6 +999,7 @@
         if (sz === 'lg') b.setAttribute('data-size', 'lg'); else b.removeAttribute('data-size');
         if (bg) { b.setAttribute('data-bg', bg.id); b.style.setProperty('--bgimg', 'url(' + bg.src + ')'); }
         else { b.removeAttribute('data-bg'); b.style.removeProperty('--bgimg'); }
+        FX.set(prefs.fx || 'none');                                           /* F22.6: unknown or out of season = 없음 */
       }
       applyOrder(); applyAvatar(); applyLook();
       if (!TASTE && D.worker) {
@@ -954,7 +1027,8 @@
         var cs = document.querySelectorAll('.set-col');
         for (var k = 0; k < cs.length; k++) cs[k].setAttribute('aria-pressed', Number(cs[k].getAttribute('data-c')) === col ? 'true' : 'false');
         var groups = [['#set-themes .set-th', 'data-theme', draft.theme || ''], ['#set-mode .set-sb', 'data-mode', draft.mode || 'auto'],
-          ['#set-size .set-sb', 'data-size', draft.size || 'md'], ['#set-bgs .set-bgb', 'data-bg', draft.bg || '']];
+          ['#set-size .set-sb', 'data-size', draft.size || 'md'], ['#set-bgs .set-bgb', 'data-bg', draft.bg || ''],
+          ['#set-fx .set-sb', 'data-fx', draft.fx || 'none']];
         groups.forEach(function (g) {
           var els = document.querySelectorAll(g[0]);
           for (var n = 0; n < els.length; n++) els[n].setAttribute('aria-pressed', els[n].getAttribute(g[1]) === g[2] ? 'true' : 'false');
@@ -969,6 +1043,8 @@
           if (t.lock) { var lk = document.createElement('span'); lk.className = 'lk'; lk.textContent = t.lock; b.appendChild(lk); b.disabled = true; }
           box.appendChild(b);
         });
+        var xb = document.querySelector('#set-fx [data-fx="xmas"]');           /* F22.6: 크리스마스 is December only */
+        if (xb && !FX.december()) { xb.disabled = true; xb.title = S.lock_dec; if (xb.textContent.indexOf('🔒') < 0) xb.textContent = '🔒 ' + xb.textContent; }
         var bb = $('set-bgs'), soon = $('set-bg-soon');
         Array.prototype.slice.call(bb.querySelectorAll('.set-bgb')).forEach(function (x) { x.remove(); });
         soon.hidden = BGS.length > 0;
@@ -1001,7 +1077,8 @@
       }
       function open() {
         draft = { avatar: prefs.avatar || '', rings: orderOf('rings', prefs.rings), today: orderOf('today', prefs.today), profile: orderOf('profile', prefs.profile), _c: 0,
-          theme: okTheme(prefs.theme || '') ? prefs.theme : '', mode: prefs.mode || 'auto', size: prefs.size || 'md', bg: bgOf(prefs.bg || '') ? prefs.bg : '' };
+          theme: okTheme(prefs.theme || '') ? prefs.theme : '', mode: prefs.mode || 'auto', size: prefs.size || 'md', bg: bgOf(prefs.bg || '') ? prefs.bg : '',
+          fx: prefs.fx || 'none' };
         $('set-err').textContent = '';
         lookButtons(); pressed(); lists();
         $('set').hidden = false;
@@ -1022,7 +1099,7 @@
       $('set').addEventListener('click', function (e) {
         var lb = e.target.closest('.set-th, .set-sb, .set-bgb');
         if (lb && !lb.disabled) {
-          ['theme', 'mode', 'size', 'bg'].forEach(function (k) { if (lb.hasAttribute('data-' + k)) draft[k] = lb.getAttribute('data-' + k); });
+          ['theme', 'mode', 'size', 'bg', 'fx'].forEach(function (k) { if (lb.hasAttribute('data-' + k)) draft[k] = lb.getAttribute('data-' + k); });
           pressed();
           return;
         }
@@ -1040,7 +1117,7 @@
       });
       $('set-save').addEventListener('click', function () {
         var out = { avatar: draft.avatar || '', rings: draft.rings, today: draft.today, profile: draft.profile,
-          theme: draft.theme || '', mode: draft.mode || 'auto', size: draft.size || 'md', bg: draft.bg || '' };
+          theme: draft.theme || '', mode: draft.mode || 'auto', size: draft.size || 'md', bg: draft.bg || '', fx: draft.fx || 'none' };
         prefs = out; LS.set(PKEY, JSON.stringify(out)); applyOrder(); applyAvatar(); applyLook();
         if (TASTE || !D.worker) { $('set-err').textContent = S.set_saved; return; }
         var fd = new FormData(); fd.append('t', tok); fd.append('prefs', JSON.stringify(out));

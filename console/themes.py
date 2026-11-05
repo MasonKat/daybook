@@ -43,6 +43,8 @@ BASE_FULL = {"light": "--bg: #ffffff; --fg: #111827; --muted: #5b6472; --card: #
 # the scrim over a background picture (behind the header and the story rings), per mode
 SCRIM = {"light": ("#ffffff", 0.84), "dark": ("#0b0f17", 0.80)}
 MODES = ("auto", "light", "dark")
+# light animated effects (static/app.js draws them on one canvas behind the content); 크리스마스 is December only
+FX = ("none", "snow", "xmas", "petals", "leaves", "stars")
 SIZES = ("md", "lg")
 # attendance-only unlocks (DECISIONS F22.5): streak days, or the class reaching its first 반 목표 step
 DEFAULT_LOCKS = {"sunset": {"streak": 7}, "night": {"streak": 21}, "blossom": {"goal": 1}}
@@ -154,7 +156,7 @@ def backgrounds(extra: dict) -> list[dict]:
     return out
 
 
-def effective(pf: dict, unlocked: set[str], bg_ids: set[str], lk: dict, taste: bool = False) -> dict:
+def effective(pf: dict, unlocked: set[str], bg_ids: set[str], lk: dict, taste: bool = False, month: int = 0) -> dict:
     """The look a page renders: a locked or unknown choice falls back to the default (the Worker cannot know locks)."""
     ok = lambda k: taste or k not in lk or k in unlocked   # noqa: E731
     theme = pf.get("theme", "")
@@ -162,4 +164,12 @@ def effective(pf: dict, unlocked: set[str], bg_ids: set[str], lk: dict, taste: b
     return {"theme": theme if theme in THEMES and ok(theme) else "",
             "mode": pf.get("mode") if pf.get("mode") in MODES else "auto",
             "size": pf.get("size") if pf.get("size") in SIZES else "md",
-            "bg": bg if bg in bg_ids and ok("bg:" + bg) else ""}
+            "bg": bg if bg in bg_ids and ok("bg:" + bg) else "",
+            "fx": fx_of(pf.get("fx"), month)}
+
+
+def fx_of(v, month: int) -> str:
+    """An unknown effect is 없음; 크리스마스 only in December (month 0 = unknown: allowed, the page checks again)."""
+    if v not in FX or (v == "xmas" and month not in (0, 12)):
+        return "none"
+    return v

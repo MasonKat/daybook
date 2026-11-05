@@ -42,7 +42,8 @@ const AVATAR_RE = /^(|own|mascot|p:[a-z]{2,10}-[0-7])$/;
 // F22.5: theme presets only (console/themes.py THEMES, compared by tests/test_themes.py); locks are applied by the console
 export const THEME_IDS = ["amp","sea","forest","sunset","mono","blossom","night"];
 const LOOK = { theme: (v) => v === '' || THEME_IDS.includes(v), mode: (v) => ['auto', 'light', 'dark'].includes(v),
-  size: (v) => ['md', 'lg'].includes(v), bg: (v) => /^[a-z0-9_-]{0,24}$/.test(v) };
+  size: (v) => ['md', 'lg'].includes(v), bg: (v) => /^[a-z0-9_-]{0,24}$/.test(v),
+  fx: (v) => ['none', 'snow', 'xmas', 'petals', 'leaves', 'stars'].includes(v) };     // console/themes.py FX
 const AVATAR_MAX = 60 * 1024;
 
 export const seoulDay = (ms) => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10);

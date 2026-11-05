@@ -507,6 +507,16 @@ The current `practice_mode = manitoba` is only the teacher's personal practice l
   keep their URL (cache stays warm).
 - Also: 글자 크기 크게 zoomed the whole `.app` (header included: the mascot grew past 44 px); it now zooms the scrolling content only.
 
+## F22.6: light animated effects (2026-11-05)
+- ⚙ 설정 → 움직이는 효과: 없음 (default), 눈, 크리스마스 (December only: lighter snow + a small twinkling lights garland on the header),
+  꽃바람 (drifting petals, pairs with 벚꽃잎), 낙엽, 별똥별 (a rare shooting star, every 7–16 s; pairs with 별밤).
+- Plain canvas + CSS in static/app.js (no library, no CDN): one fixed canvas at z-index 0 behind `.app`, `pointer-events: none`, so it
+  never covers text or buttons; at most 20 particles (12–18 in practice), ~30 fps, device-pixel ratio capped at 1.5, stopped while the
+  tab is hidden (visibilitychange), not started at all under prefers-reduced-motion (the garland's twinkle stops too).
+- Stored with the other settings (`fx`, Worker + localStorage). The Worker accepts the six ids only; the console renders an unknown
+  value, or 크리스마스 outside December, as 없음; the page checks the month again (a November build opened in December).
+- Labels are nouns; the hint and the lock line use F22.3's varied endings ("12월에만 열려유", "…가리지 않습니다").
+
 ## Deferred
 - deferred: live webcam capture for 장면 올리기 on the board (a file input is used).
 - deferred: `export pdf` stays a stub (exit 2); `daybook export report <slug>` writes print-ready HTML instead (print → PDF in the browser, no PDF library).

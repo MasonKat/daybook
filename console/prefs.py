@@ -120,7 +120,7 @@ def gallery_svg(design: str, label: str) -> str:
 def _look():
     from . import themes as TH
     return {"theme": lambda v: v == "" or v in TH.THEMES, "mode": lambda v: v in TH.MODES, "size": lambda v: v in TH.SIZES,
-            "bg": lambda v: v == "" or bool(TH.BG_RE.match(v))}
+            "bg": lambda v: v == "" or bool(TH.BG_RE.match(v)), "fx": lambda v: v in TH.FX}
 
 
 LOOK = _look()

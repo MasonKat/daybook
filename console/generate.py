@@ -32,7 +32,7 @@ TEMPLATES = ROOT / "templates"
 STATIC = ROOT / "static"
 
 SVG_W, SVG_H = 320, 150
-JS_STRINGS = ("set_theme_default", "set_bg_none", "set_up_pending", "set_up_approved", "set_up_rejected", "set_up_limit", "set_up_err", "set_up_taste", "set_saved", "set_err",
+JS_STRINGS = ("lock_dec", "set_theme_default", "set_bg_none", "set_up_pending", "set_up_approved", "set_up_rejected", "set_up_limit", "set_up_err", "set_up_taste", "set_saved", "set_err",
               "set_move_up", "set_move_down", "wt_todo", "wt_done", "wt_queued", "wt_err", "wt_closed", "wt_hard_max", "wt_edit", "wt_open", "wt_title", "done_title", "streak_label", "class_plus", "reward_to_go", "uploading", "upload_error",
               "upload_rate", "upload_offline", "replaced", "no_worker", "today_set", "set_default", "weekdays", "story_streak",
               "recorded_at", "recorded", "ritual_class", "ritual_study", "study_cta", "end_cta", "ck_done", "ck_bad",
@@ -553,7 +553,7 @@ def build_context(conn: sqlite3.Connection, cfg: Config, today: date, now: datet
         # F22.5: what attendance has opened (연속 days, the class's 반 목표 steps; never a score), then the effective look
         goal_steps = sum(1 for x in (rw.ladder or []) if x.get("reached")) if rw else 0
         unlocked = set(th_locks) if taste else TH.remember(conn, s["id"], TH.earned(streak, goal_steps, th_locks), now.isoformat())
-        look = TH.effective(pf, unlocked, {b["id"] for b in th_bgs}, th_locks, taste)
+        look = TH.effective(pf, unlocked, {b["id"] for b in th_bgs}, th_locks, taste, today.month)
 
         # parent room: one report message per week (last PARENT_WEEKS weeks), newest open, earlier ones one line
         room = []

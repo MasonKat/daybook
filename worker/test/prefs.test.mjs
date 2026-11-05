@@ -25,7 +25,8 @@ test('F22.4 settings: every id exactly once (no hiding), unknown ids refused, fo
   assert.equal(await bad({ theme: 'hotpink' }), 'bad_prefs');                                      // F22.5: presets only
   assert.equal(await bad({ mode: 'sepia' }), 'bad_prefs');
   assert.equal(await bad({ bg: '../x.png' }), 'bad_prefs');
-  assert.equal((await post(env, '/prefs', { t: TOK, prefs: JSON.stringify({ theme: 'sea', mode: 'dark', size: 'lg', bg: 'stars' }) })).body.ok, true);
+  assert.equal(await bad({ fx: 'fireworks' }), 'bad_prefs');                                       // effects: presets only
+  assert.equal((await post(env, '/prefs', { t: TOK, prefs: JSON.stringify({ theme: 'sea', mode: 'dark', size: 'lg', bg: 'stars', fx: 'petals' }) })).body.ok, true);
   assert.equal((await post(env, '/prefs', { t: B.slice(0, 25) + 'q', prefs: '{}' })).body.error, 'unknown_token');
   assert.equal(checkPrefs('x'.repeat(1100)), null);
   const pulled = (await call(env, new Request('https://w.example/avatars-pull?since=2020-01-01', { headers: { 'X-Teacher-Token': TEACHER } }))).body;

@@ -735,3 +735,15 @@ select.hold { min-height: 32px; border-radius: 8px; margin-left: 4px; }
 .set-seg { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--s2); }
 .set-sb { min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--fg); font: 600 14px var(--font); cursor: pointer; }
 .set-sb[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+
+/* F22.6 light effects: one canvas behind the content, never over text or buttons; 크리스마스 adds a small garland */
+#fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+body[data-fx] .app { position: relative; z-index: 1; }
+body[data-fx="xmas"] .sbar { position: relative; }
+body[data-fx="xmas"] .sbar::before { content: ""; position: absolute; left: 0; right: 0; top: env(safe-area-inset-top, 0px); height: 8px; pointer-events: none;
+  background: radial-gradient(circle at 6px 4px, #ef4444 2.5px, transparent 3px) 0 0 / 48px 8px repeat-x,
+              radial-gradient(circle at 22px 4px, #22c55e 2.5px, transparent 3px) 0 0 / 48px 8px repeat-x,
+              radial-gradient(circle at 38px 4px, #facc15 2.5px, transparent 3px) 0 0 / 48px 8px repeat-x;
+  animation: fx-twinkle 2.4s ease-in-out infinite alternate; }
+@keyframes fx-twinkle { from { opacity: .55; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { body[data-fx="xmas"] .sbar::before { animation: none; } }

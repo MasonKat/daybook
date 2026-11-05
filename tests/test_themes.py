@@ -42,10 +42,10 @@ def test_unlocks_follow_attendance_only_and_stay_open(conn, klass):
     assert TH.remember(conn, sid, {"sunset"}, "t1") == {"sunset"}
     assert TH.remember(conn, sid, set(), "t2") == {"sunset"}                               # a broken streak keeps it
     eff = TH.effective({"theme": "night", "mode": "light", "size": "lg"}, {"sunset"}, set(), lk)
-    assert eff == {"theme": "", "mode": "light", "size": "lg", "bg": ""}                   # locked: the default look
+    assert eff == {"theme": "", "mode": "light", "size": "lg", "bg": "", "fx": "none"}                   # locked: the default look
     assert TH.effective({"theme": "sunset"}, {"sunset"}, set(), lk)["theme"] == "sunset"
     assert TH.effective({"theme": "night"}, set(), set(), lk, taste=True)["theme"] == "night"   # the taste site: all open
-    assert TH.effective({"theme": "sea", "bg": "nope"}, set(), {"stars"}, lk) == {"theme": "sea", "mode": "auto", "size": "md", "bg": ""}
+    assert TH.effective({"theme": "sea", "bg": "nope"}, set(), {"stars"}, lk) == {"theme": "sea", "mode": "auto", "size": "md", "bg": "", "fx": "none"}
 
 
 def test_css_is_presets_only_with_no_external_fonts_or_images():
@@ -81,3 +81,17 @@ def test_the_student_page_wears_the_theme_and_the_parent_page_does_not(conn, kla
     par = page("p", studs[0]["parent_token"])
     assert "themes.css" not in par and "data-theme" not in par and "--bgimg" not in par
     assert (tmp_path / "d" / "static" / "themes.css").read_text(encoding="utf-8") == TH.css()
+
+
+def test_effects_are_presets_xmas_is_december_only_and_unknown_is_none():
+    assert PF.validate({"fx": "petals"}) == {"fx": "petals"}
+    with pytest.raises(PF.PrefsError):
+        PF.validate({"fx": "fireworks"})
+    eff = lambda fx, m: TH.effective({"fx": fx}, set(), set(), {}, month=m)["fx"]     # noqa: E731
+    assert eff("snow", 11) == "snow" and eff("xmas", 12) == "xmas" and eff("xmas", 11) == "none" and eff("bogus", 12) == "none"
+    assert eff(None, 5) == "none"
+    js = (ROOT / "static" / "app.js").read_text(encoding="utf-8")
+    fx = js[js.index("/* ---- F22.6"):js.index("/* ---- end F22.6")]
+    assert "MAX = 20" in fx and "prefers-reduced-motion" in fx and "visibilitychange" in fx
+    css = (ROOT / "static" / "app.css").read_text(encoding="utf-8")
+    assert re.search(r"#fx \{[^}]*pointer-events: none", css) and "http" not in fx
