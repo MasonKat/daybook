@@ -47,7 +47,41 @@
     (j.sets || []).forEach(function (s) { var o = document.createElement('option'); o.value = s.name; o.textContent = s.title + ' (' + s.n + ')'; sel.appendChild(o); });
     if (j.open) api('/api/live/state').then(function (st) { render(st); poll(true); });
   });
-  $('lv-open').onclick = function () { api('/api/live/open', { set: $('lv-set').value }).then(function (st) { render(st); if (st.open) poll(true); }); };
+  /* live-v2: 세트 미리보기 → 확인했어요 → 승인하고 방 열기 (the room opens only with the digest of exactly what was shown) */
+  var PV = null;
+  function pvMath(el, t) { if (window.DaybookLivePhone) window.DaybookLivePhone.math(el, t); else el.textContent = t; }
+  function pvDraw() {
+    var ol = $('lv-pv-list'); ol.innerHTML = '';
+    PV.questions.forEach(function (q) {
+      var li = document.createElement('li'), stem = document.createElement('p'); pvMath(stem, q.q); li.appendChild(stem);
+      if (q.image) { var im = document.createElement('img'); im.src = q.image; im.alt = ''; im.className = 'lv-pv-img'; li.appendChild(im); }
+      if (q.kind === 'choice') {
+        var cl = document.createElement('ol'); cl.className = 'lv-pv-ch';
+        q.choices.forEach(function (c, i) { var x = document.createElement('li'); pvMath(x, c); if (String(i + 1) === q.answer) { x.className = 'ans'; x.appendChild(document.createTextNode(' ✓')); } cl.appendChild(x); });
+        li.appendChild(cl);
+      } else { var a = document.createElement('p'); a.className = 'ans'; a.textContent = '정답 ' + q.answer; li.appendChild(a); }
+      if (q.explain) { var e = document.createElement('p'); e.className = 'muted'; pvMath(e, q.explain); li.appendChild(e); }
+      ol.appendChild(li);
+    });
+  }
+  $('lv-preview').onclick = function () {
+    PV = null; $('lv-ok').checked = false; $('lv-open').disabled = true;
+    fetch('/api/live/preview?set=' + encodeURIComponent($('lv-set').value), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) { $('lv-msg').textContent = j.error || ''; return; }
+      PV = j; $('lv-pv').hidden = false; $('lv-pv-title').textContent = j.title + ' · ' + j.questions.length;
+      pvDraw();
+      if (window.DaybookLivePhone) window.DaybookLivePhone.load(pvDraw);
+    });
+  };
+  $('lv-set').onchange = function () { PV = null; $('lv-pv').hidden = true; $('lv-open').disabled = true; };
+  $('lv-ok').onchange = function () { $('lv-open').disabled = !(PV && $('lv-ok').checked); };
+  $('lv-open').onclick = function () {
+    if (!PV || !$('lv-ok').checked) { $('lv-msg').textContent = S.need; return; }
+    api('/api/live/open', { set: PV.name, approved: PV.digest, phone: $('lv-phone').checked }).then(function (st) {
+      if (st.ok === false) { $('lv-msg').textContent = st.error || ''; return; }
+      render(st); if (st.open) poll(true);
+    });
+  };
   $('lv-next').onclick = function () { $('lv-bonus').hidden = true; api('/api/live/next', {}).then(render); };
   $('lv-reveal').onclick = function () { api('/api/live/reveal', {}).then(render); };
   $('lv-moment').onclick = function () { api('/api/live/moment', {}).then(function (st) { render(st); $('lv-msg').textContent = st.ok === false ? st.error : '✓ 오늘의 장면'; }); };

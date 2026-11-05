@@ -186,8 +186,8 @@ async function audit(browser, url, file, label, viewport, colorScheme) {
     }
     let big = 0;
     const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
-    for (const f of walk(DIST)) big = Math.max(big, fs.statSync(f).size);
-    check(big <= 100 * 1024, `every file in dist/ <= 100 KB (largest ${big} B)`);
+    for (const f of walk(DIST)) if (!f.includes(path.join('static', 'katex'))) big = Math.max(big, fs.statSync(f).size);
+    check(big <= 100 * 1024, `every file in dist/ <= 100 KB (largest ${big} B; the vendored static/katex/ excepted, loaded only in a Live room)`);
     const thumbs = fs.existsSync(path.join(DIST, 't')) ? fs.readdirSync(path.join(DIST, 't')) : [];
     check(thumbs.length > 0 && thumbs.every((f) => fs.statSync(path.join(DIST, 't', f)).size <= 60 * 1024), `${thumbs.length} thumbnails in dist/t, each <= 60 KB`);
 
@@ -695,6 +695,14 @@ print(json.dumps([r[0] for r in c.execute("SELECT s.student_token FROM students_
     const perr = [];
     proj.on('console', (m) => { if (m.type() === 'error') perr.push(m.text()); });
     await proj.goto(BOARD + '/live', { waitUntil: 'networkidle' });
+    await proj.selectOption('#lv-set', 'demo-round.json');
+    check(await proj.isDisabled('#lv-preview') === false, 'live-v2: 세트 미리보기 comes first');
+    await proj.click('#lv-preview');
+    await proj.waitForSelector('#lv-pv:not([hidden]) .lv-pv-list li', { timeout: 5000 });
+    check(await proj.isDisabled('#lv-open') && (await proj.locator('#lv-pv-list > li').count()) === 5 && (await proj.locator('#lv-pv-list .ans').count()) === 5,
+      'live-v2: the preview lists 5 items with their answers; 방 열기 stays off until 확인했어요');
+    await proj.uncheck('#lv-phone');                                             // this round: projector only (as before)
+    await proj.check('#lv-ok');
     await proj.click('#lv-open');
     await proj.waitForSelector('#lv-room:not([hidden])', { timeout: 5000 });
     const ROOM = (await proj.textContent('#lv-code')).trim();
@@ -737,6 +745,42 @@ import sqlite3, sys
 c = sqlite3.connect(sys.argv[1])
 print(c.execute("SELECT COUNT(*), SUM(correct) FROM effort WHERE source = 'live'").fetchone())`, env.DAYBOOK_DB], { encoding: 'utf-8' }).trim();
     check(eff === '(2, 1)', `daybook pull imported the per-student counts into effort, source 'live' ${eff}`);
+
+    console.log('\n[6a2] live-v2: questions on the phones (KaTeX, self-hosted), only after the board preview + approval');
+    {
+      await proj.selectOption('#lv-set', 'demo-phone.json');
+      await proj.click('#lv-preview');
+      await proj.waitForSelector('#lv-pv-list .katex', { timeout: 8000 }).catch(() => {});
+      const bd = await proj.evaluate(() => ({ dlp: !!window.DaybookLivePhone, k: !!window.katex, n: document.querySelectorAll('#lv-pv-list > li').length,
+        kn: document.querySelectorAll('#lv-pv-list .katex').length, pv: !document.getElementById('lv-pv').hidden, msg: document.getElementById('lv-msg').textContent }));
+      check(bd.kn > 0 && bd.pv, `the board preview renders the math with the self-hosted KaTeX ${JSON.stringify(bd)}`);
+      await proj.check('#lv-phone');                                    // the [6a] round unticked it on this same page
+      await proj.check('#lv-ok');
+      await proj.click('#lv-open');
+      await proj.waitForSelector('#lv-room:not([hidden])', { timeout: 5000 });
+      const ROOM2 = (await proj.textContent('#lv-code')).trim();
+      const pc = await browser.newContext({ viewport: { width: 360, height: 740 } });
+      const pp = await pc.newPage();
+      const perr2 = [];
+      pp.on('console', (m) => { if (m.type() === 'error') perr2.push(m.text()); });
+      await pp.goto(`${PAGES}/s/${twoToks[0]}/#today`, { waitUntil: 'networkidle' });
+      await pp.click('#live-open');
+      for (const k of ROOM2) await pp.click(`#keys button[data-k="${k}"]`);
+      await pp.waitForSelector('#live:not([hidden])', { timeout: 5000 });
+      await proj.click('#lv-next');
+      await pp.waitForSelector('#lv-qbox:not([hidden]) #lv-stem .katex', { timeout: 8000 }).catch(() => {});
+      const ph = await pp.evaluate(() => ({ stem: !!document.querySelector('#lv-stem .katex'), txt: document.getElementById('lv-choices').classList.contains('txt'),
+        kch: document.querySelectorAll('#lv-choices button .katex').length, sw: document.documentElement.scrollWidth,
+        cdn: [...document.querySelectorAll('script[src], link[href]')].some((e) => /^https?:/.test(e.getAttribute('src') || e.getAttribute('href') || '')) }));
+      const dbg = await pp.evaluate(() => ({ k: !!window.katex, dlp: !!window.DaybookLivePhone, qbox: !document.getElementById('lv-qbox').hidden,
+        stem: document.getElementById('lv-stem').textContent.slice(0, 40), status: document.getElementById('lv-status').textContent }));
+      check(ph.stem && ph.txt && ph.kch === 5 && ph.sw <= 360 && !ph.cdn, `phone at 360 px: the stem and 5 choices rendered with KaTeX from /static/katex (no CDN), scroll ${ph.sw} ${JSON.stringify(dbg)}`);
+      await pp.click('#lv-choices button[data-a="3"]');
+      await proj.click('#lv-close');
+      await pp.waitForFunction(() => /끝/.test(document.getElementById('lv-status').textContent), null, { timeout: 6000 }).catch(() => {});
+      check(perr2.length === 0, `0 console errors on the phone ${perr2.slice(0, 2).join(' | ')}`);
+      await pc.close();
+    }
 
     console.log('\n[6r] 학생 리뷰 (F18.3): write -> 확인 중 -> pull -> 승인 -> a classmate sees it; a blocked line is never stored');
     {

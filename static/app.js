@@ -507,6 +507,7 @@
     }
     function liveRender(st) {
       if (!st) return;
+      if (window.DaybookLivePhone) window.DaybookLivePhone.render(st, { worker: D.worker, tok: tok, room: LV.room });   /* live-v2 */
       if (!st.open) {
         $('lv-status').textContent = S.live_closed;
         LV.stop = true; clearInterval(LV.timer); clearTimeout(LV.timer);

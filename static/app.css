@@ -753,3 +753,21 @@ body[data-fx="xmas"] .sbar::before { content: ""; position: absolute; left: 0; r
   animation: fx-twinkle 2.4s ease-in-out infinite alternate; }
 @keyframes fx-twinkle { from { opacity: .55; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { body[data-fx="xmas"] .sbar::before { animation: none; } }
+
+/* live-v2: the question on the phone (stem, picture, choices as text), the sheet scrolls when it is long */
+.live { overflow-y: auto; }
+.live-qbox { background: #111827; border-radius: 14px; padding: 12px 14px; margin: 6px 0 12px; font-size: 18px; line-height: 1.6; }
+.live-stem .katex { font-size: 1.05em; }
+.live-img { display: block; max-width: 100%; margin-top: 10px; border-radius: 8px; background: #fff; }
+.live-choices.txt { grid-template-columns: 1fr; }
+.live-choices.txt button { min-height: 52px; display: flex; align-items: center; gap: 12px; text-align: left; padding: 8px 14px; font: 600 17px var(--font); }
+.live-choices.txt .lm { font-weight: 800; font-size: 20px; flex: none; }
+.live-choices.txt .lt { min-width: 0; overflow-wrap: anywhere; }
+
+/* live-v2 board: 세트 미리보기 */
+.lv-pv-list { padding-left: 1.4em; }
+.lv-pv-list > li { margin: 10px 0; }
+.lv-pv-ch { list-style: none; padding: 0; display: grid; gap: 2px; }
+.lv-pv-ch li::before { content: counter(list-item, decimal) ". "; color: var(--muted); }
+.lv-pv-ch .ans, .lv-pv-list .ans { font-weight: 700; color: var(--up); }
+.lv-pv-img { max-width: 260px; display: block; border-radius: 6px; }

@@ -411,6 +411,7 @@
 <div class="live" id="live" role="dialog" aria-modal="true" aria-label="{{ S.live_btn }}" hidden>
   <div class="live-top"><b>{{ S.live_btn }} <span class="tnum" id="lv-qn"></span></b><button type="button" class="live-x" id="lv-x" aria-label="{{ S.close }}">×</button></div>
   <p class="live-status" id="lv-status" aria-live="polite"></p>
+  <div class="live-qbox" id="lv-qbox" hidden><div class="live-stem" id="lv-stem"></div><img class="live-img" id="lv-img" alt="" hidden></div>
   <div class="live-choices" id="lv-choices">{% for m in ["①", "②", "③", "④", "⑤"] %}<button type="button" data-a="{{ loop.index }}">{{ m }}</button>{% endfor %}</div>
   <div id="lv-numbox" hidden>
     <div class="live-num tnum" id="lv-num"></div>
@@ -500,5 +501,6 @@
 <script type="application/json" id="data">{{ me.js | safe }}</script>
 <script src="/static/review_filter.js" defer></script>
 <script src="/static/tour.js" defer></script>
+<script src="/static/live_phone.js" defer></script>
 <script src="/static/app.js" defer></script>
 {% endblock %}

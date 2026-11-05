@@ -8,7 +8,14 @@
   {% if not worker %}<p class="err">{{ S.lv_need_worker }}</p>{% endif %}
   <section id="lv-setup" class="card">
     <h2>{{ S.lv_open_title }}</h2>
-    <div class="trow"><select id="lv-set"></select><button type="button" class="btn primary" id="lv-open">{{ S.lv_open }}</button></div>
+    <div class="trow"><select id="lv-set"></select><button type="button" class="btn ghost" id="lv-preview">{{ S.lv_preview }}</button></div>
+    <div id="lv-pv" hidden>
+      <h3 id="lv-pv-title"></h3>
+      <ol class="lv-pv-list" id="lv-pv-list"></ol>
+      <label class="trow"><input type="checkbox" id="lv-phone" checked> {{ S.lv_phone }}</label>
+      <label class="trow"><input type="checkbox" id="lv-ok"> {{ S.lv_approve }}</label>
+      <button type="button" class="btn primary" id="lv-open" disabled>{{ S.lv_open_ok }}</button>
+    </div>
     <p class="muted">{{ S.lv_privacy }}</p>
   </section>
   <section id="lv-room" hidden>
@@ -30,6 +37,7 @@
     <p class="muted" id="lv-msg" aria-live="polite"></p>
   </section>
 </main>
-<script type="application/json" id="data">{{ {"S": {"answered": S.lv_answered, "correct": S.lv_correct, "bonus": S.lv_bonus, "qn": S.lv_qn, "wait": S.lv_wait, "closed": S.lv_closed}} | tojson }}</script>
+<script type="application/json" id="data">{{ {"S": {"answered": S.lv_answered, "correct": S.lv_correct, "bonus": S.lv_bonus, "qn": S.lv_qn, "wait": S.lv_wait, "closed": S.lv_closed, "need": S.lv_need_preview}} | tojson }}</script>
+<script src="/static/live_phone.js" defer></script>
 <script src="/static/live.js" defer></script>
 {% endblock %}

@@ -913,5 +913,10 @@
   "set_fx_leaves": "낙엽",
   "set_fx_stars": "별똥별",
   "set_fx_hint": "배경에서 살짝 움직여요. 글자와 버튼은 가리지 않아요.",
-  "lock_dec": "12월에만 열려유"
+  "lock_dec": "12월에만 열려유",
+  "lv_preview": "세트 미리보기",
+  "lv_approve": "문항과 정답을 확인했어요",
+  "lv_open_ok": "승인하고 방 열기",
+  "lv_phone": "학생 휴대폰에 문제 보이기 (끄면 프로젝터만)",
+  "lv_need_preview": "먼저 세트 미리보기로 문항과 정답을 확인해 주세요"
 }

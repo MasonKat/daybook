@@ -1,0 +1,8 @@
+{
+  "_comment": "live-v2 demo (synthetic): questions shown on the phones, math in $...$ rendered with the self-hosted KaTeX.",
+  "title": "데모 · 휴대폰 문제 (분수와 근)",
+  "questions": [
+    {"q": "$\\frac{1}{2}+\\frac{1}{3}$의 값은?", "choices": ["$\\frac{1}{6}$", "$\\frac{2}{5}$", "$\\frac{5}{6}$", "$1$", "$\\frac{1}{5}$"], "answer": "3", "explain": "통분하면 $\\frac{3}{6}+\\frac{2}{6}$"},
+    {"q": "이차방정식 $x^2-5x+6=0$의 두 근의 곱은?", "kind": "num", "answer": "6"}
+  ]
+}
