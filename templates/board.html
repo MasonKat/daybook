@@ -3,7 +3,7 @@
 {% block body %}
 <header class="top">
   <span class="brand">{% if mascot %}<img class="mascot" src="{{ mascot }}" alt="" width="{{ mascot_px }}" height="{{ mascot_px }}" style="--mpx: {{ mascot_px }}px">{% endif %}{{ S.board_title }} · {{ cls.name }}</span>
-  <a class="who tlink" href="/live">AMP Live</a>
+  <a class="who tlink" href="/live">AMP Live</a> <a class="who tlink" href="/game">{{ S.gm_board }}</a>
   <a class="who tlink" href="/teacher">{{ S.board_teacher }}</a>
   <button type="button" class="who tlink tv" id="tv-toggle" aria-pressed="false" data-s="{{ {"need": S.c_need, "notice": S.c_notice, "none": S.board_flags_none, "hint": S.board_flags_hint, "three": S.board_three} | tojson | forceescape }}">{{ S.board_teacher_view }}</button>
   <span class="who" id="b-poll">{{ S.board_poll_on | fmt(n=poll_seconds) if poll else S.board_poll_off }}</span>

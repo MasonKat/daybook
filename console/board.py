@@ -167,6 +167,36 @@ class Board:
 
     deploy_runner = None   # tests replace the wrangler call
     live: dict | None = None   # F7: the open AMP Live room (code, set, local question text)
+    game_room: str | None = None   # games-v1: the open 수학 용어 찾기 room (its code only)
+
+    def game_page(self) -> str:
+        with self.conn() as conn:
+            cls = conn.execute("SELECT * FROM classes WHERE id = ?", (self.class_id,)).fetchone()
+        return generate.env().get_template("game_board.html").render(S=self.S, page="gameboard", cls=cls, worker=bool(self.cfg.worker))
+
+    def game_call(self, op: str, body: dict | None = None) -> dict:
+        """games-v1 on the TV: open (round, minutes), state (the Worker's teacher view: grid, found, n/N; no names), close."""
+        from . import wordsearch as WS
+        from .pull import http_fetch
+        with self.conn() as conn:
+            if op == "rounds":
+                return {"rounds": list(WS.load_terms()["rounds"]), "room": self.game_room}
+            if op == "open":
+                cls = conn.execute("SELECT name FROM classes WHERE id = ?", (self.class_id,)).fetchone()
+                seed = (body or {}).get("seed")
+                r = WS.open_room(conn, self.cfg, cls["name"], str((body or {}).get("round") or ""), int((body or {}).get("minutes") or 8),
+                                 int(seed) if isinstance(seed, int) else None)
+                self.game_room = r["room"]
+                return {"ok": True, **r}
+            if not self.game_room:
+                return {"ok": True, "open": False}
+            if op == "state":
+                return json.loads(http_fetch(self.cfg)(f"/live/state?room={self.game_room}"))
+            if op == "close":
+                r = WS.finish(conn, self.cfg, self.game_room)
+                self.game_room = None
+                return {"ok": True, "message": f"찾은 단어 {r['found']}/{r['n']}" + (f" · 반 보너스 +{r['bonus']}" if r["bonus"] else ""), **r}
+        return {"ok": False, "error": "op"}
 
     def live_page(self) -> str:
         with self.conn() as conn:
@@ -487,6 +517,16 @@ def make_handler(board: Board):
                 return self._teacher_get(path, query)
             if path == "/live":
                 return self._send(200, board.live_page().encode(), "text/html; charset=utf-8")
+            if path == "/game":                       # games-v1: the TV view of 수학 용어 찾기
+                return self._send(200, board.game_page().encode(), "text/html; charset=utf-8")
+            if path in ("/api/game/rounds", "/api/game/state"):
+                from . import wordsearch as WS
+                from .pull import PullError
+                try:
+                    with board.lock:
+                        return self._json(board.game_call(path.rsplit("/", 1)[1]))
+                except (WS.WordSearchError, PullError) as e:
+                    return self._json({"ok": False, "error": str(e)}, 200)
             if path == "/api/live/sets":
                 from . import live as L
                 return self._json({"sets": L.list_sets(board.cfg), "open": board.live and {k: board.live[k] for k in ("room", "title")}})
@@ -576,6 +616,14 @@ def make_handler(board: Board):
                 body = json.loads(raw or b"{}")
                 if self.path.startswith("/api/teacher/"):
                     return self._teacher_post(body)
+                if self.path in ("/api/game/open", "/api/game/close"):
+                    from . import wordsearch as WS
+                    from .pull import PullError
+                    try:
+                        with board.lock:
+                            return self._json(board.game_call(self.path.rsplit("/", 1)[1], body))
+                    except (WS.WordSearchError, PullError, ValueError) as e:
+                        return self._json({"ok": False, "error": str(e)}, 200)
                 if self.path.startswith("/api/live/"):
                     from . import live as L
                     from .moments import MomentError

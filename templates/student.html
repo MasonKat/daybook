@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="/static/themes.css">
 {% endblock %}
 {% block bodyattrs %}{% if me.look.theme %} data-theme="{{ me.look.theme }}"{% endif %}{% if me.look.mode != 'auto' %} data-mode="{{ me.look.mode }}"{% endif %}{% if me.look.size == 'lg' %} data-size="lg"{% endif %}{% if me.look.fx and me.look.fx != 'none' %} data-fx="{{ me.look.fx }}"{% endif %}{% if me.bg_src %} data-bg="{{ me.look.bg }}" style="--bgimg: url({{ me.bg_src }})"{% endif %}{% endblock %}
+{% macro gm_clock() %}<span class="gm-clock"><svg viewBox="0 0 36 36" aria-hidden="true"><circle class="gm-ring-bg" cx="18" cy="18" r="15.9"/><circle class="gm-ring-fg" cx="18" cy="18" r="15.9" pathLength="100"/></svg><b class="gm-time tnum" id="gm-time"></b></span>{% endmacro %}
 {% block body %}
 <div class="app">
 <header class="sbar">
@@ -409,11 +410,11 @@
 </div>
 
 <div class="wt gm" id="gm" role="dialog" aria-modal="true" aria-labelledby="gm-h" hidden>
-  <div class="wt-top"><b id="gm-h">{{ S.gm_title }}</b><span class="tnum gm-time" id="gm-time"></span><button type="button" class="live-x" id="gm-x" aria-label="{{ S.close }}">×</button></div>
+  <div class="wt-top"><b id="gm-h">{{ S.gm_title }}</b>{{ gm_clock() }}<button type="button" class="live-x" id="gm-x" aria-label="{{ S.close }}">×</button></div>
   <div class="wt-body">
     {% if taste %}<p class="muted">{{ S.gm_taste }}</p>{% endif %}
     <p class="gm-count tnum" id="gm-count"></p>
-    <div class="gm-grid" id="gm-grid"></div>
+    <div class="gm-stage"><div class="gm-grid" id="gm-grid"></div><p class="gm-combo" hidden></p><p class="gm-toast" role="status" hidden></p></div>
     <p class="muted">{{ S.gm_hint }}</p>
     <ul class="gm-words" id="gm-words"></ul>
     <p class="gm-msg" id="gm-msg" aria-live="polite"></p>

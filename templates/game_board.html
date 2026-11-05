@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block body %}
+<header class="top"><span class="brand">{{ S.gm_title }} · {{ cls.name }}</span><span class="who"><a class="tlink" href="/">{{ S.t_back }}</a></span></header>
+<main class="proj gboard">
+  {% if not worker %}<p class="err">{{ S.lv_need_worker }}</p>{% endif %}
+  <section id="gb-setup" class="card">
+    <h2>{{ S.gb_open_title }}</h2>
+    <div class="trow"><select id="gb-round"></select><label>{{ S.gb_minutes }} <input id="gb-min" type="number" min="3" max="15" value="8"></label>
+      <button type="button" class="btn primary" id="gb-open">{{ S.gb_open }}</button></div>
+    <p class="muted">{{ S.gb_privacy }}</p>
+  </section>
+  <section id="gb" class="gb-room">
+    <div id="gb-room" hidden>
+      <div class="proj-top"><div class="proj-code"><span class="muted">{{ S.lv_code }}</span><b class="tnum" id="gb-code"></b></div>
+        <p class="gm-count tnum"></p><span class="gm-clock"><svg viewBox="0 0 36 36" aria-hidden="true"><circle class="gm-ring-bg" cx="18" cy="18" r="15.9"/><circle class="gm-ring-fg" cx="18" cy="18" r="15.9" pathLength="100"/></svg><b class="gm-time tnum"></b></span></div>
+      <div class="gb-main"><div class="gm-stage"><div class="gm-grid"></div><p class="gm-combo" hidden></p><p class="gm-toast" role="status" hidden></p></div>
+        <ul class="gm-words"></ul></div>
+      <p class="gm-msg" aria-live="polite"></p>
+      <div class="trow proj-btns"><button type="button" class="btn ghost" id="gb-close">{{ S.gb_close }}</button></div>
+    </div>
+  </section>
+  <p class="muted" id="gb-msg" aria-live="polite"></p>
+</main>
+<script type="application/json" id="data">{{ {"S": {"gm_count": S.gm_count, "gm_done": S.gm_done, "gm_over": S.gm_over, "gm_combo": S.gm_combo, "gm_closed": S.gm_closed}} | tojson }}</script>
+<script src="/static/game.js" defer></script>
+{% endblock %}

@@ -32,7 +32,7 @@ TEMPLATES = ROOT / "templates"
 STATIC = ROOT / "static"
 
 SVG_W, SVG_H = 320, 150
-JS_STRINGS = ("gm_count", "gm_hit", "gm_miss", "gm_done", "gm_over", "gm_closed", "lock_dec", "set_theme_default", "set_bg_none", "set_up_pending", "set_up_approved", "set_up_rejected", "set_up_limit", "set_up_err", "set_up_taste", "set_saved", "set_err",
+JS_STRINGS = ("gm_combo", "gm_count", "gm_hit", "gm_miss", "gm_done", "gm_over", "gm_closed", "lock_dec", "set_theme_default", "set_bg_none", "set_up_pending", "set_up_approved", "set_up_rejected", "set_up_limit", "set_up_err", "set_up_taste", "set_saved", "set_err",
               "set_move_up", "set_move_down", "wt_todo", "wt_done", "wt_queued", "wt_err", "wt_closed", "wt_hard_max", "wt_edit", "wt_open", "wt_title", "done_title", "streak_label", "class_plus", "reward_to_go", "uploading", "upload_error",
               "upload_rate", "upload_offline", "replaced", "no_worker", "today_set", "set_default", "weekdays", "story_streak",
               "recorded_at", "recorded", "ritual_class", "ritual_study", "study_cta", "end_cta", "ck_done", "ck_bad",

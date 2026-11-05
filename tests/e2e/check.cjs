@@ -1085,9 +1085,10 @@ print(c.execute("SELECT m.marks FROM classwork_marks m JOIN students s ON s.id =
       await tp.click(`#gm-grid .gm-c[data-r="${demo.cells[0][0]}"][data-c="${demo.cells[0][1]}"]`);
       const lastC = demo.cells[demo.cells.length - 1];
       await tp.click(`#gm-grid .gm-c[data-r="${lastC[0]}"][data-c="${lastC[1]}"]`);
-      const gm = await tp.evaluate(() => ({ lit: document.querySelectorAll('#gm-grid .gm-c.f').length, msg: document.getElementById('gm-msg').textContent,
+      await tp.waitForSelector('#gm .gm-toast:not([hidden])', { timeout: 4000 }).catch(() => {});
+      const gm = await tp.evaluate(() => ({ lit: document.querySelectorAll('#gm-grid .gm-c.f').length, toast: document.querySelector('#gm .gm-toast').textContent,
         count: document.getElementById('gm-count').textContent }));
-      check(gm.lit >= demo.w.length && /찾았/.test(gm.msg) && /찾은 단어 [1-8]\/8/.test(gm.count), `taste: the practice word search (${demo.w} found; ${gm.count})`);
+      check(gm.lit >= demo.w.length && gm.toast.includes(demo.w) && /찾은 단어 [1-8]\/8/.test(gm.count), `taste: the practice word search (${demo.w} found, toast "${gm.toast.slice(0, 30)}"; ${gm.count})`);
       await tp.click('#gm-x');
       check(await tp.isVisible('#wt-card'), 'taste: a practice 주간 테스트 round is open for 콩');
       await tp.click('#wt-open');
@@ -1309,6 +1310,40 @@ print(c.execute("SELECT p.prefs FROM student_prefs p JOIN students s ON s.id = p
       for (const x of gp) await x.c.close();
       const closed = daybook('game', 'close', GROOM);
       check(/찾은 단어 1\/8/.test(closed) && !/bonus/.test(closed), `game close: ${closed.trim()} (unfinished: no class bonus)`);
+    }
+
+    console.log('\n[7e] games-v1 tonight: the 정적분 round on the TV (/game) + a phone: stroke, meaning toast, n/14, no names');
+    {
+      const tvc = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+      const tv = await tvc.newPage();
+      await tv.goto(BOARD + '/game', { waitUntil: 'networkidle' });
+      const op = await tv.evaluate(() => fetch('/api/game/open', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ round: '정적분 (고2)', minutes: 5, seed: 3 }) }).then((r) => r.json()));
+      await tv.goto(BOARD + '/game', { waitUntil: 'networkidle' });                  // the page picks the open room back up
+      await tv.waitForSelector('#gb-room:not([hidden]) .gm-grid .gm-c', { timeout: 8000 }).catch(() => {});
+      const w0 = JSON.parse(execFileSync(PYTHON, ['-c', 'import json; from console import wordsearch as W; print(json.dumps(W.round_grid("정적분 (고2)", 3)["words"][0]))'], { cwd: ROOT, encoding: 'utf-8' }));
+      const pc = await browser.newContext({ viewport: { width: 360, height: 740 } });
+      const ph = await pc.newPage();
+      await ph.goto(`${PAGES}/s/${twoToks[0]}/#today`, { waitUntil: 'networkidle' });
+      await ph.click('#live-open');
+      for (const k of op.room) await ph.click(`#keys button[data-k="${k}"]`);
+      await ph.waitForSelector('#gm:not([hidden]) .gm-c', { timeout: 6000 }).catch(() => {});
+      const cell = (rc) => `#gm-grid .gm-c[data-r="${rc[0]}"][data-c="${rc[1]}"]`;
+      await ph.click(cell(w0.cells[0])); await ph.click(cell(w0.cells[w0.cells.length - 1]));
+      await ph.waitForSelector('#gm .gm-toast:not([hidden])', { timeout: 6000 }).catch(() => {});
+      const pv = await ph.evaluate(() => ({ n: document.querySelectorAll('#gm-grid .gm-c').length, w: document.querySelector('#gm-grid .gm-c').getBoundingClientRect().width,
+        lines: document.querySelectorAll('#gm .gm-line').length, toast: document.querySelector('#gm .gm-toast').textContent, sw: document.documentElement.scrollWidth,
+        ring: !!document.querySelector('#gm .gm-ring-fg') }));
+      check(op.ok && pv.n === 100 && pv.w >= 30 && pv.lines === 1 && pv.toast.includes(w0.w) && pv.toast.includes(w0.m.slice(0, 6)) && pv.sw <= 360 && pv.ring,
+        `phone 360 px: 10×10 (${Math.round(pv.w)} px letters), a glowing stroke + the toast "${pv.toast.slice(0, 40)}…", countdown ring`);
+      await tv.waitForFunction(() => document.querySelectorAll('#gb .gm-line').length === 1, null, { timeout: 8000 }).catch(() => {});
+      const tvs = await tv.evaluate(() => ({ lines: document.querySelectorAll('#gb .gm-line').length, count: document.querySelector('#gb .gm-count').textContent,
+        names: /(님|학생)/.test(document.getElementById('gb-room').textContent) }));
+      check(tvs.lines === 1 && /1\/14/.test(tvs.count) && !tvs.names, `the TV lights the same word in real time (${tvs.count}), no names`);
+      await tv.click('#gb-close');
+      await tv.waitForFunction(() => /찾은 단어 1\/14/.test(document.getElementById('gb-msg').textContent), null, { timeout: 6000 }).catch(() => {});
+      check(/찾은 단어 1\/14/.test(await tv.textContent('#gb-msg')), `게임 닫기: ${await tv.textContent('#gb-msg')}`);
+      await pc.close(); await tvc.close();
     }
 
     console.log('\n[8] F19 mascot size: brand.mascot_px 44 keeps the student header on one line at 360 px');
