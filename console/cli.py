@@ -1444,3 +1444,30 @@ def classwork_export(obj: Ctx, class_name, out_dir):
 
 if __name__ == "__main__":
     main()
+
+
+# ---------------------------------------------------------------- live-v2: AMP Live question sets
+
+@cli.group("live")
+def live_group():
+    """AMP Live sets: generate one (gen); every set is approved on the board (세트 미리보기) before 방 열기."""
+
+
+@live_group.command("gen")
+@click.option("--unit", required=True, help="단원, e.g. 이차방정식 (2022 개정 공통수학1·2, 대수, 미적분I)")
+@click.option("--level", type=click.Choice(["easy", "moderate"]), required=True)
+@click.option("--n", "n", type=int, default=8, show_default=True, help="5-10 items")
+@click.option("--out", required=True, help="e.g. live/이차방정식-easy.json")
+@click.option("--model", default=None, help="Default: claude-haiku-4-5-20251001")
+def live_gen(unit, level, n, out, model):
+    """Generate a set with the Anthropic API (key ONLY from the ANTHROPIC_API_KEY environment variable; never stored)."""
+    from . import livegen as LG
+    try:
+        data = LG.generate(unit, level, n, model or LG.DEFAULT_MODEL)
+        p = LG.write(data, out)
+    except LG.LiveGenError as e:
+        fail(str(e))
+    click.echo(f"{p}: {len(data['questions'])} items ({len(data['dropped'])} dropped by the checks, {data['calls']} API call(s))")
+    for w in data["dropped"]:
+        click.echo(f"  dropped: {w}")
+    click.echo("next: board → AMP Live → 세트 미리보기 → 승인하고 방 열기")
