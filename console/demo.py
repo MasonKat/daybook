@@ -424,6 +424,9 @@ def write_demo_videos(today: date | None = None, out: Path | None = None) -> Pat
             v["thumb"] = thumb
         v.update(tags)
         items.append(v)
+    lib = ROOT / "demo" / "library.demo.json"                 # video-library: 8 synthetic catalog items (library only)
+    if lib.exists():
+        items += json.loads(lib.read_text(encoding="utf-8"))
     out.write_text(json.dumps(items, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     return out
 

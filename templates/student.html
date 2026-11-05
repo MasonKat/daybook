@@ -48,9 +48,9 @@
 
 <main class="s-main" id="s-main">
 <section id="tab-videos" class="panel" role="tabpanel" hidden>
-  {% if me.shorts or me.longs %}
+  {% if me.shorts or me.longs or me.library.any %}
   <div class="feedbar">
-    {% if me.shorts and me.longs %}
+    {% if me.shorts and (me.longs or me.library.any) %}
     <div class="seg" role="tablist">
       <button type="button" class="seg-b" id="v-shorts" data-v="shorts" aria-selected="true">{{ S.tab_shorts }}</button>
       <button type="button" class="seg-b" id="v-long" data-v="long" aria-selected="false">{{ S.tab_long }}</button>
@@ -80,7 +80,7 @@
     {% endfor %}
   </div>
   {% endif %}
-  {% if me.longs %}
+  {% if me.longs or me.library.any %}
   <div class="longs" id="longs"{% if me.shorts %} hidden{% endif %}>
     {% for v in me.longs %}
     <article class="lcard" data-yt="{{ v.yt_id }}">
@@ -100,11 +100,6 @@
       </div>
     </article>
     {% endfor %}
-  </div>
-  {% endif %}
-  {% else %}
-  <p class="muted pad">{{ S.videos_empty }}</p>
-  {% endif %}
   {% if me.library.any %}
   <div class="lib" id="lib">
     <h2 class="sec-h">📚 {{ S.lib_title }}</h2>
@@ -115,6 +110,11 @@
     {% if me.library.roadmap %}<details class="lib-g"><summary>🧭 {{ S.lib_roadmap }}</summary>
       <ol class="lib-list">{% for x in me.library.roadmap %}<li><a href="/v/{{ x.key }}/">{% if x.unit %}<span class="muted">{{ x.unit }}</span> {% endif %}{{ x.title }}</a></li>{% endfor %}</ol></details>{% endif %}
   </div>
+  {% endif %}
+</div>
+  {% endif %}
+  {% else %}
+  <p class="muted pad">{{ S.videos_empty }}</p>
   {% endif %}
 </section>
 

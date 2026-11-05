@@ -1272,6 +1272,42 @@ print(c.execute("SELECT p.prefs FROM student_prefs p JOIN students s ON s.id = p
       check(JSON.parse(row).avatar === 'p:owl-2' && JSON.parse(row).rings.join() === want.join(), `pull copied the settings to SQLite: ${row.slice(0, 80)}…`);
     }
 
+    console.log('\n[7d] video-library: /v/<key>/ in-page player (chapters, speed, 넓게), counts only with this phone\'s own token');
+    {
+      const VURL = `${PAGES}/v/11-2-2-574/`;
+      const watchReqs = [];
+      for (const withTok of [false, true]) {
+        const vc = await browser.newContext({ viewport: { width: 360, height: 740 } });
+        if (withTok) await vc.addInitScript((t) => { try { localStorage.setItem('daybook.token', t); localStorage.setItem('daybook.watchok', '1'); } catch (e) { /* ignore */ } }, pick.student_token);
+        const vp = await vc.newPage();
+        await vp.route(/youtube-nocookie\.com/, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>stub</title>' }));
+        vp.on('request', (r) => { if (/\/watch$/.test(r.url())) watchReqs.push(withTok); });
+        await vp.goto(VURL, { waitUntil: 'networkidle' });
+        if (!withTok) {
+          await vp.click('#vp-wide');
+          const theater = await vp.evaluate(() => document.body.classList.contains('vp-theater'));
+          await vp.click('.vp-ch[data-t="50"]');                                  // starts the player at that chapter
+          await vp.waitForSelector('#vp-frame iframe', { timeout: 5000 });
+          await vp.click('.vp-ch[data-t="150"]');                                 // then seeks
+          const r = await vp.evaluate(() => ({ sent: window.DaybookVideo.sent.slice(-1)[0], now: document.querySelector('.vp-ch.now').getAttribute('data-t'),
+            src: document.querySelector('#vp-frame iframe').src, counts: window.DaybookVideo.counts(), sw: document.documentElement.scrollWidth,
+            n: document.querySelectorAll('.vp-ch').length, links: [...document.querySelectorAll('.vp-links a')].filter((a) => !a.hidden).length }));
+          const seek = JSON.parse(r.sent);
+          check(theater && r.n === 4 && seek.func === 'seekTo' && seek.args[0] === 150 && r.now === '150' && /youtube-nocookie\.com\/embed\/AMPlib11574\?.*enablejsapi=1.*&start=50/.test(r.src)
+            && r.sw <= 360 && r.links >= 3 && !r.counts && !/[a-z2-7]{26}/.test(vp.url() + r.src),
+            `/v/ at 360 px: 넓게 on, chapter tap starts at 50 s then seekTo 150 (highlighted), ${r.links} follow-up links, no token in any URL`);
+          const sentNow = await vp.evaluate(() => { window.DaybookVideo._state.sec = 30; return window.DaybookVideo.flush(false); });
+          check(sentNow === false, 'no stored token: it plays and counts nothing (no /watch call)');
+        } else {
+          const r = await vp.evaluate(() => { window.DaybookVideo._state.sec = 30; return { counts: window.DaybookVideo.counts(), sent: window.DaybookVideo.flush(false) }; });
+          await vp.waitForTimeout(400);
+          check(r.counts && r.sent && !(await vp.isHidden('#vp-mine')), 'this phone opened its own /s/ page (token + consent stored): watch time goes to /watch; 내 데이북으로 shown');
+        }
+        await vc.close();
+      }
+      check(watchReqs.length === 1 && watchReqs[0] === true, `exactly one /watch call, from the phone with its own token (${JSON.stringify(watchReqs)})`);
+    }
+
     console.log('\n[8] F19 mascot size: brand.mascot_px 44 keeps the student header on one line at 360 px');
     {
       const c44 = { ...cfgCopy, brand: { ...(cfgCopy.brand || {}), mascot_px: 44 } };

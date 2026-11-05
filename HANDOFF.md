@@ -276,6 +276,28 @@ The student 영상 tab is rendered at publish from the file named by `videos_pat
   `videos.local.json`, never from the page. Without one, the reel shows a gradient card with the title.
 - `demo/videos.demo.json` (written by `daybook demo`) and `demo/thumbs/` are a complete synthetic example.
 
+### 5a. The video library fields (branch `video-library`; all optional, old items stay valid)
+
+Each `videos.json` item may also carry these fields (`console/videolib.py` validates them; anything malformed is dropped with a
+publish warning, never a failed publish):
+
+| field | example | meaning |
+|---|---|---|
+| `key` | `11-2-2-574`, `cv-10-2-014` | lowercase letters, digits, `-` (2-41 chars). An item with a `key` AND a `yt_id` gets its own page `/v/<key>/` |
+| `chapters` | `[{"t": 0, "label": "문제 읽기"}, {"t": 150, "label": "역함수로 풀기"}]` | 타임스탬프 in seconds (sorted on load); tapping one seeks there |
+| `book`, `no`, `level`, `unit` | `"데모 워크북"`, `"574"`, `"심화"`, `"함수"` | library groups (book · level), the number search, the roadmap order |
+| `concept_key` | `cv-10-2-014` | the "개념 영상" link; items that others point to here form the 개념 로드맵 |
+| `next_key` | `11-2-2-575` | the "다음 문제" link |
+| `related_keys` | `["11-2-2-571"]` | "같은 단원 문제" links (up to 6) |
+| `feed` | `false` | library only: kept out of the 영상 feed (a big Video Vault must not flood it) |
+
+- `/v/<key>/` pages carry no token in their HTML or URL (safe to share, safe behind a printed QR). A phone that opened its own
+  `/s/<token>/` page stored its token and the consent flag (localStorage); only then does watch time go to `/watch` (F15.1), and the
+  Worker still drops it without consent (F17). Without a token the video plays and nothing is counted.
+- The player is the same postMessage protocol as the feed (youtube-nocookie, enablejsapi=1; no YouTube script in our pages).
+- Demo: `demo/library.demo.json` (8 synthetic items covering every field); `daybook demo` appends it to the demo catalog.
+- The laptop agent's Video Vault exporter writes these fields; nothing else changes.
+
 ## 5b. Assignment labels (optional)
 
 Students never see a set id. The 오늘 tab shows a label for `?set=<set_id>` from `assignments.json` (gitignored; copy

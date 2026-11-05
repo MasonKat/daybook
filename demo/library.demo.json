@@ -1,0 +1,211 @@
+[
+ {
+  "key": "cv-10-2-014",
+  "title": "개념 · 일대일대응과 역함수",
+  "url": "https://www.youtube.com/watch?v=AMPlibCv014",
+  "yt_id": "AMPlibCv014",
+  "group": "개념",
+  "added": "2026-10-20",
+  "kind": "long",
+  "feed": false,
+  "unit": "함수",
+  "level": "개념",
+  "book": "개념 영상",
+  "chapters": [
+   {
+    "t": 0,
+    "label": "들어가며"
+   },
+   {
+    "t": 75,
+    "label": "일대일대응의 뜻"
+   },
+   {
+    "t": 190,
+    "label": "역함수 구하기"
+   },
+   {
+    "t": 320,
+    "label": "정리"
+   }
+  ]
+ },
+ {
+  "key": "cv-10-2-015",
+  "title": "개념 · 합성함수",
+  "url": "https://www.youtube.com/watch?v=AMPlibCv015",
+  "yt_id": "AMPlibCv015",
+  "group": "개념",
+  "added": "2026-10-21",
+  "kind": "long",
+  "feed": false,
+  "unit": "함수",
+  "level": "개념",
+  "book": "개념 영상",
+  "chapters": [
+   {
+    "t": 0,
+    "label": "합성의 순서"
+   },
+   {
+    "t": 140,
+    "label": "교환법칙이 안 되는 이유"
+   }
+  ]
+ },
+ {
+  "key": "11-2-2-571",
+  "title": "571번 풀이",
+  "url": "https://www.youtube.com/watch?v=AMPlib11571",
+  "yt_id": "AMPlib11571",
+  "group": "풀이",
+  "added": "2026-10-25",
+  "kind": "long",
+  "feed": false,
+  "book": "데모 워크북",
+  "no": "571",
+  "level": "기본",
+  "unit": "함수",
+  "concept_key": "cv-10-2-015",
+  "next_key": "11-2-2-572",
+  "related_keys": [
+   "11-2-2-574"
+  ],
+  "chapters": [
+   {
+    "t": 0,
+    "label": "문제 읽기"
+   },
+   {
+    "t": 45,
+    "label": "식 세우기"
+   },
+   {
+    "t": 130,
+    "label": "답 확인"
+   }
+  ]
+ },
+ {
+  "key": "11-2-2-572",
+  "title": "572번 풀이",
+  "url": "https://www.youtube.com/watch?v=AMPlib11572",
+  "yt_id": "AMPlib11572",
+  "group": "풀이",
+  "added": "2026-10-25",
+  "kind": "long",
+  "feed": false,
+  "book": "데모 워크북",
+  "no": "572",
+  "level": "기본",
+  "unit": "함수",
+  "concept_key": "cv-10-2-015",
+  "next_key": "11-2-2-573",
+  "chapters": [
+   {
+    "t": 0,
+    "label": "조건 정리"
+   },
+   {
+    "t": 60,
+    "label": "풀이"
+   }
+  ]
+ },
+ {
+  "key": "11-2-2-573",
+  "title": "573번 풀이",
+  "url": "https://www.youtube.com/watch?v=AMPlib11573",
+  "yt_id": "AMPlib11573",
+  "group": "풀이",
+  "added": "2026-10-26",
+  "kind": "long",
+  "feed": false,
+  "book": "데모 워크북",
+  "no": "573",
+  "level": "기본",
+  "unit": "함수",
+  "concept_key": "cv-10-2-014",
+  "next_key": "11-2-2-574"
+ },
+ {
+  "key": "11-2-2-574",
+  "title": "574번 풀이",
+  "url": "https://www.youtube.com/watch?v=AMPlib11574",
+  "yt_id": "AMPlib11574",
+  "group": "풀이",
+  "added": "2026-10-26",
+  "kind": "long",
+  "feed": false,
+  "book": "데모 워크북",
+  "no": "574",
+  "level": "심화",
+  "unit": "함수",
+  "concept_key": "cv-10-2-014",
+  "next_key": "11-2-2-575",
+  "related_keys": [
+   "11-2-2-571",
+   "11-2-2-575"
+  ],
+  "chapters": [
+   {
+    "t": 0,
+    "label": "문제 읽기"
+   },
+   {
+    "t": 50,
+    "label": "그래프 그리기"
+   },
+   {
+    "t": 150,
+    "label": "역함수로 풀기"
+   },
+   {
+    "t": 240,
+    "label": "검토"
+   }
+  ]
+ },
+ {
+  "key": "11-2-2-575",
+  "title": "575번 풀이",
+  "url": "https://www.youtube.com/watch?v=AMPlib11575",
+  "yt_id": "AMPlib11575",
+  "group": "풀이",
+  "added": "2026-10-27",
+  "kind": "long",
+  "feed": false,
+  "book": "데모 워크북",
+  "no": "575",
+  "level": "심화",
+  "unit": "함수",
+  "concept_key": "cv-10-2-014",
+  "related_keys": [
+   "11-2-2-574"
+  ]
+ },
+ {
+  "key": "11-2-2-601",
+  "title": "601번 풀이 (유리함수)",
+  "url": "https://www.youtube.com/watch?v=AMPlib11601",
+  "yt_id": "AMPlib11601",
+  "group": "풀이",
+  "added": "2026-10-28",
+  "kind": "long",
+  "feed": false,
+  "book": "데모 워크북",
+  "no": "601",
+  "level": "기본",
+  "unit": "유리함수",
+  "chapters": [
+   {
+    "t": 0,
+    "label": "점근선 찾기"
+   },
+   {
+    "t": 90,
+    "label": "그래프"
+   }
+  ]
+ }
+]
