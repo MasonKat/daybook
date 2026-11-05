@@ -395,8 +395,7 @@
     <p class="wt-q">{{ S.set_order }}</p>
     <p class="muted">{{ S.set_order_hint }}</p>
     {% for k in ("rings", "today", "profile") %}<p class="set-oh">{{ S["set_" ~ k] }}</p><ol class="set-ord" data-kind="{{ k }}"></ol>{% endfor %}
-    <p class="err" id="set-err" aria-live="polite"></p>
-    <div class="set-btns"><button type="button" class="btn ghost" id="set-reset">{{ S.set_reset }}</button><button type="button" class="btn primary" id="set-save">{{ S.set_save }}</button></div>
+    <div class="set-btns" id="set-btns"><p class="err" id="set-err" aria-live="polite"></p><button type="button" class="btn ghost" id="set-reset">{{ S.set_reset }}</button><button type="button" class="btn primary" id="set-save">{{ S.set_save }}</button></div>
   </div>
 </div>
 <div class="wt" id="cw" role="dialog" aria-modal="true" aria-labelledby="cw-h" hidden>

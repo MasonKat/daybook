@@ -1228,6 +1228,34 @@ print(c.execute("SELECT m.marks FROM classwork_marks m JOIN students s ON s.id =
       const still = await rp2.evaluate(() => ({ cv: !!document.getElementById('fx') && !document.getElementById('fx').hidden, on: window.DaybookFx.on() }));
       check(!still.cv && !still.on, 'prefers-reduced-motion: the saved effect does not run (no canvas)');
       await rm.close();
+      // ⚙ 설정: 저장 / 기본 순서로 follow the screen (sticky at the bottom of the sheet) at 360 / 390, light / dark, 글자 크기 크게
+      for (const vp of [{ width: 360, height: 740 }, { width: 390, height: 844 }]) {
+        for (const scheme of ['light', 'dark']) {
+          const bc = await browser.newContext({ viewport: vp, colorScheme: scheme });
+          await bc.addInitScript((t) => { try { localStorage.setItem('daybook.prefs.' + t, JSON.stringify({ size: 'lg', theme: 'sea' })); } catch (e) { /* ignore */ } }, offPick.student_token);
+          const bp = await bc.newPage();
+          await bp.goto(`${PAGES}/s/${offPick.student_token}/#me`, { waitUntil: 'networkidle' });
+          await bp.click('#set-open');
+          const where = [];
+          for (const f of [0, 0.5, 1]) {
+            where.push(await bp.evaluate((frac) => {
+              const body = document.querySelector('#set .wt-body'); body.scrollTop = frac * (body.scrollHeight - body.clientHeight);
+              const out = {};
+              for (const id of ['set-save', 'set-reset']) {
+                const r = document.getElementById(id).getBoundingClientRect();
+                const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+                out[id] = r.bottom <= innerHeight && r.top >= 0 && r.height >= 44 && !!top && (top.id === id || !!top.closest('#' + id));
+              }
+              const bg = getComputedStyle(document.getElementById('set-btns')).backgroundColor;
+              return { ok: out['set-save'] && out['set-reset'], opaque: !/rgba\(.*, 0\)|transparent/.test(bg), sw: document.documentElement.scrollWidth,
+                lg: document.body.getAttribute('data-size') === 'lg', long: body.scrollHeight > body.clientHeight * 1.5 };
+            }, f));
+          }
+          check(where.every((x) => x.ok && x.opaque && x.sw <= vp.width && x.lg) && where[0].long,
+            `⚙ 설정 ${vp.width}px ${scheme} 크게: 저장 and 기본 순서로 stay on screen and tappable at the top, middle and end of the sheet`);
+          await bc.close();
+        }
+      }
       const oc = await browser.newContext({ viewport: { width: 390, height: 844 } });          // another device: from the Worker
       const op = await oc.newPage();
       await op.goto(`${PAGES}/s/${pick.student_token}/#me`, { waitUntil: 'networkidle' });

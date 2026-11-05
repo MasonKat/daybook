@@ -720,7 +720,13 @@ select.hold { min-height: 32px; border-radius: 8px; margin-left: 4px; }
 .set-ord .so-l { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .so-b { min-width: 44px; min-height: 40px; border-radius: 10px; border: 1px solid var(--line, rgba(127,127,127,.3)); background: none; color: inherit; font-size: 15px; cursor: pointer; }
 .so-b:disabled { opacity: .3; cursor: default; }
-.set-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: var(--s3); }
+/* the 저장 / 기본 순서로 row follows the screen: sticky at the bottom of the scrolling sheet, opaque, above the iPhone home bar */
+.set .wt-body { padding-bottom: 0; }
+.set-btns { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: flex-end;
+  margin-top: var(--s3); padding: 10px 0 calc(10px + env(safe-area-inset-bottom)); background: var(--bg); border-top: 1px solid var(--line); }
+.set-btns .err { flex: 1 1 100%; margin: 0; min-height: 0; }
+.set-btns .err:empty { display: none; }
+.set-btns .btn { min-height: 44px; min-width: 96px; }
 .three-av { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; }
 .three-av .av { width: 28px; height: 28px; font-size: 12px; }
 
