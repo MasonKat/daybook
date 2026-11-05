@@ -25,7 +25,7 @@ def load_terms(path: Path | None = None) -> dict:
     return json.loads(Path(path or TERMS).read_text(encoding="utf-8"))
 
 
-def _lines(grid: list[list[str]]):
+def _lines_unused(grid: list[list[str]]):
     n = len(grid)
     for dr, dc in DIRS:
         for r in range(n):
@@ -40,20 +40,51 @@ def _lines(grid: list[list[str]]):
 
 def count(grid: list[list[str]], word: str) -> int:
     """How many times a word can be read along the four directions."""
-    return sum(line.count(word) for line in _lines(grid)) if len(word) > 1 else 0
+    return len(occurrences(grid, word))
 
 
-def generate(words: list[str], seed: int, size: int = SIZE, pool: str = "", tries: int = 200) -> dict:
-    """{"grid": [rows], "words": [{"w", "cells": [[r, c], …]}], "seed"}: every word placed (crossings only on the same
-    syllable), filled from `pool`, each word readable exactly once."""
-    words = [w.strip() for w in words if w.strip()]
-    if not words or len(words) > 10 or len(set(words)) != len(words):
-        raise WordSearchError("1-10 different words")
+def occurrences(grid: list[list[str]], word: str) -> list[frozenset]:
+    """Every reading of `word` (across, down, the two diagonals), as its set of cells."""
+    n, out = len(grid), []
+    if len(word) < 2:
+        return out
+    for dr, dc in DIRS:
+        for r in range(n):
+            for c in range(n):
+                cells = [(r + i * dr, c + i * dc) for i in range(len(word))]
+                if all(0 <= rr < n and 0 <= cc < n and grid[rr][cc] == word[i] for i, (rr, cc) in enumerate(cells)):
+                    out.append(frozenset(cells))
+    return out
+
+
+def free_count(grid, word: str, placed: list[dict]) -> int:
+    """Readings of `word` that do not lie inside a longer placed word (정적분 inside 부정적분 does not count)."""
+    hosts = [frozenset(map(tuple, p["cells"])) for p in placed if len(p["w"]) > len(word) and word in p["w"]]
+    return sum(1 for o in occurrences(grid, word) if not any(o <= h for h in hosts))
+
+
+def _norm(entries) -> tuple[list[str], dict]:
+    """A round is a list of terms, each a string or {"w": term, "m": one-line meaning}."""
+    words, means = [], {}
+    for e in entries:
+        w = (e.get("w") if isinstance(e, dict) else e) or ""
+        w = str(w).strip()
+        if w:
+            words.append(w)
+            if isinstance(e, dict) and e.get("m"):
+                means[w] = str(e["m"]).strip()[:60]
+    return words, means
+
+
+def generate(words: list, seed: int, size: int | None = None, pool: str = "", tries: int = 300) -> dict:
+    """{"grid": [rows], "words": [{"w", "cells", "m"?}], "seed", "size"}: every word placed (crossings only on the same
+    syllable), filled from `pool`; each word readable exactly once outside the longer words that contain it."""
+    words, means = _norm(words)
+    if not words or len(words) > 16 or len(set(words)) != len(words):
+        raise WordSearchError("1-16 different words")
+    size = size or (SIZE if len(words) <= 10 and max(map(len, words)) <= SIZE else 10)
     if any(len(w) < 2 or len(w) > size for w in words):
         raise WordSearchError(f"every word needs 2-{size} syllables")
-    inner = [(a, b) for a in words for b in words if a != b and a in b]
-    if inner:
-        raise WordSearchError(f"{inner[0][0]!r} is inside {inner[0][1]!r}: it could never be found just once")
     pool = pool or "".join(sorted(set("".join(words))))
     rng = random.Random(seed)
     for _ in range(tries):
@@ -66,9 +97,11 @@ def generate(words: list[str], seed: int, size: int = SIZE, pool: str = "", trie
             for r, c, (dr, dc) in spots:
                 cells = [(r + i * dr, c + i * dc) for i in range(len(w))]
                 if all(0 <= rr < size and 0 <= cc < size and grid[rr][cc] in ("", w[i]) for i, (rr, cc) in enumerate(cells)):
+                    if any(set(cells) <= set(map(tuple, p["cells"])) for p in placed):
+                        continue                         # never hidden entirely inside another word's letters
                     for i, (rr, cc) in enumerate(cells):
                         grid[rr][cc] = w[i]
-                    placed.append({"w": w, "cells": [list(x) for x in cells]})
+                    placed.append({"w": w, "cells": [list(x) for x in cells], **({"m": means[w]} if w in means else {})})
                     break
             else:
                 ok = False
@@ -77,9 +110,10 @@ def generate(words: list[str], seed: int, size: int = SIZE, pool: str = "", trie
             continue
         for _fill in range(20):
             g = [[ch or rng.choice(pool) for ch in row] for row in grid]
-            if all(count(g, w) == 1 for w in words):
+            if all(free_count(g, w, placed) == 1 for w in words):
                 order = {w: i for i, w in enumerate(words)}
-                return {"grid": ["".join(row) for row in g], "words": sorted(placed, key=lambda p: order[p["w"]]), "seed": seed}
+                return {"grid": ["".join(row) for row in g], "words": sorted(placed, key=lambda p: order[p["w"]]), "seed": seed,
+                        "size": size}
     raise WordSearchError("could not place every word: fewer or shorter words")
 
 
@@ -87,7 +121,10 @@ def round_grid(name: str, seed: int, path: Path | None = None) -> dict:
     t = load_terms(path)
     if name not in t["rounds"]:
         raise WordSearchError(f"no round {name!r} (rounds: {', '.join(t['rounds'])})")
-    return generate(t["rounds"][name], seed, pool=t.get("distractors", ""))
+    r = t["rounds"][name]
+    if isinstance(r, dict):
+        return generate(r.get("words") or [], seed, size=r.get("size"), pool=r.get("distractors") or t.get("distractors", ""))
+    return generate(r, seed, pool=t.get("distractors", ""))
 
 
 # ---------------------------------------------------------------- the room (via the Worker) and the class bonus

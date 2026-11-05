@@ -904,7 +904,7 @@ export function checkGame(g) {
   if (!g || !Array.isArray(g.grid) || !Array.isArray(g.words)) return null;
   const n = g.grid.length;
   if (n < 5 || n > 10 || !g.grid.every((r) => typeof r === 'string' && HANGUL_RE.test(r) && r.length === n)) return null;
-  if (!g.words.length || g.words.length > 10) return null;
+  if (!g.words.length || g.words.length > 16) return null;
   const words = [];
   for (const x of g.words) {
     const w = String((x && x.w) || ''), cells = Array.isArray(x && x.cells) ? x.cells : [];
@@ -913,7 +913,8 @@ export function checkGame(g) {
       const [r, c] = cells[i] || [];
       if (!Number.isInteger(r) || !Number.isInteger(c) || r < 0 || c < 0 || r >= n || c >= n || g.grid[r][c] !== w[i]) return null;
     }
-    words.push({ w, cells: cells.map(([r, c]) => [r, c]) });
+    const m = typeof x.m === 'string' ? x.m.slice(0, 60) : '';          // a one-line meaning for the toast (optional)
+    words.push({ w, cells: cells.map(([r, c]) => [r, c]), ...(m ? { m } : {}) });
   }
   const minutes = Number(g.minutes);
   if (!(minutes >= 3 && minutes <= 15)) return null;
@@ -934,7 +935,7 @@ async function gameOpen(env, b) {
     if (r.meta && r.meta.changes) code = c;
   }
   if (!code) return json({ ok: false, error: 'busy' }, 503, {});
-  await roomCall(env, code, 'open', { code, class: b.class, date: day, size, game: { grid: g.grid, words: g.words, ends }, closes_at: closes });
+  await roomCall(env, code, 'open', { code, class: b.class, date: day, size, game: { grid: g.grid, words: g.words, ends, secs: g.minutes * 60 }, closes_at: closes });
   return json({ ok: true, room: code, size, ends, closes_at: closes }, 200, {});
 }
 
@@ -982,7 +983,7 @@ export class LiveRoom {
     const found = this.sql.exec('SELECT i FROM gfound ORDER BY ts').toArray().map((r) => r.i);
     const joined = this.sql.exec('SELECT COUNT(*) AS n FROM members').toArray()[0].n;
     const over = Date.now() > Date.parse(g.ends);
-    return { ok: true, open: true, game: true, grid: g.grid, words: g.words.map((x) => x.w), n: g.words.length,
+    return { ok: true, open: true, game: true, grid: g.grid, words: g.words.map((x) => x.w), means: g.words.map((x) => x.m || ''), secs: g.secs || 0, n: g.words.length,
       found: found.map((i) => ({ i, cells: g.words[i].cells })), ends: g.ends, over, done: found.length === g.words.length,
       joined, size: st.size };
   }

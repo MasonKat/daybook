@@ -12,15 +12,16 @@ def read(grid, cells):
 @pytest.mark.parametrize("seed", range(12))
 def test_every_word_is_placed_once_and_reads_back(name, seed):
     g = WS.round_grid(name, seed)
-    words = WS.load_terms()["rounds"][name]
-    assert len(g["grid"]) == WS.SIZE and all(len(row) == WS.SIZE for row in g["grid"])
+    words, _ = WS._norm(WS.load_terms()["rounds"][name] if isinstance(WS.load_terms()["rounds"][name], list) else WS.load_terms()["rounds"][name]["words"])
+    n = g["size"]
+    assert len(g["grid"]) == n and all(len(row) == n for row in g["grid"]) and n in (8, 10)
     assert [p["w"] for p in g["words"]] == words
     grid = [list(row) for row in g["grid"]]
     for p in g["words"]:
         assert read(grid, p["cells"]) == p["w"]                                   # no crossing broke a word
         steps = {(b[0] - a[0], b[1] - a[1]) for a, b in zip(p["cells"], p["cells"][1:])}
         assert len(steps) == 1 and steps.pop() in WS.DIRS                          # a straight line: across, down, diagonal
-        assert WS.count(grid, p["w"]) == 1                                         # no accidental second copy
+        assert WS.free_count(grid, p["w"], g["words"]) == 1                        # no accidental second copy (outside longer words)
 
 
 def test_deterministic_with_a_seed_and_different_across_seeds():
@@ -34,7 +35,10 @@ def test_crossings_share_a_syllable_and_bad_lists_are_refused():
     for p in g["words"]:
         for (r, c), ch in zip(p["cells"], p["w"]):
             assert cells.setdefault((r, c), ch) == ch
-    for bad in ([], ["역"], ["가나다라마바사아자"], ["명제", "명제"], ["함수", "역함수"]):
+    nested = WS.generate(["정적분", "부정적분", "넓이"], seed=2)                     # 정적분 inside 부정적분: still found once on its own
+    cells = {p["w"]: set(map(tuple, p["cells"])) for p in nested["words"]}
+    assert not cells["정적분"] <= cells["부정적분"]
+    for bad in ([], ["역"], ["가나다라마바사아자차카"], ["명제", "명제"], [f"단어{i:02d}" for i in range(17)]):
         with pytest.raises(WS.WordSearchError):
             WS.generate(bad, seed=1)
 
@@ -62,3 +66,9 @@ def test_open_and_close_award_the_class_bonus_once(conn, klass):
     assert conn.execute("SELECT COUNT(*) FROM class_bonus WHERE source = 'game'").fetchone()[0] == 1
     with pytest.raises(WS.WordSearchError):
         WS.finish(conn, Config(), "9999", fetch=fetch, post=post)
+
+
+def test_the_g11_round_fits_10x10_with_meanings():
+    g = WS.round_grid("정적분 (고2)", 11)
+    assert g["size"] == 10 and len(g["words"]) == 14 and all(p.get("m") for p in g["words"])
+    assert any(p["w"] == "미적분의기본정리" for p in g["words"])
