@@ -943,6 +943,8 @@ def render_site(conn: sqlite3.Connection, cfg: Config, out: Path, today: date, n
     for f in STATIC.iterdir():
         if f.is_file() and f.name not in LOCAL_ONLY_STATIC:      # the Teacher tab's script never goes online
             shutil.copy2(f, out / "static" / f.name)
+    if (STATIC / "katex").is_dir():                             # live-v2: self-hosted KaTeX (no CDN), with its license
+        shutil.copytree(STATIC / "katex", out / "static" / "katex")
     # F9: served from the root so it may control /s/ (and /p/ for push). The cache name carries a hash of the static
     # files, so every publish that changes app.js / app.css also changes sw.js: phones then fetch the new files instead
     # of keeping a cache-first copy forever.

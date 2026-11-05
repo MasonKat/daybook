@@ -31,6 +31,8 @@ PHOTO_SRC_RE = re.compile(r"/photo\b|photo:\d{4}-|\d{4}-\d{2}-\d{2}/[a-z2-7]{26}
 MAX_IMAGE_BYTES = 60 * 1024
 TEXT_SUFFIXES = {".html", ".htm", ".css", ".js", ".json", ".webmanifest", ".txt", ".svg", ".xml", ""}
 MAX_BYTES = 100 * 1024
+VENDOR_PREFIX = "static/katex/"        # live-v2: KaTeX 0.16.11 (MIT), self-hosted; loaded only while a Live room is open
+VENDOR_MAX_BYTES = 300 * 1024
 
 
 @dataclass
@@ -86,8 +88,9 @@ def lint_dir(root: Path, students: list[PrivateRow], page_title: str) -> list[Fi
     for path in sorted(p for p in root.rglob("*") if p.is_file()):
         rel = path.relative_to(root).as_posix()
         size = path.stat().st_size
-        if size > MAX_BYTES:
-            findings.append(Finding("error", rel, "size", f"{size} bytes > {MAX_BYTES}"))
+        cap = VENDOR_MAX_BYTES if rel.startswith(VENDOR_PREFIX) else MAX_BYTES
+        if size > cap:
+            findings.append(Finding("error", rel, "size", f"{size} bytes > {cap}"))
         if rel.startswith("t/") and size > MAX_IMAGE_BYTES:
             findings.append(Finding("error", rel, "image_size", f"{size} bytes > {MAX_IMAGE_BYTES}"))
         if path.suffix.lower() not in TEXT_SUFFIXES:
